@@ -139,6 +139,32 @@ function codeBars(x, y, w, rows, t, o = {}) {
   ctx.restore();
 }
 
+/* ---------------- AI footage (Higgsfield clips, UI composited into the green screens) ---------------- */
+// [from, to, clip id, timeline t -> clip time (s)]; clips are 24fps, 141 frames
+const FUSE = [
+  [12.5, 17.5, "s04", t => 0.5 + (t - 13)],
+  [26.0, 30.0, "s07", t => 0.8 + (t - 26) * 1.2],
+  [61.9, 67.5, "s15", t => 0.2 + (t - 62)],
+  [67.5, 72.5, "s16", t => 0.4 + (t - 67.5)],
+  [72.5, 76.5, "s17", t => 1.0 + (t - 72.5)],
+  [79.1, 86.3, "s19", t => Math.max(0, t - 79.5) * 0.9]
+];
+const FCACHE = new Map();
+const fkey = (id, t) => `${id}/${String(clamp(Math.round(t * 24), 0, 140) + 1).padStart(3, "0")}`;
+function loadF(k) {
+  if (FCACHE.has(k)) return FCACHE.get(k).p;
+  const img = new Image(); const e = { img, ok: false };
+  e.p = new Promise(res => { img.onload = () => { e.ok = true; res(); }; img.onerror = () => res(); img.src = `assets/footage/${k}.jpg`; });
+  FCACHE.set(k, e); if (FCACHE.size > 48) FCACHE.delete(FCACHE.keys().next().value);
+  return e.p;
+}
+async function prepareAt(t) { await Promise.all(FUSE.filter(f => t >= f[0] && t < f[1]).map(f => loadF(fkey(f[2], f[3](t))))); }
+function footage(id, t) {
+  const f = FUSE.find(x => x[2] === id); const e = FCACHE.get(fkey(id, f[3](t)));
+  if (!e || !e.ok) { fill("#000"); return false; }
+  ctx.drawImage(e.img, 0, 0, W, H); return true;
+}
+
 /* ---------------- lockup geometry ---------------- */
 const LK = 1.3, LW = 900 * LK, LH = 317 * LK, LX = 960 - LW / 2, LY = 470 - LH / 2;
 const TL = p => [LX + p[0] * LK, LY + p[1] * LK];         // wordmark → screen (final lockup)
@@ -334,31 +360,12 @@ function s03(t) {
   vignette(.6);
 }
 
-/* S04 · 13–17.5 ليالي العمل (placeholder for the AI office clip) */
+/* S04 · 13–17.5 ليالي العمل (AI clip) */
 function s04(t) {
-  const lt = t - 13, z = 1 + .05 * eio(clamp(lt / 4.5));
-  ctx.save(); ctx.translate(960, 540); ctx.scale(z, z); ctx.translate(-960, -540);
-  fill("#081419");
-  // window + blurred city bokeh
-  ctx.fillStyle = "#0b1d26"; ctx.fillRect(120, 80, 1680, 520);
-  const r = rng(21); ctx.save(); ctx.filter = "blur(10px)"; ctx.globalCompositeOperation = "lighter";
-  for (let i = 0; i < 70; i++) { const x = 140 + r() * 1640, y = 250 + r() * 330, rad = 8 + r() * 30; ctx.fillStyle = r() < .6 ? hex("#E8B872", .18 + r() * .25) : hex(COL.teal2, .12 + r() * .2); ctx.beginPath(); ctx.arc(x, y, rad, 0, 7); ctx.fill(); }
-  ctx.restore();
-  // desk + screens (solid glows)
-  ctx.fillStyle = "#0a0f12"; ctx.fillRect(0, 700, W, 380);
-  [[330, 430, 420], [800, 400, 460], [1310, 440, 400]].forEach(([x, y, w]) => { ctx.save(); ctx.shadowColor = COL.teal; ctx.shadowBlur = 80; ctx.fillStyle = "#0f2a2d"; rr(x, y, w, w * .56, 8); ctx.fill(); ctx.restore(); ctx.fillStyle = "rgba(43,212,197,.10)"; rr(x + 10, y + 10, w - 20, w * .56 - 20, 4); ctx.fill(); });
-  // silhouettes (over the shoulder)
-  ctx.fillStyle = "#04080a";
-  [[520, 820, 150], [1000, 860, 170], [1480, 830, 150]].forEach(([x, y, s]) => { ctx.beginPath(); ctx.ellipse(x, y - s * 1.05, s * .42, s * .5, 0, 0, 7); ctx.fill(); ctx.beginPath(); ctx.ellipse(x, y + s * .7, s * 1.1, s * .95, 0, Math.PI, 0); ctx.fill(); ctx.fillRect(x - s * 1.1, y + s * .7, s * 2.2, 400); });
-  // warm lamps
-  [[180, 690], [1760, 700]].forEach(([x, y]) => { const g = ctx.createRadialGradient(x, y, 0, x, y, 420); g.addColorStop(0, "rgba(255,196,120,.35)"); g.addColorStop(1, "rgba(255,196,120,0)"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); });
-  ctx.restore();
-  // thread crossing behind, lightly
-  const pts = []; for (let x = 2000; x >= -80; x -= 16) pts.push([x, 300 + Math.sin(x / 260 + 1) * 40]);
-  const u = eio(seg(t, 13.1, 17.3)); thread(subU(mkPath(pts), 0, u), { w: 3, alpha: .55, head: true, headR: 4 });
-  // dissolve in from S03 bokeh
-  vignette(.7);
-  tag("مؤقت · S04 · لقطة الفريق ليلًا — AI جاهزة في Higgsfield");
+  footage("s04", t);
+  const pts = []; for (let x = 2000; x >= -80; x -= 16) pts.push([x, 250 + Math.sin(x / 260 + 1) * 40]);
+  const u = eio(seg(t, 13.1, 17.3)); thread(subU(mkPath(pts), 0, u), { w: 3, alpha: .45, head: true, headR: 4 });
+  vignette(.45);
 }
 
 /* S05 · 17.5–21.5 اشتغلنا · جرّبنا · غلطنا · عدّلنا */
@@ -407,31 +414,10 @@ function s06(t) {
   // one cold light on the knot
   const g = ctx.createRadialGradient(960, 520, 0, 960, 520, 700); g.addColorStop(0, "rgba(120,160,170,.06)"); g.addColorStop(1, "rgba(0,0,0,.55)"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   if (rew > 0 && rew < 1) { ctx.save(); ctx.globalAlpha = .08 * Math.sin(rew * Math.PI); for (let y = 0; y < H; y += 6) { ctx.fillStyle = "#9fd"; ctx.fillRect(0, y, W, 1); } ctx.restore(); }
-  tag("S06 · خلفها شاشة «Conflict Detected» الحقيقية خارج التركيز");
 }
 
-/* S07 · 26–30 سبب نكمل */
-function s07(t) {
-  fill("#07141a");
-  const warm = seg(t, 26.4, 28.5);
-  const g = ctx.createRadialGradient(1900, 380, 0, 1900, 380, 1300); g.addColorStop(0, `rgba(232,196,140,${.28 * warm})`); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  const ui = seg(t, 27.7, 28.2);
-  if (ui > 0) { device("monitor", IMG["ui-booking-success"], 560, 170, 800, { skew: [-.05, .02], alpha: ui }); }
-  // knot → straight thread
-  const pull = eio(seg(t, 26.3, 27.6)), fade = seg(t, 27.7, 28.1);
-  if (fade < 1) {
-    const K = P.knot6, n = 220; const pts = [];
-    for (let i = 0; i < n; i++) { const u = i / (n - 1); const a = ptAt(K, u * K.L); const b = [lerp(1880, 60, u), 540]; pts.push([lerp(a[0], b[0], pull), lerp(a[1], b[1], pull)]); }
-    const grow = eo(seg(t, 26.0, 26.3));
-    thread(subU(mkPath(pts), 0, grow), { w: 9 - pull * 4, alpha: 1 - fade, glow: 1 + pull * .8, head: pull > .9 });
-  }
-  // check mark lands on the success screen
-  const ck = eio(seg(t, 28.05, 28.65));
-  if (ck > 0) { const c = mkPath([[820, 470], [920, 570], [1120, 360]]); thread(subU(c, 0, ck), { w: 10, head: ck < 1 }); }
-  const out = seg(t, 29.4, 30); if (out > 0) { ctx.save(); ctx.strokeStyle = hex(COL.teal2, out); ctx.lineWidth = 2; for (let i = 0; i < 8; i++) { const y = 230 + i * 70; ctx.beginPath(); ctx.moveTo(560 - out * 560, y); ctx.lineTo(1360 + out * 560, y); ctx.stroke(); } ctx.restore(); }
-  vignette(.6);
-  if (t < 27.8) tag("مؤقت · S07 · لقطة اليدين والخيط — AI جاهزة في Higgsfield");
-}
+/* S07 · 26–30 سبب نكمل: AI clip — the hands pull the thread taut */
+function s07(t) { footage("s07", t); vignette(.45); }
 
 /* S08 · 30–33 من الواجهة إلى النسيج */
 function s08(t) {
@@ -507,27 +493,43 @@ function s10(t) {
   tag("S10 · الصور الرسمية + قالب الإطار (ص56) — يعتمدها فريق البروتوكول");
 }
 
-/* S11 · 43–49 خيطٌ جديد */
+/* S11 · 43–48.4 خطوة جديدة: the thread climbs the fabric's stepped (Sadu) motif, step by step, then lifts to the lens */
+const STEPS = (() => { // path in cell units relative to the textile centre; integer points sit on cell centres
+  const p = [[44, 11], [30, 11]]; let u = 30, v = 11;
+  for (let k = 0; k < 6; k++) { u -= 5; p.push([u, v]); v -= 3; p.push([u, v]); }
+  return p;
+})();
+// head keyframes: [time, index of the vertex reached]
+const STEP_KEYS = [[43.0, 0], [43.45, 1], [43.75, 2], [43.95, 3], [44.3, 4], [44.5, 5], [44.85, 6], [45.05, 7], [45.4, 8], [45.6, 9], [46.0, 10], [46.25, 11], [46.6, 12], [46.85, 13]];
 function s11(t) {
   fill("#021311");
-  const lt = t - 43; const pan = eio(clamp(lt / 3.2)) * 380;
-  drawTextile(.62, 960 + pan, 540, null);
-  // the thread weaves through (over / under), tracked by the camera
-  const c = CELL * .62; const y0 = 540 + c * 0.5; const headX = lerp(2050, 700, eio(seg(t, 43.2, 46.2))) ;
-  const pts = []; for (let x = 2100; x >= headX; x -= 4) pts.push([x, y0 + Math.sin(x / (c) * Math.PI) * 3]);
-  if (pts.length > 2) {
-    // under-segments dimmed
-    ctx.save(); thread(pts, { w: 7, glow: .7 }); ctx.restore();
-    ctx.save(); ctx.globalAlpha = .55; const ox = (960 + pan) - 5.5 * c; for (let x = ox - 200 * c; x < W; x += 2 * c) { if (x > headX) { ctx.fillStyle = "rgba(6,42,39,.9)"; ctx.fillRect(x + c * .15, y0 - 7, c * .7, 14); } } ctx.restore();
+  const e = eio(seg(t, 43.0, 47.2));
+  const cx = 960 + lerp(-300, 60, e), cy = 540 + lerp(-170, 140, e);
+  const s = .72, c = CELL * s;
+  drawTextile(s, cx, cy, null);
+  const P = mkPath(STEPS.map(([u, v]) => [cx + u * c, cy + v * c]));
+  // head position along the stepped path (each run and each rise eases in and settles)
+  let hv = STEP_KEYS[STEP_KEYS.length - 1][1];
+  for (let k = 0; k < STEP_KEYS.length - 1; k++) if (t < STEP_KEYS[k + 1][0]) { hv = STEP_KEYS[k][1] + eio(seg(t, STEP_KEYS[k][0], STEP_KEYS[k + 1][0])); break; }
+  if (t < STEP_KEYS[0][0]) hv = 0;
+  const vi = Math.floor(hv), vf = hv - vi; const hs = P.cum[Math.min(vi, P.pts.length - 1)] + (vi < P.pts.length - 1 ? (P.cum[vi + 1] - P.cum[vi]) * vf : 0);
+  // the steps become part of the weave: cells behind the head turn turquoise
+  for (let d = 0; d < hs; d += c) {
+    const [x, y] = ptAt(P, d); const q = clamp((hs - d) / (c * 3));
+    const i = Math.round((x - cx) / c), j = Math.round((y - cy) / c);
+    ctx.save(); ctx.globalAlpha = .35 + .65 * q; ctx.drawImage(SPR[((i + j) & 1 ? "teal2h" : "teal2v")], cx + (i - .5) * c, cy + (j - .5) * c, c + .5, c + .5); ctx.restore();
   }
-  // the free end lifts toward the lens
-  const lift = seg(t, 46.0, 48.35);
+  const lift = seg(t, 47.05, 48.35);
+  thread(sub(P, 0, hs), { w: 4, alpha: .85, head: lift <= 0, headR: 6 });
+  // a soft ping of light on each landing
+  STEP_KEYS.forEach(([tk, idx]) => { if (idx >= 3 && idx % 2 === 1) { const q = seg(t, tk, tk + .5); if (q > 0 && q < 1) { const [x, y] = P.pts[idx]; glowDot(x, y, 40 + 60 * q, .5 * (1 - q)); } } });
+  // from the top step the thread lifts toward the lens and becomes the point of light
   if (lift > 0) {
-    const e = ei(lift); const tip = [lerp(headX, 960, eio(lift)), lerp(y0, 520, eio(lift))];
-    const ctrl = [headX - 140, y0 - 40 * (1 - e)];
-    const curve = bez([headX, y0], ctrl, [lerp(headX, tip[0], .6), lerp(y0, tip[1] - 120 * (1 - e), .6)], tip, 40);
-    thread(curve, { w: 7 + e * 30, glow: 1 + e * 2, head: true, headR: 6 + e * 40 });
-    glowDot(tip[0], tip[1], 60 + e * 1800, .35 + e * .65);
+    const el = ei(lift), top = P.pts[P.pts.length - 1];
+    const tip = [lerp(top[0], 960, eio(lift)), lerp(top[1], 470, eio(lift))];
+    const curve = bez(top, [top[0] - 60, top[1] - 90], [lerp(top[0], tip[0], .5), tip[1] - 80 * (1 - el)], tip, 40);
+    thread(curve, { w: 4 + el * 30, glow: 1 + el * 2, head: true, headR: 6 + el * 40 });
+    glowDot(tip[0], tip[1], 60 + el * 1800, .35 + el * .65);
   }
   vignette(.55);
   const white = seg(t, 48.1, 48.4); if (white > 0) fill(`rgba(220,255,250,${white * .85})`);
@@ -602,51 +604,20 @@ function s13(t) {
     ctx.fillStyle = COL.navy; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillText(S.slice(0, n), 960 - fw / 2, LY + LH + 78); ctx.restore();
   }
   ctx.restore();
-  // exit: a thread leaves the last letter (dal) out of frame
-  const ex = eio(seg(t, 61.2, 62.0));
-  if (ex > 0) { const a = TL(STR.dal.pts[STR.dal.pts.length - 1]); thread([a, [lerp(a[0], -60, ex), a[1] + 40 * ex]], { w: 6, glow: 0, color: COL.teal, core: false }); }
   vignette(light > .5 ? .35 : .5, light > .5);
 }
 
-/* S15–S17 · 62–76.5 طالب · معلم · ولي أمر (placeholders for the AI clips) */
-function warmRoom(c1, c2, lx) { const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, c1); g.addColorStop(1, c2); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); const r = ctx.createRadialGradient(lx, 200, 0, lx, 200, 1400); r.addColorStop(0, "rgba(255,226,170,.55)"); r.addColorStop(1, "rgba(255,226,170,0)"); ctx.fillStyle = r; ctx.fillRect(0, 0, W, H); }
-function s15(t) {
-  const lt = t - 62, dx = -lt * 18;
-  warmRoom("#6d5a40", "#1f1b16", 1700);
-  ctx.save(); ctx.translate(dx, 0);
-  ctx.fillStyle = "#3a2c1d"; ctx.fillRect(-100, 760, W + 300, 400); // desk
-  ctx.fillStyle = "#efe6d3"; ctx.save(); ctx.translate(560, 820); ctx.rotate(-.05); ctx.fillRect(-260, -60, 520, 170); ctx.restore(); // notebook
-  device("tablet", IMG["ui-request-tutor"], 900, 330, 640, { skew: [-.06, 0] });
-  ctx.restore();
-  const g = ctx.createLinearGradient(1600, 0, 700, 0); g.addColorStop(0, "rgba(255,210,140,.18)"); g.addColorStop(1, "rgba(255,210,140,0)"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  thread([[900 + dx, 330 + 460], [1540 + dx - 30, 330 + 460]], { w: 2, alpha: .6 });
-  vignette(.55);
-  tag("مؤقت · S15 · لقطة الطالب — AI جاهزة في Higgsfield + واجهة الطالب العربية");
-}
-function s16(t) {
-  const lt = t - 67.5; const hx = Math.sin(lt * 1.7) * 6, hy = Math.cos(lt * 1.3) * 4;
-  ctx.save(); ctx.translate(hx, hy);
-  warmRoom("#dfe8e4", "#8fa7a2", 300);
-  ctx.fillStyle = "#f7f7f4"; ctx.fillRect(1180, 120, 620, 420); ctx.strokeStyle = "#c9d3d0"; ctx.lineWidth = 6; ctx.strokeRect(1180, 120, 620, 420); // whiteboard
-  ctx.strokeStyle = COL.navy; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(1390, 320, 90, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.moveTo(1520, 240); ctx.lineTo(1680, 400); ctx.stroke(); ctx.beginPath(); ctx.moveTo(1650, 400); ctx.lineTo(1680, 400); ctx.lineTo(1680, 370); ctx.stroke();
-  ctx.fillStyle = "#c8b394"; ctx.fillRect(-50, 780, W + 100, 400);
-  device("laptop", IMG["ui-attendance"], 380, 380, 700, { skew: [.05, 0] });
-  ctx.restore();
-  vignette(.35);
-  tag("مؤقت · S16 · لقطة المعلمة — AI جاهزة في Higgsfield + واجهة المعلم");
-}
+/* S15–S17 · 62–76.5 طالب · معلم · ولي أمر (AI clips + Mehad UI in the screens) */
+function s15(t) { footage("s15", t); vignette(.4); }
+function s16(t) { footage("s16", t); vignette(.35); }
 function s17(t) {
-  const lt = t - 72.5;
-  warmRoom("#4a3522", "#120d09", 300);
-  const r = rng(4); ctx.save(); ctx.filter = "blur(18px)"; for (let i = 0; i < 6; i++) { ctx.fillStyle = hex(i % 2 ? "#8a5a33" : "#5b3e25", .8); rr(100 + i * 300, 700 + r() * 60, 260, 200, 60); ctx.fill(); } ctx.restore();
-  const z = 1 + lt * .012; ctx.save(); ctx.translate(960, 540); ctx.scale(z, z); ctx.translate(-960, -540);
-  device("phone", IMG["ui-child-mgmt"], 800, 170, 330, { skew: [0, -.03] });
-  const ping = seg(t, 72.6, 73.0) * (1 - seg(t, 74.2, 74.6)); if (ping > 0) { ctx.save(); ctx.globalAlpha = ping; ctx.fillStyle = "rgba(255,255,255,.95)"; rr(830, 220, 270, 90, 20); ctx.fill(); txt("تقرير الجلسة جاهز", 1080, 265, { font: "600 26px Cairo", color: COL.navy, align: "right" }); ctx.fillStyle = COL.teal; rr(846, 240, 50, 50, 12); ctx.fill(); ctx.restore(); }
-  ctx.restore();
-  // phone glow collapses to a point of light → S18
-  const pt = eio(seg(t, 75.9, 76.5)); if (pt > 0) { fill(hex(COL.night, pt)); glowDot(960, 540, lerp(400, 40, pt), pt); glowDot(960, 540, 12, pt); }
-  vignette(.6);
-  if (t < 75.9) tag("مؤقت · S17 · لقطة ولي الأمر — AI جاهزة في Higgsfield + واجهة ولي الأمر");
+  footage("s17", t);
+  const ping = seg(t, 72.6, 72.9) * (1 - seg(t, 74.0, 74.3));
+  if (ping > 0) glowDot(140, 950, 90, .35 * ping);
+  // the phone glow becomes the point of light that opens S18
+  const pt = eio(seg(t, 75.9, 76.5));
+  if (pt > 0) { fill(hex(COL.night, pt)); const x = lerp(125, 960, pt), y = lerp(962, 620, pt); glowDot(x, y, lerp(260, 60, pt), .5 + .5 * pt); glowDot(x, y, 14, pt); }
+  vignette(.5);
 }
 
 /* S18 · 76.5–79.5 من نقطة إلى شبكة */
@@ -678,28 +649,17 @@ function s18(t) {
   vignette(.6);
 }
 
-/* S19 · 79.5–86 من السعودية (placeholder for licensed drone / AI skyline) */
+/* S19 · 79.5–86 من السعودية (AI drone clip; licensed drone footage in the final) */
 function s19(t) {
-  const lt = t - 79.5; const z = 1 + .12 * eio(clamp(lt / 6.5));
-  ctx.save(); ctx.translate(960, 700); ctx.scale(z, z); ctx.translate(-960, -700 - lt * 6);
-  const g = ctx.createLinearGradient(0, 0, 0, 760); g.addColorStop(0, "#051318"); g.addColorStop(.55, "#0c3440"); g.addColorStop(.86, "#3f6b69"); g.addColorStop(1, "#d9b27a"); ctx.fillStyle = g; ctx.fillRect(-200, -200, W + 400, 980);
-  // generic low skyline + city lights (no identifiable landmarks)
-  const r = rng(19); ctx.fillStyle = "#0a1a20"; for (let x = 200; x < 1720; x += 20 + r() * 30) { const h = 10 + r() * 50 * (1 - Math.abs(x - 960) / 900); ctx.fillRect(x, 760 - h, 16 + r() * 20, h + 40); }
-  ctx.fillStyle = "#0b1b1f"; ctx.fillRect(-200, 770, W + 400, 400);
-  ctx.save(); ctx.globalCompositeOperation = "lighter"; for (let i = 0; i < 520; i++) { const x = 180 + r() * 1560, y = 770 + Math.pow(r(), 1.8) * 90, tw = .5 + .5 * Math.sin(t * 3 + i); ctx.fillStyle = hex(r() < .7 ? "#F2C98A" : COL.teal2, (.25 + .55 * r()) * tw); ctx.fillRect(x, y, 2.2, 2.2); } ctx.restore();
-  // escarpment edge in the foreground
-  ctx.fillStyle = "#050a0b"; ctx.beginPath(); ctx.moveTo(-200, 1200); ctx.lineTo(-200, 930); const rr2 = rng(33); for (let x = -200; x <= W + 200; x += 40) ctx.lineTo(x, 900 + Math.sin(x / 210) * 26 + rr2() * 14 + (x > 1300 ? (x - 1300) * .12 : 0)); ctx.lineTo(W + 200, 1200); ctx.closePath(); ctx.fill();
-  ctx.restore();
-  // threads rise from the city and converge in the sky
+  footage("s19", t);
   const r3 = rng(7);
-  for (let i = 0; i < 12; i++) { const sx = 260 + r3() * 1400, sy = 790 + r3() * 40; const q = eio(seg(t, 80.2 + i * .07, 81.9 + i * .05)); if (q <= 0) continue; const c = bez([sx, sy], [sx, 560], [lerp(sx, 960, .6), 330], [960, 300], 40); thread(subU(mkPath(c), 0, q), { w: 2.4, alpha: .8 * (1 - seg(t, 82.3, 82.9)), head: q < 1, headR: 4, color: i % 3 ? undefined : hex(COL.gold, .9) }); }
-  const conv = seg(t, 81.9, 82.4); if (conv > 0) glowDot(960, 300, 200 * (1 - seg(t, 82.3, 83)) + 20, conv * (1 - seg(t, 82.4, 83.0)));
-  const lk = eo(seg(t, 82.2, 82.9)); if (lk > 0) drawLockup({ white: true, alpha: lk, scale: .52, cx: 960, cy: 290 });
-  const lw = seg(t, 83.0, 83.5); if (lw > 0) txt("Learn Without Limits", 960, 505, { font: "300 34px Cairo", color: COL.ice, alpha: lw, dir: "ltr", ls: "2px" });
-  const nd = seg(t, 83.6, 84.1); if (nd > 0) txt("اليوم الوطني السعودي 96", 960, 575, { font: "600 38px Cairo", color: COL.gold2, alpha: nd });
+  for (let i = 0; i < 12; i++) { const sx = 620 + r3() * 460, sy = 515 + r3() * 18; const q = eio(seg(t, 80.2 + i * .07, 81.9 + i * .05)); if (q <= 0) continue; const c = bez([sx, sy], [sx, 380], [lerp(sx, 960, .7), 230], [960, 210], 40); thread(subU(mkPath(c), 0, q), { w: 2.2, alpha: .8 * (1 - seg(t, 82.3, 82.9)), head: q < 1, headR: 4, color: i % 3 ? undefined : hex(COL.gold, .9) }); }
+  const conv = seg(t, 81.9, 82.4); if (conv > 0) glowDot(960, 210, 200 * (1 - seg(t, 82.3, 83)) + 20, conv * (1 - seg(t, 82.4, 83.0)));
+  const lk = eo(seg(t, 82.2, 82.9)); if (lk > 0) drawLockup({ white: true, alpha: lk, scale: .44, cx: 960, cy: 200 });
+  const lw = seg(t, 83.0, 83.5); if (lw > 0) txt("Learn Without Limits", 960, 330, { font: "300 32px Cairo", color: COL.ice, alpha: lw, dir: "ltr", ls: "2px" });
+  const nd = seg(t, 83.6, 84.1); if (nd > 0) txt("اليوم الوطني السعودي 96", 960, 390, { font: "600 34px Cairo", color: COL.gold2, alpha: nd });
   const dk = seg(t, 85.4, 86.0); if (dk > 0) fill(hex(COL.deep, dk));
-  vignette(.55);
-  tag("مؤقت · S19 · لقطة درون مرخّصة للرياض وطويق (أو AI جاهزة في Higgsfield) · شعار معكوس مؤقت");
+  vignette(.45);
 }
 
 /* S20 · 86–89.5 التوقيع */
@@ -718,7 +678,7 @@ function s20(t) {
 
 /* VO guide subtitles — timings from the storyboard VO table */
 const SHOW_SUBS = !/nosubs/.test(location.search);
-const VO = [[1.0, 4.3, "كل شيء كبير... بدأ بفكرة."], [5.5, 8.3, "ومهاد... بدأت بفكرة."], [9.3, 12.8, "فكرة إن التعليم... يكون أقرب. أسهل. وأوسع."],
+let VO = [[1.0, 4.3, "كل شيء كبير... بدأ بفكرة."], [5.5, 8.3, "ومهاد... بدأت بفكرة."], [9.3, 12.8, "فكرة إن التعليم... يكون أقرب. أسهل. وأوسع."],
   [13.8, 17.3, "خلال الشهور اللي راحت... ما كان الطريق سهل."], [18.0, 21.3, "اشتغلنا... وجرّبنا... وغلطنا... وعدّلنا."], [22.3, 25.8, "مرات وقفنا عند مشكلة... ومرات رجعنا من البداية."],
   [26.5, 29.8, "بس كل مرة... كان عندنا سبب نكمل."], [36.0, 41.0, "وفي يوم نحتفل فيه بوطن... علّمنا إن الطموح ما له سقف."], [43.5, 45.8, "نحتفل بخطوة جديدة..."],
   [46.0, 48.4, "خطوة اسمها... مهاد."], [53.6, 56.5, "اليوم... مهاد مو مجرد فكرة."], [56.8, 59.3, "اليوم... مهاد صارت منصة."], [59.5, 61.9, "ومن هنا... تبدأ الحكاية."],
@@ -771,13 +731,15 @@ async function boot() {
   P.meemR = mkPath(STR.meem.pts.slice().reverse().map(TL));
   P.alef = mkPath(STR.alef.pts.map(TL));
   P.dal = mkPath(STR.dal.pts.map(TL));
+  try { const vt = await (await fetch("assets/vo_timing.json")).json(); VO = vt.lines.map(l => [l.t0 - .05, l.t1 + .45, l.text]); } catch (e) { }
   mkSprites(); mkGrain(); mkNet();
+  window.prepareAt = prepareAt;
   window.renderAt = renderAt; window.DUR = DUR; window.FPS = FPS;
   if (/render/.test(location.search)) { document.body.classList.add("render"); window.READY = true; return; }
   const play = document.getElementById("play"), scrub = document.getElementById("scrub"), tc = document.getElementById("tc");
   let t = +(new URLSearchParams(location.search).get("t") || 0), playing = false, last = 0;
   const fmt = x => { const m = Math.floor(x / 60), s = x - m * 60; return String(m).padStart(2, "0") + ":" + s.toFixed(2).padStart(5, "0"); };
-  const draw = () => { renderAt(t); scrub.value = t; tc.textContent = fmt(t); };
+  const draw = () => { const tt = t; prepareAt(tt).then(() => { renderAt(tt); scrub.value = tt; tc.textContent = fmt(tt); }); };
   const tick = now => { if (playing) { t += (now - last) / 1000; last = now; if (t >= DUR) { t = DUR; playing = false; play.textContent = "▶"; } draw(); requestAnimationFrame(tick); } };
   play.onclick = () => { playing = !playing; play.textContent = playing ? "❚❚" : "▶"; if (playing) { if (t >= DUR) t = 0; last = performance.now(); requestAnimationFrame(tick); } };
   scrub.oninput = () => { t = +scrub.value; draw(); };

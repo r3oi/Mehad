@@ -8,3 +8,5 @@ film/audio/*.wav
 __pycache__/
 film/work/trace.py
 film/work/logo_path_raw.json
+film/engine/assets/footage/
+film/work/raw/

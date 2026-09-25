@@ -10,7 +10,7 @@ page.on("pageerror", e => console.error("PAGEERR:", e.message));
 await page.goto(`http://127.0.0.1:8765/engine/index.html?render${flag === "notags" ? "&notags" : ""}`);
 await page.waitForFunction(() => window.READY || window.BOOT_ERROR, null, { timeout: 60000 });
 const err = await page.evaluate(() => window.BOOT_ERROR); if (err) { console.error(err); process.exit(1); }
-const grab = t => page.evaluate(t => { renderAt(t); return document.getElementById("cv").toDataURL("image/jpeg", 0.94).slice(23); }, t);
+const grab = t => page.evaluate(async t => { await prepareAt(t); renderAt(t); return document.getElementById("cv").toDataURL("image/jpeg", 0.94).slice(23); }, t);
 if (mode === "stills") {
   const SD = process.env.SD || "out/stills"; fs.mkdirSync(SD, { recursive: true });
   for (const t of arg.split(",").map(Number)) { const b = await grab(t); fs.writeFileSync(`${SD}/t${t.toFixed(2).padStart(6, "0")}.jpg`, Buffer.from(b, "base64")); }

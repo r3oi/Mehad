@@ -172,12 +172,12 @@ put(creak * (0.3 + 0.7 * np.abs(np.sin(tc * 7))) * np.clip(tc / 3, 0, 1) * .25, 
 nr = int(.75 * SR); tr = np.arange(nr) / SR                        # tape-rewind
 put(np.sin(2 * np.pi * np.cumsum(2400 * np.exp(-tr * 3.2)) / SR) * np.exp(-tr * 2) * .12 + noise(.75, 500, 4000) * .05, 24.75)
 put(harmonic(note('A5'), 3.0), 27.4, .5)                           # knot releases: clean ring
-put(harmonic(note('E6'), 1.2) * .6, 28.6, .5, .2); put(harmonic(note('A6'), 1.2) * .6, 28.75, .5, .2)  # success chime
 put(noise(3.0, 2000, 9000) * np.linspace(0, 1, int(3 * SR)) ** 2 * .12, 30.0)   # riser
 for t0 in (30.8, 31.4, 32.2): put(click(q=(600, 2200)), t0, .6)   # loom shuttle
 for t0, d in ((33.2, .3), (33.5, .28), (33.8, .26), (34.08, .22), (34.32, .2), (34.54, .18), (34.74, .2)): put(click(q=(500, 2000)), t0, .7, .2)
 put(thump(), 35.0, 1.0)                                            # the only deep hit in the film
-put(harmonic(note('D6'), 2.5), 43.5, .4); put(harmonic(note('A6'), 2.5), 46.0, .45)
+for t0, n in ((43.95, 'D5'), (44.5, 'E5'), (45.05, 'F5'), (45.6, 'A5'), (46.25, 'D6'), (46.85, 'E6')):   # one ring per step climbed
+    put(harmonic(note(n), 1.8), t0, .42, 0); put(click(q=(500, 2000)), t0 - .02, .35)
 put(noise(2.0, 3000, 9000) * np.linspace(0, 1, 2 * SR) ** 3 * .15, 46.4)
 for t0 in (49.35, 49.58, 49.8, 50.03, 50.2, 50.35): put(click(q=(2500, 7000)), t0, .3, rng.uniform(-.5, .5))
 put(noise(1.2, 1500, 8000) * np.linspace(0, 1, int(1.2 * SR)) ** 2 * .1, 50.2)
