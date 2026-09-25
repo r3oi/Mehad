@@ -1,0 +1,10 @@
+film/out/
+film/node_modules/
+film/src/
+film/fonts/
+film/work/*.png
+film/work/*.npy
+film/audio/*.wav
+__pycache__/
+film/work/trace.py
+film/work/logo_path_raw.json
