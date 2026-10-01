@@ -278,6 +278,102 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
 .sheet h3 { margin: 0 0 8px; font: 700 18px/1.4 var(--font-display); }
 .sheet p { margin: 0 0 18px; color: var(--muted); }
 
+/* Apple Pay sheet preview (demo mode only). Mirrors the iOS sheet, so it uses Apple's system palette. */
+.ap {
+  --ap-bg: rgb(242 242 247 / 0.97);
+  --ap-group: #ffffff;
+  --ap-ink: #000000;
+  --ap-sub: rgb(60 60 67 / 0.62);
+  --ap-fill: rgb(120 120 128 / 0.16);
+  --ap-blue: #1d4ed8;
+  --ap-ok: #34c759;
+  position: fixed; inset: 0; z-index: 25;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  color: var(--ap-ink);
+}
+.ap-scrim { position: absolute; inset: 0; background: rgb(28 28 30 / 0.42); opacity: 0; transition: opacity .25s ease; }
+.ap.open .ap-scrim { opacity: 1; }
+.ap-hint {
+  position: absolute; bottom: calc(100% + 22px); right: -8px;
+  display: flex; align-items: center; gap: 10px;
+  color: #ffffff; font-size: 17px; font-weight: 600; line-height: 1.2; text-align: right;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.35);
+  opacity: 0; transition: opacity .3s ease .2s;
+}
+.ap-hint::after { content: ""; width: 5px; height: 76px; border-radius: 3px 0 0 3px; background: rgb(255 255 255 / 0.9); }
+.ap.open .ap-hint { opacity: 1; animation: ap-pulse 1.6s ease-in-out infinite .5s; }
+.ap[data-stage="processing"] .ap-hint, .ap[data-stage="done"] .ap-hint { display: none; }
+@keyframes ap-pulse { 50% { opacity: .55; } }
+.ap-sheet {
+  position: absolute; inset-inline: 8px; bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  max-width: 420px; margin-inline: auto;
+  display: grid; gap: 8px;
+  padding: 16px 14px 12px;
+  border-radius: 36px;
+  background: var(--ap-bg);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 20px 60px -10px rgb(0 0 0 / 0.35);
+  transform: translateY(calc(100% + 24px));
+  transition: transform .35s cubic-bezier(.2,.9,.25,1);
+}
+.ap.open .ap-sheet { transform: none; }
+.ap-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 4px; }
+.ap-logo { display: inline-flex; align-items: center; gap: 1px; font-size: 30px; font-weight: 600; letter-spacing: -.02em; }
+.ap-logo svg { font-size: 28px; margin-top: -5px; }
+.ap-x {
+  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%;
+  border: 0; background: var(--ap-fill); color: var(--ap-ink); font-size: 18px;
+}
+.ap-group { background: var(--ap-group); border-radius: 22px; padding: 12px 16px; }
+.ap-row { display: flex; align-items: center; gap: 14px; }
+.ap-grow { flex: 1; min-width: 0; display: grid; }
+.ap-grow b { font-weight: 500; font-size: 17px; }
+.ap-grow small { color: var(--ap-sub); font-size: 15px; }
+.ap-card-art {
+  position: relative; width: 44px; height: 30px; border-radius: 4px; flex: none;
+  background: linear-gradient(135deg, #2338c9, #1b2a8f);
+}
+.ap-card-art i { position: absolute; right: 4px; bottom: 4px; width: 10px; height: 4px; border-radius: 1px; background: rgb(255 255 255 / 0.7); }
+.ap-last4 { font-size: 17px; letter-spacing: .04em; }
+.ap-link .ap-grow { font-size: 17px; }
+.ap-chev { transform: scaleX(-1); color: var(--ap-sub); font-size: 20px; }
+.ap-contact { align-items: flex-start; }
+.ap-contact .ap-grow { font-size: 17px; line-height: 1.35; }
+.ap-contact .ap-grow small { font-size: 14px; margin-bottom: 2px; }
+.ap-contact .ap-chev { align-self: center; }
+.ap-sep { height: 1px; margin: 8px 0; background: rgb(60 60 67 / 0.18); }
+.ap-avatar {
+  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; flex: none;
+  background: var(--ap-fill); color: #1c1c1e; font-size: 22px;
+}
+.ap-total { display: flex; align-items: center; gap: 12px; padding: 6px 6px 0; }
+.ap-total small { color: var(--ap-sub); font-size: 15px; }
+.ap-total strong { font-size: 28px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.ap-info {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--ap-fill); color: var(--ap-sub); font: 600 15px/1 Georgia, serif;
+}
+.ap-confirm {
+  display: grid; justify-items: center; gap: 4px;
+  margin-top: 2px; padding: 6px; border: 0; background: none; color: var(--ap-ink);
+  font: 500 15px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+}
+.ap-confirm-icon { display: grid; place-items: center; width: 44px; height: 44px; }
+.ap-confirm-icon > * { grid-area: 1 / 1; }
+.ap-ic-side { width: 42px; height: 42px; color: var(--ap-blue); }
+.ap-ic-spin {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 3px solid rgb(60 60 67 / 0.18); border-top-color: var(--ap-sub);
+  animation: spin .8s linear infinite;
+}
+.ap-ic-done {
+  width: 42px; height: 42px; padding: 9px; border-radius: 50%;
+  background: var(--ap-ok); color: #ffffff;
+}
+.ap-confirm[data-stage="ready"] .ap-ic-spin, .ap-confirm[data-stage="ready"] .ap-ic-done,
+.ap-confirm[data-stage="processing"] .ap-ic-side, .ap-confirm[data-stage="processing"] .ap-ic-done,
+.ap-confirm[data-stage="done"] .ap-ic-side, .ap-confirm[data-stage="done"] .ap-ic-spin { display: none; }
+
 /* Toast */
 .toast {
   position: fixed; inset-inline: 16px; bottom: calc(100px + env(safe-area-inset-bottom, 0px)); z-index: 20;

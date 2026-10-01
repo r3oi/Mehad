@@ -278,13 +278,46 @@
 
   /* ---------- pay ---------- */
 
+  /* ---------- Apple Pay sheet preview (demo mode only) ---------- */
+
+  function setApStage(stage) {
+    $('ap').dataset.stage = stage;
+    $('ap-confirm').dataset.stage = stage;
+    $('ap-confirm-text').textContent = { ready: 'Confirm with Side Button', processing: 'Processing', done: 'Done' }[stage];
+  }
+
+  function openApplePayPreview() {
+    const { order, quote } = state.data;
+    $('ap-name').textContent = order.student;
+    $('ap-amount').textContent = `SAR ${quote.total.toFixed(2)}`;
+    setApStage('ready');
+    $('ap').hidden = false;
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => requestAnimationFrame(() => $('ap').classList.add('open')));
+    $('ap-confirm').focus({ preventScroll: true });
+  }
+
+  function closeApplePayPreview() {
+    $('ap').classList.remove('open');
+    document.body.style.overflow = '';
+    setTimeout(() => { $('ap').hidden = true; }, 350);
+  }
+
+  function confirmApplePayPreview() {
+    if ($('ap').dataset.stage !== 'ready') return;
+    setApStage('processing');
+    setTimeout(() => {
+      setApStage('done');
+      setTimeout(() => {
+        closeApplePayPreview();
+        showSheet('تم الدفع بنجاح', 'على الموقع الفعلي يُنقل العميل بعدها لصفحة تأكيد الحجز. هذه معاينة ولم يتم خصم أي مبلغ.');
+      }, 900);
+    }, 1300);
+  }
+
   function onApplePayClick() {
     if (state.mode === 'demo') {
-      showSheet(
-        'هنا تفتح نافذة Apple Pay',
-        `على موقع مهاد الفعلي تظهر الآن نافذة Apple Pay الأصلية بمبلغ ${fmt.format(state.data.quote.total)} ريال، ` +
-        'ويؤكد العميل بالضغط مرتين على الزر الجانبي أو بـ Face ID. هذه معاينة فقط ولم يتم خصم أي مبلغ.'
-      );
+      openApplePayPreview();
       return;
     }
     if (!state.applePayAvailable || state.mf.failed) {
@@ -324,6 +357,14 @@
   /* ---------- wiring ---------- */
 
   function wire() {
+    document.querySelectorAll('[data-ap-close]').forEach((el) => el.addEventListener('click', () => {
+      if ($('ap').dataset.stage === 'ready') closeApplePayPreview();
+    }));
+    $('ap-confirm').addEventListener('click', confirmApplePayPreview);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !$('ap').hidden && $('ap').dataset.stage === 'ready') closeApplePayPreview();
+    });
+
     $('details-toggle').addEventListener('click', (e) => {
       const open = e.currentTarget.getAttribute('aria-expanded') !== 'true';
       e.currentTarget.setAttribute('aria-expanded', String(open));

@@ -24,6 +24,8 @@
   <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></g></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M20 6 9 17l-5-5"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2c-4.4 0-8 2.2-8 5v1.5h16V19c0-2.8-3.6-5-8-5Z"/></symbol>
+  <symbol id="i-side" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="21"/><path d="M17 37V15a5 5 0 0 1 5-5h3v9"/><path d="M36 24h-8m3.5-3.5L28 24l3.5 3.5"/></g></symbol>
 </svg>
 
 <div class="page">
@@ -152,6 +154,50 @@
 </dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- Preview only: a stand-in for the native Apple Pay sheet. On the live site iOS draws the real one. -->
+<div class="ap" id="ap" hidden>
+  <div class="ap-scrim" data-ap-close></div>
+  <section class="ap-sheet" role="dialog" aria-modal="true" aria-label="Apple Pay" lang="en" dir="ltr">
+    <div class="ap-hint" aria-hidden="true"><span>Double Click<br>to Pay</span></div>
+    <header class="ap-head">
+      <span class="ap-logo"><svg><use href="#i-apple"/></svg>Pay</span>
+      <button type="button" class="ap-x" data-ap-close aria-label="Cancel"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <div class="ap-group ap-row">
+      <span class="ap-card-art" aria-hidden="true"><i></i></span>
+      <span class="ap-grow"><b>Classic Debit Card</b><small>mada</small></span>
+      <span class="ap-last4">•••• 4821</span>
+    </div>
+    <div class="ap-group ap-row ap-link">
+      <span class="ap-grow">Change Payment Method</span>
+      <svg class="ap-chev"><use href="#i-chev"/></svg>
+    </div>
+    <div class="ap-group ap-row ap-contact">
+      <span class="ap-avatar"><svg><use href="#i-user"/></svg></span>
+      <span class="ap-grow">
+        <small>Contact</small>
+        <span id="ap-name">Rayyan Test3</span>
+        <span>+966 50 123 4567</span>
+        <span class="ap-sep"></span>
+        <span>rayyan@example.com</span>
+      </span>
+      <svg class="ap-chev"><use href="#i-chev"/></svg>
+    </div>
+    <div class="ap-total">
+      <span class="ap-grow"><small>Pay Mehad (via MyFatoorah)</small><strong id="ap-amount">SAR 100.00</strong></span>
+      <span class="ap-info" aria-hidden="true">i</span>
+    </div>
+    <button type="button" class="ap-confirm" id="ap-confirm" data-stage="ready">
+      <span class="ap-confirm-icon">
+        <svg class="ap-ic-side"><use href="#i-side"/></svg>
+        <span class="ap-ic-spin"></span>
+        <svg class="ap-ic-done"><use href="#i-check"/></svg>
+      </span>
+      <span id="ap-confirm-text">Confirm with Side Button</span>
+    </button>
+  </section>
+</div>
 
 <script src="checkout.js"></script>
 </body>
