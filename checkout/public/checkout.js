@@ -19,6 +19,12 @@
     vouchers: [{ code: 'VOUCHAR_26', percent: 99, minTotal: 10 }],
   };
   const VAT_RATE = 0.15;
+  // Display currencies. The charge itself is always in SAR; SAR is pegged at 3.75 per USD.
+  const CURRENCIES = {
+    SAR: { perSar: 1, flag: 'i-flag-sa' },
+    USD: { perSar: 1 / 3.75, flag: 'i-flag-us' },
+  };
+  const CURRENCY_KEY = 'mehad.checkout.currency';
   const APPLE_PAY_NETWORKS = ['mada', 'visa', 'masterCard'];
 
   const $ = (id) => document.getElementById(id);
@@ -29,6 +35,7 @@
     applePayAvailable: false,
     mf: { ready: false, sessionId: null },
     demoPromo: null,
+    currency: 'SAR',
   };
 
   /* ---------- helpers ---------- */
@@ -36,7 +43,14 @@
   const fmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
   const round2 = (n) => Math.round(n * 100) / 100;
 
-  function money(n, sign = '') {
+  const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+
+  // n is always in SAR; it is shown in the selected display currency unless cur says otherwise.
+  function money(n, sign = '', cur = state.currency) {
+    if (cur === 'USD') {
+      const v = usd.format(round2(n * CURRENCIES.USD.perSar));
+      return `<span class="money" dir="ltr" aria-label="${sign}${v}">${sign}${v}</span>`;
+    }
     return `<span class="money" dir="ltr" aria-label="${sign}${fmt.format(n)} ريال">` +
       `${sign}<svg aria-hidden="true"><use href="#i-sar"/></svg><span>${fmt.format(n)}</span></span>`;
   }
@@ -135,6 +149,11 @@
     $('q-vat').innerHTML = money(quote.vat);
     $('q-total').innerHTML = money(quote.total);
     $('bar-total').innerHTML = money(quote.total);
+    const foreign = state.currency !== 'SAR';
+    $('charge-note').hidden = !foreign;
+    $('charge-sar').innerHTML = money(quote.total, '', 'SAR');
+    $('bar-sub').textContent = foreign ? 'شامل الضريبة · الدفع بالريال' : 'شامل الضريبة';
+    renderCurrency();
 
     $('promo-toggle').hidden = Boolean(promoCode);
     $('promo-applied').hidden = !promoCode;
@@ -146,6 +165,41 @@
     $('vouchers').hidden = list.children.length === 0;
 
     renderMethods();
+  }
+
+  function renderCurrency() {
+    const cur = state.currency;
+    $('currency-code').textContent = cur;
+    $('currency-flag').firstElementChild.setAttribute('href', `#${CURRENCIES[cur].flag}`);
+    const menu = $('currency-menu');
+    menu.replaceChildren(...Object.keys(CURRENCIES).map((code) => {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', String(code === cur));
+      li.tabIndex = 0;
+      li.dataset.code = code;
+      li.innerHTML = `<svg class="flag" aria-hidden="true"><use href="#${CURRENCIES[code].flag}"/></svg>` +
+        `<span>${code}</span><svg class="check" aria-hidden="true"><use href="#i-check"/></svg>`;
+      return li;
+    }));
+  }
+
+  function toggleCurrencyMenu(open) {
+    $('currency-menu').hidden = !open;
+    $('currency-btn').setAttribute('aria-expanded', String(open));
+    if (open) {
+      const sel = $('currency-menu').querySelector('[aria-selected="true"]');
+      if (sel) sel.focus();
+    }
+  }
+
+  function setCurrency(code) {
+    if (!CURRENCIES[code]) return;
+    state.currency = code;
+    try { localStorage.setItem(CURRENCY_KEY, code); } catch { /* storage unavailable */ }
+    toggleCurrencyMenu(false);
+    $('currency-btn').focus();
+    render();
   }
 
   function voucherItem(v) {
@@ -364,6 +418,26 @@
   /* ---------- wiring ---------- */
 
   function wire() {
+    $('currency-btn').addEventListener('click', () => toggleCurrencyMenu($('currency-menu').hidden));
+    $('currency-menu').addEventListener('click', (e) => {
+      const li = e.target.closest('li[data-code]');
+      if (li) setCurrency(li.dataset.code);
+    });
+    $('currency-menu').addEventListener('keydown', (e) => {
+      const li = e.target.closest('li[data-code]');
+      if (!li) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrency(li.dataset.code); }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const next = e.key === 'ArrowDown' ? li.nextElementSibling : li.previousElementSibling;
+        if (next) next.focus();
+      }
+      if (e.key === 'Escape') { toggleCurrencyMenu(false); $('currency-btn').focus(); }
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.currency')) toggleCurrencyMenu(false);
+    });
+
     document.querySelectorAll('[data-ap-close]').forEach((el) => el.addEventListener('click', () => {
       if ($('ap').dataset.stage === 'ready') closeApplePayPreview();
     }));
@@ -413,6 +487,10 @@
   }
 
   async function boot() {
+    try {
+      const saved = localStorage.getItem(CURRENCY_KEY);
+      if (CURRENCIES[saved]) state.currency = saved;
+    } catch { /* storage unavailable */ }
     wire();
     state.applePayAvailable = detectApplePay();
 

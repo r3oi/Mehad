@@ -58,19 +58,50 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
   letter-spacing: -0.01em;
   text-wrap: balance;
 }
-.icon-btn {
+
+/* Navbar */
+.navbar { background: var(--surface); border-block-end: 1px solid var(--line); }
+.navbar-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  max-width: calc(var(--col) + 32px); height: 60px;
+  margin-inline: auto; padding-inline: 16px;
+}
+.nav-back {
   display: grid; place-items: center;
-  width: 38px; height: 38px; border-radius: 50%;
-  background: var(--surface); border: 1px solid var(--line);
-  font-size: 18px; text-decoration: none;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--bg); font-size: 18px; text-decoration: none;
 }
-.secure-pill {
+.nav-logo { display: block; width: 34px; height: auto; }
+
+/* Currency */
+.currency { position: relative; }
+.currency-btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 14px; border-radius: 999px;
+  height: 36px; padding-inline: 10px 8px;
+  border: 0; border-radius: 999px;
   background: linear-gradient(135deg, var(--brand), var(--brand-deep));
-  color: var(--on-brand);
-  font-size: 13px; font-weight: 600;
+  color: var(--on-brand); font: 600 14px/1 var(--font-display);
+  direction: ltr;
 }
+.flag { width: 20px; height: 20px; border-radius: 50%; }
+.currency-btn .flag { box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.55); }
+.currency-btn .caret { font-size: 14px; transition: transform .2s ease; }
+.currency-btn[aria-expanded="true"] .caret { transform: rotate(180deg); }
+.currency-menu {
+  position: absolute; left: 0; top: calc(100% + 6px); z-index: 15;
+  min-width: 132px; margin: 0; padding: 6px; list-style: none;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 14px 34px -14px rgb(15 37 34 / 0.35);
+  direction: ltr;
+}
+.currency-menu li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 10px; cursor: pointer;
+  font: 600 14px/1 var(--font-display);
+}
+.currency-menu li:hover, .currency-menu li:focus-visible { background: var(--surface-2); outline: none; }
+.currency-menu .check { margin-inline-start: auto; color: var(--brand-ink); visibility: hidden; }
+.currency-menu li[aria-selected="true"] .check { visibility: visible; }
 
 /* Cards */
 .card {
@@ -172,6 +203,8 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
 .line.discount > span:last-child { color: var(--ok); }
 .line.total { margin-block-start: 6px; color: var(--ink); font: 700 17px/1.3 var(--font-display); }
 .line.total > span:last-child { color: var(--brand-ink); font-size: 20px; }
+.charge-note { margin: -2px 0 0; color: var(--muted); font-size: 12.5px; }
+.charge-note .money { color: var(--ink); font-weight: 600; }
 
 /* Money */
 .money { display: inline-flex; align-items: center; gap: .22em; font-variant-numeric: tabular-nums; white-space: nowrap; }
