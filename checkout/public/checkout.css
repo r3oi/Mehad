@@ -71,18 +71,6 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
   font-size: 13px; font-weight: 600;
 }
 
-/* Demo strip */
-.demo-strip {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px;
-  margin-block-end: 14px; padding: 10px 14px;
-  border: 1px dashed var(--brand); border-radius: 12px;
-  background: var(--brand-soft); color: var(--brand-ink);
-  font-size: 13px;
-}
-.demo-strip p { margin: 0; }
-.switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
-.switch input { accent-color: var(--brand); width: 16px; height: 16px; margin: 0; }
-
 /* Cards */
 .card {
   background: var(--surface);

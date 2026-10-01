@@ -160,10 +160,8 @@
   }
 
   function renderMethods() {
-    $('method-applepay').hidden = !state.applePayAvailable;
-    if (!state.method || (state.method === 'applepay' && !state.applePayAvailable)) {
-      state.method = state.applePayAvailable ? 'applepay' : 'mada';
-    }
+    // Apple Pay is always listed; it is the default only where the device can use it.
+    if (!state.method) state.method = state.applePayAvailable ? 'applepay' : 'mada';
     $(`m-${state.method}`).checked = true;
   }
 
@@ -255,10 +253,9 @@
       });
       state.mf.ready = true;
     } catch (e) {
-      // Apple Pay could not be prepared (domain not registered, network, ...). Fall back to cards quietly.
+      // Apple Pay could not be prepared (domain not registered, network, ...). The tap handler explains it.
       console.error('Apple Pay init failed:', e);
-      state.applePayAvailable = false;
-      renderMethods();
+      state.mf.failed = true;
     }
   }
 
@@ -287,6 +284,13 @@
         'هنا تفتح نافذة Apple Pay',
         `على موقع مهاد الفعلي تظهر الآن نافذة Apple Pay الأصلية بمبلغ ${fmt.format(state.data.quote.total)} ريال، ` +
         'ويؤكد العميل بالضغط مرتين على الزر الجانبي أو بـ Face ID. هذه معاينة فقط ولم يتم خصم أي مبلغ.'
+      );
+      return;
+    }
+    if (!state.applePayAvailable || state.mf.failed) {
+      showSheet(
+        'Apple Pay غير متاح على هذا الجهاز',
+        'يعمل Apple Pay على الآيفون والآيباد والماك من متصفح Safari. اختر مدى أو فيزا / ماستركارد لإكمال الدفع من هذا الجهاز.'
       );
       return;
     }
@@ -358,11 +362,6 @@
       if (history.length > 1) { e.preventDefault(); history.back(); }
     });
 
-    $('demo-ap-toggle').addEventListener('change', (e) => {
-      state.applePayAvailable = e.currentTarget.checked;
-      if (state.applePayAvailable) state.method = 'applepay';
-      renderMethods();
-    });
   }
 
   async function boot() {
@@ -390,8 +389,6 @@
     } else {
       state.mode = 'demo';
       state.data = demoData();
-      $('demo-strip').hidden = false;
-      $('demo-ap-switch').hidden = state.applePayAvailable;
       render();
     }
   }
