@@ -165,9 +165,6 @@
       state.method = state.applePayAvailable ? 'applepay' : 'mada';
     }
     $(`m-${state.method}`).checked = true;
-    const isApple = state.method === 'applepay';
-    $('pay-btn').hidden = isApple;
-    $('applepay-btn').hidden = !isApple;
   }
 
   /* ---------- promo ---------- */
@@ -348,8 +345,11 @@
       });
     });
 
-    $('pay-btn').addEventListener('click', onPayClick);
-    $('applepay-btn').addEventListener('click', onApplePayClick);
+    // Same "ادفع الآن" button for every method. Apple Pay is dispatched synchronously so Safari keeps the tap gesture.
+    $('pay-btn').addEventListener('click', () => {
+      if (state.method === 'applepay') onApplePayClick();
+      else onPayClick();
+    });
 
     $('back-link').addEventListener('click', (e) => {
       if (history.length > 1) { e.preventDefault(); history.back(); }
@@ -368,9 +368,6 @@
   async function boot() {
     wire();
     state.applePayAvailable = detectApplePay();
-    if (state.applePayAvailable && CSS.supports('-webkit-appearance', '-apple-pay-button')) {
-      $('applepay-btn').classList.add('native');
-    }
 
     let config = null;
     try {

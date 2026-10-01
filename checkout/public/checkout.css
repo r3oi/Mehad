@@ -1,5 +1,5 @@
 /* Layout: one narrow column of stacked cards (Alraheek checkout layout) with the pay bar pinned to the bottom.
-   Identity: Mehad teal on a green-tinted neutral, Cairo for text, Readex Pro for headings and amounts. */
+   Identity: light theme only, Mehad teal on a green-tinted neutral, Cairo for text, Readex Pro for headings and amounts. */
 :root {
   --bg: #eef3f2;
   --surface: #ffffff;
@@ -14,8 +14,6 @@
   --on-brand: #ffffff;
   --ok: #15803d;
   --danger: #b42318;
-  --apple-bg: #000000;
-  --apple-fg: #ffffff;
   --scrim: rgb(9 24 22 / 0.45);
   --shadow: 0 1px 2px rgb(15 37 34 / 0.05), 0 10px 28px -16px rgb(15 37 34 / 0.18);
 
@@ -26,23 +24,6 @@
   --col: 560px;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #08110f; --surface: #111d1b; --surface-2: #0c1715; --ink: #e6efed; --muted: #93a7a2;
-    --line: #20302d; --brand: #2fb8ad; --brand-ink: #5ed2c7; --brand-deep: #0f5c55; --brand-soft: #123a36;
-    --on-brand: #ffffff; --ok: #4ade80; --danger: #f97066; --apple-bg: #ffffff; --apple-fg: #000000;
-    --scrim: rgb(0 0 0 / 0.6); --shadow: 0 1px 0 rgb(255 255 255 / 0.03);
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #08110f; --surface: #111d1b; --surface-2: #0c1715; --ink: #e6efed; --muted: #93a7a2;
-  --line: #20302d; --brand: #2fb8ad; --brand-ink: #5ed2c7; --brand-deep: #0f5c55; --brand-soft: #123a36;
-  --on-brand: #ffffff; --ok: #4ade80; --danger: #f97066; --apple-bg: #ffffff; --apple-fg: #000000;
-  --scrim: rgb(0 0 0 / 0.6); --shadow: 0 1px 0 rgb(255 255 255 / 0.03);
-  color-scheme: dark;
-}
-
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -281,29 +262,6 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
 .btn-pay:active { transform: scale(.98); }
 .btn-pay:disabled { filter: grayscale(.4); opacity: .7; cursor: default; }
 .btn-pay.wide { width: 100%; }
-
-/* Apple Pay button: the real WebKit-drawn button where available, a matching fallback elsewhere. */
-.btn-applepay {
-  direction: ltr;
-  flex: none; min-width: 140px; height: 48px; padding: 0 22px;
-  border: 0; border-radius: 999px;
-  background: var(--apple-bg); color: var(--apple-fg);
-}
-.btn-applepay .fallback { display: inline-flex; align-items: center; gap: 2px; font: 600 19px/1 -apple-system, "Helvetica Neue", Arial, sans-serif; }
-.btn-applepay .fallback svg { font-size: 19px; margin-top: -3px; }
-@supports (-webkit-appearance: -apple-pay-button) {
-  .btn-applepay.native {
-    -webkit-appearance: -apple-pay-button;
-    -apple-pay-button-type: plain;
-    -apple-pay-button-style: black;
-    background: none; padding: 0; width: 150px;
-  }
-  .btn-applepay.native .fallback { display: none; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .btn-applepay.native { -apple-pay-button-style: white; }
-  }
-  :root[data-theme="dark"] .btn-applepay.native { -apple-pay-button-style: white; }
-}
 
 .mf-host { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 
