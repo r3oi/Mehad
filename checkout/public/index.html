@@ -24,6 +24,8 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M20 6 9 17l-5-5"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M18 6 6 18M6 6l12 12"/></symbol>
   <symbol id="i-flag-us" viewBox="0 0 24 24"><clipPath id="clip-us"><circle cx="12" cy="12" r="12"/></clipPath><g clip-path="url(#clip-us)"><rect width="24" height="24" fill="#ffffff"/><path fill="#d22f27" d="M0 0h24v1.85H0zm0 3.7h24v1.85H0zm0 3.7h24v1.85H0zm0 3.7h24v1.85H0zm0 3.7h24v1.85H0zm0 3.7h24v1.85H0zm0 3.7h24V24H0z"/><rect width="11" height="12.95" fill="#1f3a93"/><g fill="#ffffff"><circle cx="2.8" cy="2.8" r=".75"/><circle cx="5.6" cy="2.8" r=".75"/><circle cx="8.4" cy="2.8" r=".75"/><circle cx="4.2" cy="5.4" r=".75"/><circle cx="7" cy="5.4" r=".75"/><circle cx="2.8" cy="8" r=".75"/><circle cx="5.6" cy="8" r=".75"/><circle cx="8.4" cy="8" r=".75"/><circle cx="4.2" cy="10.6" r=".75"/><circle cx="7" cy="10.6" r=".75"/></g></g></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></g></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 9V7a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a3 3 0 0 0 0 6v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a3 3 0 0 0 0-6Z"/><path stroke-dasharray="1.6 2.2" stroke-linecap="round" d="M15 7v10"/></g></symbol>
   <symbol id="i-user" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2c-4.4 0-8 2.2-8 5v1.5h16V19c0-2.8-3.6-5-8-5Z"/></symbol>
   <symbol id="i-side" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="21"/><path d="M17 37V15a5 5 0 0 1 5-5h3v9"/><path d="M36 24h-8m3.5-3.5L28 24l3.5 3.5"/></g></symbol>
 </svg>
@@ -35,6 +37,7 @@
   </div>
 </nav>
 
+<div id="view-checkout">
 <div class="page">
 
   <header class="topbar">
@@ -78,7 +81,7 @@
     <section class="card" aria-labelledby="pay-h">
       <div class="card-head"><h2 id="pay-h">ملخص الدفع</h2></div>
 
-      <button type="button" class="action-row" id="promo-toggle" aria-expanded="false" aria-controls="promo-panel">
+      <button type="button" class="action-row" id="promo-toggle" aria-haspopup="dialog" aria-controls="promo-dialog">
         <svg class="lead"><use href="#i-percent"/></svg>
         <span class="grow">أضف رمز خصم</span>
         <span class="link">أدخل الرمز<svg><use href="#i-chev"/></svg></span>
@@ -89,19 +92,6 @@
         <span class="grow">تم تطبيق <b id="promo-applied-code" dir="ltr"></b></span>
         <button type="button" class="link danger" id="promo-remove">إزالة</button>
       </div>
-
-      <form class="promo-panel" id="promo-panel" hidden novalidate>
-        <div class="promo-input">
-          <label class="sr-only" for="promo-code">رمز الخصم</label>
-          <input id="promo-code" name="promo-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="أدخل رمز الخصم" dir="auto">
-          <button type="submit" class="btn-soft" id="promo-apply">تطبيق</button>
-        </div>
-        <p class="field-error" id="promo-error" role="alert" hidden></p>
-        <div class="vouchers" id="vouchers" hidden>
-          <p class="mini-label">القسائم المتاحة لك</p>
-          <ul id="voucher-list"></ul>
-        </div>
-      </form>
 
       <div class="receipt">
         <div class="line"><span>المجموع الفرعي</span><span id="q-subtotal"></span></div>
@@ -149,6 +139,71 @@
   </div>
 </div>
 
+</div>
+
+<!-- Step 2 for mada / Visa / Mastercard -->
+<div class="view-card is-offstage" id="view-card" aria-hidden="true" inert>
+  <div class="page page-card">
+    <header class="topbar">
+      <h1>الدفع بالبطاقة</h1>
+      <span class="secure-chip"><svg><use href="#i-lock"/></svg>اتصال آمن</span>
+    </header>
+
+    <section class="card paycard" aria-labelledby="paycard-h">
+      <div class="paycard-head">
+        <h2 id="paycard-h">بيانات البطاقة</h2>
+        <span class="paycard-brands" id="paycard-brands"></span>
+      </div>
+
+      <div class="paycard-inner">
+        <div class="paycard-total">
+          <span>المبلغ المستحق</span>
+          <span class="paycard-amount"><span id="pc-total"></span><small id="pc-total-alt" hidden></small></span>
+        </div>
+
+        <!-- Live: MyFatoorah's secure card fields render here, so card data never touches Mehad's servers. -->
+        <div id="mf-card" class="mf-card"></div>
+        <p class="mf-fallback" id="mf-fallback" hidden>تعذّر تحميل نموذج البطاقة الآن. اضغط «ادفع» وسننقلك لصفحة الدفع الآمنة في ماي فاتورة.</p>
+
+        <!-- Preview only: stand-in fields. Nothing typed here leaves the page. -->
+        <form class="card-form" id="card-form" novalidate>
+          <div class="field">
+            <label for="cc-name">اسم حامل البطاقة</label>
+            <input id="cc-name" name="cc-name" type="text" autocomplete="cc-name" placeholder="الاسم كما يظهر على البطاقة" dir="auto" spellcheck="false" autocapitalize="characters" aria-describedby="cc-name-err">
+            <p class="field-msg" id="cc-name-err" role="alert"></p>
+          </div>
+          <div class="field">
+            <label for="cc-number">رقم البطاقة</label>
+            <div class="input-wrap">
+              <input id="cc-number" name="cc-number" type="text" inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000" dir="ltr" maxlength="23" aria-describedby="cc-number-err">
+              <span class="cc-brand" id="cc-brand" aria-hidden="true"><b>VISA</b><i class="mc"><i></i><i></i></i></span>
+            </div>
+            <p class="field-msg" id="cc-number-err" role="alert"></p>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="cc-exp">تاريخ الانتهاء</label>
+              <input id="cc-exp" name="cc-exp" type="text" inputmode="numeric" autocomplete="cc-exp" placeholder="MM / YY" dir="ltr" maxlength="7" aria-describedby="cc-exp-err">
+              <p class="field-msg" id="cc-exp-err" role="alert"></p>
+            </div>
+            <div class="field">
+              <label for="cc-cvv">رمز الأمان</label>
+              <input id="cc-cvv" name="cc-cvv" type="text" inputmode="numeric" autocomplete="cc-csc" placeholder="CVV" dir="ltr" maxlength="4" aria-describedby="cc-cvv-err">
+              <p class="field-msg" id="cc-cvv-err" role="alert"></p>
+            </div>
+          </div>
+        </form>
+
+        <button type="button" class="btn-pay wide" id="card-pay-btn">ادفع <span id="card-pay-amount"></span></button>
+        <p class="paycard-note" id="paycard-note"><svg><use href="#i-lock"/></svg><span id="paycard-note-text"></span></p>
+        <button type="button" class="demo-fill" id="demo-fill" hidden>تعبئة بطاقة تجريبية</button>
+      </div>
+    </section>
+
+    <button type="button" class="change-method" id="change-method"><svg><use href="#i-back"/></svg>تغيير طريقة الدفع</button>
+  </div>
+</div>
+
 <!-- MyFatoorah renders its Apple Pay frame here. We use our own button, so it stays visually hidden, not display:none. -->
 <div id="mf-applepay" class="mf-host" aria-hidden="true"></div>
 
@@ -162,6 +217,38 @@
     <h3 id="sheet-title"></h3>
     <p id="sheet-body"></p>
     <button class="btn-pay wide" id="sheet-close" value="close">تمام</button>
+  </form>
+</dialog>
+
+<dialog class="modal" id="promo-dialog" aria-labelledby="promo-title">
+  <form class="modal-body" id="promo-form" novalidate>
+    <div class="modal-head">
+      <span class="modal-icon"><svg><use href="#i-ticket"/></svg></span>
+      <div class="modal-titles">
+        <h3 id="promo-title">استخدم رمز الخصم</h3>
+        <p>اكتب الرمز أو اختر قسيمة من القسائم المتاحة لك.</p>
+      </div>
+      <button type="button" class="modal-x" id="promo-x" aria-label="إغلاق"><svg><use href="#i-x"/></svg></button>
+    </div>
+
+    <div class="field">
+      <label for="promo-code">رمز الخصم</label>
+      <div class="promo-field">
+        <svg><use href="#i-percent"/></svg>
+        <input id="promo-code" name="promo-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="مثال: MEHAD10" dir="ltr" aria-describedby="promo-error">
+      </div>
+      <p class="field-msg" id="promo-error" role="alert" hidden></p>
+    </div>
+
+    <div class="vouchers" id="vouchers" hidden>
+      <p class="mini-label">القسائم المتاحة لك</p>
+      <ul class="tickets" id="voucher-list"></ul>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" id="promo-cancel">إلغاء</button>
+      <button type="submit" class="btn-pay" id="promo-apply">تطبيق</button>
+    </div>
   </form>
 </dialog>
 

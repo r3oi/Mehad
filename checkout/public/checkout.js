@@ -26,7 +26,47 @@
     USD: { perSar: 1 / 3.75, flag: { symbol: 'i-flag-us' } },
   };
   const CURRENCY_KEY = 'mehad.checkout.currency';
-  const APPLE_PAY_NETWORKS = ['mada', 'visa', 'masterCard'];
+  const CARD_NETWORKS = ['mada', 'visa', 'masterCard'];
+  const BRAND_LOGOS = {
+    mada: '<span class="logo logo-mada" aria-label="مدى"><span class="bars"><i></i><i></i></span><b>mada</b></span>',
+    card: '<span class="logo logo-cards" aria-label="فيزا وماستركارد"><b>VISA</b><i class="mc"><i></i><i></i></i></span>',
+  };
+  // MyFatoorah draws its card fields in an iframe, so they get literal values instead of our CSS tokens.
+  const MF_CARD_STYLE = {
+    hideNetworkIcons: false,
+    cardHeight: '250px',
+    input: {
+      color: '#0f2522',
+      fontSize: '16px',
+      fontFamily: 'Cairo, Tahoma, sans-serif',
+      inputHeight: '50px',
+      borderColor: '#e0e8e6',
+      backgroundColor: '#f5f8f7',
+      borderRadius: '14px',
+      placeHolder: {
+        holderName: 'الاسم كما يظهر على البطاقة',
+        cardNumber: '0000 0000 0000 0000',
+        expiryDate: 'MM / YY',
+        securityCode: 'CVV',
+      },
+    },
+    label: {
+      display: true,
+      color: '#0f2522',
+      fontSize: '14px',
+      fontWeight: '600',
+      fontFamily: 'Cairo, Tahoma, sans-serif',
+      text: {
+        holderName: 'اسم حامل البطاقة',
+        cardNumber: 'رقم البطاقة',
+        expiryDate: 'تاريخ الانتهاء',
+        securityCode: 'رمز الأمان',
+      },
+    },
+    error: { borderColor: '#b42318', borderRadius: '14px' },
+    button: { useCustomButton: true }, // our "ادفع" button calls submitCardPayment()
+    separator: { useCustomSeparator: true },
+  };
 
   const $ = (id) => document.getElementById(id);
   const state = {
@@ -34,15 +74,19 @@
     data: null, // { order, quote, promoCode, vouchers }
     method: null,
     applePayAvailable: false,
-    mf: { ready: false, sessionId: null },
+    mf: { ready: false, failed: false, sessionId: null },
     demoPromo: null,
     currency: 'SAR',
+    view: 'checkout',
+    pushedCardView: false,
   };
 
   /* ---------- helpers ---------- */
 
   const fmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
   const round2 = (n) => Math.round(n * 100) / 100;
+  const digits = (s) => String(s).replace(/\D/g, '');
+  const isTouch = () => window.matchMedia('(pointer: coarse)').matches;
 
   const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
@@ -82,12 +126,13 @@
     if (text) $('busy-text').textContent = text;
   }
 
-  function showSheet(title, body) {
+  function showSheet(title, body, onClose) {
     $('sheet-title').textContent = title;
     $('sheet-body').textContent = body;
     const d = $('sheet');
+    if (onClose) d.addEventListener('close', onClose, { once: true });
     if (typeof d.showModal === 'function') d.showModal();
-    else toast(body);
+    else { toast(body); if (onClose) onClose(); }
   }
 
   function loadScript(src) {
@@ -159,13 +204,13 @@
     $('promo-toggle').hidden = Boolean(promoCode);
     $('promo-applied').hidden = !promoCode;
     $('promo-applied-code').textContent = promoCode || '';
-    if (promoCode) $('promo-panel').hidden = true;
 
     const list = $('voucher-list');
     list.replaceChildren(...vouchers.filter((v) => v.code !== promoCode).map(voucherItem));
     $('vouchers').hidden = list.children.length === 0;
 
     renderMethods();
+    if (state.view === 'card') renderCardView();
   }
 
   function flagHtml(code) {
@@ -211,12 +256,14 @@
   }
 
   function voucherItem(v) {
+    const eligible = state.data.quote.subtotal >= v.minTotal;
     const li = document.createElement('li');
-    li.className = 'voucher';
+    li.className = 'ticket';
+    if (!eligible) li.setAttribute('aria-disabled', 'true');
     li.innerHTML =
-      `<div class="v-text"><code dir="ltr"></code><span class="tag">خصم ${v.percent}٪</span>` +
-      `<small>صالح للطلبات بقيمة ${money(v.minTotal)} أو أكثر</small></div>` +
-      '<button type="button">تطبيق</button>';
+      `<div class="ticket-value"><b>${v.percent}٪</b><small>خصم</small></div>` +
+      `<div class="ticket-body"><code dir="ltr"></code><small>للطلبات بقيمة ${money(v.minTotal)} أو أكثر</small></div>` +
+      `<button type="button" class="ticket-use"${eligible ? '' : ' disabled'}>استخدم</button>`;
     li.querySelector('code').textContent = v.code;
     li.querySelector('button').addEventListener('click', () => applyPromo(v.code));
     return li;
@@ -228,15 +275,37 @@
     $(`m-${state.method}`).checked = true;
   }
 
-  /* ---------- promo ---------- */
+  /* ---------- promo popup ---------- */
+
+  function openPromo() {
+    $('promo-error').hidden = true;
+    $('promo-code').value = '';
+    $('promo-code').removeAttribute('aria-invalid');
+    const d = $('promo-dialog');
+    if (typeof d.showModal === 'function') d.showModal();
+    else d.setAttribute('open', '');
+    // On phones let the customer see the vouchers before the keyboard covers them.
+    if (!isTouch()) $('promo-code').focus();
+  }
+
+  function closePromo() {
+    const d = $('promo-dialog');
+    if (d.open) d.close();
+  }
+
+  function showPromoError(msg) {
+    $('promo-error').textContent = msg;
+    $('promo-error').hidden = false;
+    $('promo-code').setAttribute('aria-invalid', 'true');
+  }
 
   async function applyPromo(raw) {
     const code = String(raw || '').trim().toUpperCase();
-    const err = $('promo-error');
-    err.hidden = true;
+    $('promo-error').hidden = true;
+    $('promo-code').removeAttribute('aria-invalid');
     if (!code) {
-      err.textContent = 'اكتب رمز الخصم أولاً.';
-      err.hidden = false;
+      showPromoError('اكتب رمز الخصم أولاً.');
+      $('promo-code').focus();
       return;
     }
     $('promo-apply').disabled = true;
@@ -250,13 +319,12 @@
         state.demoPromo = code;
         state.data = demoData();
       }
-      $('promo-code').value = '';
+      closePromo();
       render();
       onTotalChanged();
       toast(`تم تطبيق الرمز ${code}`);
     } catch (e) {
-      err.textContent = e.message;
-      err.hidden = false;
+      showPromoError(e.message);
     } finally {
       $('promo-apply').disabled = false;
     }
@@ -283,29 +351,167 @@
     }
   }
 
-  /* ---------- Apple Pay via MyFatoorah embedded session ---------- */
+  /* ---------- views: checkout → card payment ---------- */
 
-  async function initApplePay(scriptUrl) {
+  function showView(name, { push = true } = {}) {
+    const card = name === 'card';
+    state.view = name;
+    $('toast').hidden = true;
+    $('view-checkout').hidden = card;
+    // The card view is moved off stage rather than display:none, so MyFatoorah's iframe keeps its size.
+    $('view-card').classList.toggle('is-offstage', !card);
+    $('view-card').toggleAttribute('inert', !card);
+    $('view-card').setAttribute('aria-hidden', String(!card));
+    if (card) renderCardView();
+    window.scrollTo(0, 0);
+    if (card && push) {
+      try {
+        history.pushState({ view: 'card' }, '');
+        state.pushedCardView = true;
+      } catch {
+        state.pushedCardView = false;
+      }
+    }
+    if (card && state.mode === 'demo' && !isTouch()) $('cc-name').focus();
+  }
+
+  function leaveCardView() {
+    if (state.pushedCardView) history.back(); // popstate brings the checkout back
+    else showView('checkout', { push: false });
+  }
+
+  function renderCardView() {
+    const { quote } = state.data;
+    const foreign = state.currency !== 'SAR';
+    $('pc-total').innerHTML = money(quote.total, '', 'SAR');
+    $('pc-total-alt').hidden = !foreign;
+    $('pc-total-alt').innerHTML = foreign ? `≈ ${money(quote.total)}` : '';
+    $('card-pay-amount').innerHTML = money(quote.total, '', 'SAR');
+    $('paycard-brands').innerHTML = BRAND_LOGOS[state.method === 'mada' ? 'mada' : 'card'];
+    $('mf-fallback').hidden = !(state.mode === 'live' && state.mf.failed);
+    if (state.mode === 'live') $('mf-card').hidden = state.mf.failed;
+    $('paycard-note-text').textContent = state.mode === 'live'
+      ? 'تُرسل بيانات البطاقة مشفّرة إلى ماي فاتورة مباشرة، ولا تحفظها مهاد.'
+      : 'معاينة: بيانات البطاقة لا تُرسل ولا تُحفظ.';
+  }
+
+  /* ---------- card form (preview mode) ---------- */
+
+  function luhn(num) {
+    let sum = 0;
+    let alt = false;
+    for (let i = num.length - 1; i >= 0; i -= 1) {
+      let d = Number(num[i]);
+      if (alt) { d *= 2; if (d > 9) d -= 9; }
+      sum += d;
+      alt = !alt;
+    }
+    return sum % 10 === 0;
+  }
+
+  function cardBrand(num) {
+    if (/^4/.test(num)) return 'visa';
+    const p4 = Number(num.slice(0, 4));
+    if (/^5[1-5]/.test(num) || (num.length >= 4 && p4 >= 2221 && p4 <= 2720)) return 'mc';
+    return '';
+  }
+
+  const formatNumber = (v) => digits(v).slice(0, 19).replace(/(\d{4})(?=\d)/g, '$1 ');
+
+  function formatExpiry(v) {
+    let d = digits(v).slice(0, 4);
+    if (d.length === 1 && d > '1') d = `0${d}`;
+    return d.length > 2 ? `${d.slice(0, 2)} / ${d.slice(2)}` : d;
+  }
+
+  function setFieldError(id, msg) {
+    $(id).setAttribute('aria-invalid', String(Boolean(msg)));
+    $(`${id}-err`).textContent = msg || '';
+  }
+
+  function validateCard() {
+    const errors = {};
+    const name = $('cc-name').value.trim();
+    const num = digits($('cc-number').value);
+    const exp = digits($('cc-exp').value);
+    const cvv = digits($('cc-cvv').value);
+
+    if (name.length < 2) errors['cc-name'] = 'اكتب الاسم كما يظهر على البطاقة.';
+    if (!num) errors['cc-number'] = 'اكتب رقم البطاقة.';
+    else if (num.length < 13 || !luhn(num)) errors['cc-number'] = 'رقم البطاقة غير صحيح.';
+    const mm = Number(exp.slice(0, 2));
+    const yy = Number(exp.slice(2));
+    if (exp.length !== 4 || mm < 1 || mm > 12) errors['cc-exp'] = 'تاريخ غير صحيح.';
+    else if (new Date(2000 + yy, mm, 1) <= new Date()) errors['cc-exp'] = 'البطاقة منتهية الصلاحية.';
+    if (cvv.length < 3) errors['cc-cvv'] = 'رمز غير صحيح.';
+
+    ['cc-name', 'cc-number', 'cc-exp', 'cc-cvv'].forEach((id) => setFieldError(id, errors[id]));
+    const first = Object.keys(errors)[0];
+    if (first) $(first).focus();
+    return !first;
+  }
+
+  function resetCardForm() {
+    $('card-form').reset();
+    ['cc-name', 'cc-number', 'cc-exp', 'cc-cvv'].forEach((id) => setFieldError(id, ''));
+    $('cc-brand').className = 'cc-brand';
+  }
+
+  function fillDemoCard() {
+    $('cc-name').value = 'RAYYAN TEST';
+    $('cc-number').value = formatNumber('4111111111111111');
+    $('cc-exp').value = '12 / 30';
+    $('cc-cvv').value = '123';
+    $('cc-brand').className = 'cc-brand is-visa';
+    ['cc-name', 'cc-number', 'cc-exp', 'cc-cvv'].forEach((id) => setFieldError(id, ''));
+  }
+
+  function onCardPayClick() {
+    if (state.mode === 'live') {
+      // MyFatoorah validates its own fields, then calls onMyFatoorahPayment.
+      if (state.mf.ready) window.myfatoorah.submitCardPayment();
+      else redirectToHostedPage();
+      return;
+    }
+    if (!validateCard()) return;
+    setBusy(true, 'جارٍ معالجة الدفع…');
+    setTimeout(() => {
+      setBusy(false);
+      showSheet(
+        'تم الدفع بنجاح',
+        'على الموقع الفعلي يتحقق البنك من العملية برمز التحقق (OTP) ثم يُنقل العميل لصفحة تأكيد الحجز. هذه معاينة: لم تُرسل بيانات البطاقة ولم يُخصم أي مبلغ.',
+        () => { resetCardForm(); leaveCardView(); }
+      );
+    }, 1400);
+  }
+
+  /* ---------- MyFatoorah embedded session (card + Apple Pay) ---------- */
+
+  async function initMyFatoorah() {
     state.mf.ready = false;
+    state.mf.failed = false;
     try {
-      if (!window.myfatoorah) await loadScript(scriptUrl);
+      if (!window.myfatoorah) await loadScript(state.scriptUrl);
       const s = await api('/api/payments/session', {});
       state.mf.sessionId = s.sessionId;
+      const options = ['Card'];
+      if (state.applePayAvailable) options.push('ApplePay');
       window.myfatoorah.init({
         sessionId: s.sessionId,
         countryCode: s.countryCode,
         currencyCode: s.currencyCode,
         amount: String(s.amount),
-        callback: onApplePayAuthorized,
-        containerId: 'mf-applepay',
-        paymentOptions: ['ApplePay'],
-        supportedNetworks: APPLE_PAY_NETWORKS,
+        callback: onMyFatoorahPayment,
+        containerId: 'mf-card',
+        paymentOptions: options,
+        supportedNetworks: CARD_NETWORKS,
         language: 'ar',
         settings: {
+          card: { style: MF_CARD_STYLE },
           applePay: {
             containerId: 'mf-applepay',
-            callback: onApplePayAuthorized,
-            supportedNetworks: APPLE_PAY_NETWORKS,
+            callback: onMyFatoorahPayment,
+            supportedNetworks: CARD_NETWORKS,
             language: 'ar',
             useCustomButton: true, // our own button calls initApplePayPayment()
             sessionStarted: () => {},
@@ -316,30 +522,42 @@
       });
       state.mf.ready = true;
     } catch (e) {
-      // Apple Pay could not be prepared (domain not registered, network, ...). The tap handler explains it.
-      console.error('Apple Pay init failed:', e);
+      // Domain not registered, network, ... Cards fall back to MyFatoorah's hosted page; Apple Pay explains itself.
+      console.error('MyFatoorah init failed:', e);
       state.mf.failed = true;
     }
+    if (state.view === 'card') renderCardView();
   }
 
-  async function onApplePayAuthorized(response) {
+  async function onMyFatoorahPayment(response) {
     if (!response || !response.isSuccess) {
       setBusy(false);
-      toast('لم تكتمل عملية Apple Pay. حاول مرة أخرى أو اختر طريقة دفع أخرى.');
+      toast(response && response.paymentType === 'Card'
+        ? 'تحقّق من بيانات البطاقة وحاول مرة أخرى.'
+        : 'لم تكتمل عملية الدفع. حاول مرة أخرى أو اختر طريقة دفع أخرى.');
       return;
     }
     setBusy(true, 'جارٍ تأكيد الدفع…');
     try {
       const r = await api('/api/payments/execute', { sessionId: response.sessionId || state.mf.sessionId });
+      window.location.assign(r.paymentUrl); // 3-D Secure for cards, straight to the result for Apple Pay
+    } catch (e) {
+      setBusy(false);
+      toast(e.message);
+      initMyFatoorah(); // a session id is single-use, so prepare a fresh one
+    }
+  }
+
+  async function redirectToHostedPage() {
+    setBusy(true, 'جارٍ تحويلك لصفحة الدفع الآمنة…');
+    try {
+      const r = await api('/api/payments/redirect', { method: state.method });
       window.location.assign(r.paymentUrl);
     } catch (e) {
       setBusy(false);
       toast(e.message);
-      initApplePay(state.scriptUrl); // a session id is single-use, so prepare a fresh one
     }
   }
-
-  /* ---------- pay ---------- */
 
   /* ---------- Apple Pay sheet preview (demo mode only) ---------- */
 
@@ -384,6 +602,8 @@
     }, 1300);
   }
 
+  /* ---------- pay ---------- */
+
   function onApplePayClick() {
     if (state.mode === 'demo') {
       openApplePayPreview();
@@ -402,25 +622,6 @@
     }
     // Must run synchronously inside the tap, or Safari refuses to open the sheet.
     window.myfatoorah.initApplePayPayment();
-  }
-
-  async function onPayClick() {
-    const label = state.method === 'mada' ? 'مدى' : 'فيزا / ماستركارد';
-    if (state.mode === 'demo') {
-      showSheet(
-        `الدفع بـ ${label}`,
-        'على الموقع الفعلي ينتقل العميل إلى صفحة الدفع الآمنة في ماي فاتورة لإدخال بيانات البطاقة، ثم يرجع لصفحة نتيجة الدفع. هذه معاينة فقط.'
-      );
-      return;
-    }
-    setBusy(true, 'جارٍ تحويلك لصفحة الدفع الآمنة…');
-    try {
-      const r = await api('/api/payments/redirect', { method: state.method });
-      window.location.assign(r.paymentUrl);
-    } catch (e) {
-      setBusy(false);
-      toast(e.message);
-    }
   }
 
   /* ---------- wiring ---------- */
@@ -460,15 +661,20 @@
       $('details').hidden = !open;
     });
 
-    $('promo-toggle').addEventListener('click', (e) => {
-      const open = $('promo-panel').hidden;
-      $('promo-panel').hidden = !open;
-      e.currentTarget.setAttribute('aria-expanded', String(open));
-      if (open) $('promo-code').focus();
+    // Promo popup
+    $('promo-toggle').addEventListener('click', openPromo);
+    $('promo-x').addEventListener('click', closePromo);
+    $('promo-cancel').addEventListener('click', closePromo);
+    $('promo-dialog').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closePromo(); // tap on the backdrop
     });
-    $('promo-panel').addEventListener('submit', (e) => {
+    $('promo-form').addEventListener('submit', (e) => {
       e.preventDefault();
       applyPromo($('promo-code').value);
+    });
+    $('promo-code').addEventListener('input', () => {
+      $('promo-error').hidden = true;
+      $('promo-code').removeAttribute('aria-invalid');
     });
     $('promo-remove').addEventListener('click', removePromo);
 
@@ -482,16 +688,44 @@
     // Same "ادفع الآن" button for every method. Apple Pay is dispatched synchronously so Safari keeps the tap gesture.
     $('pay-btn').addEventListener('click', () => {
       if (state.method === 'applepay') onApplePayClick();
-      else onPayClick();
+      else showView('card');
+    });
+
+    // Card form
+    $('cc-number').addEventListener('input', (e) => {
+      e.target.value = formatNumber(e.target.value);
+      const brand = cardBrand(digits(e.target.value));
+      $('cc-brand').className = `cc-brand${brand ? ` is-${brand}` : ''}`;
+      setFieldError('cc-number', '');
+    });
+    $('cc-exp').addEventListener('input', (e) => {
+      const deleting = e.inputType && e.inputType.startsWith('delete');
+      e.target.value = deleting ? e.target.value : formatExpiry(e.target.value);
+      setFieldError('cc-exp', '');
+    });
+    $('cc-cvv').addEventListener('input', (e) => {
+      e.target.value = digits(e.target.value).slice(0, 4);
+      setFieldError('cc-cvv', '');
+    });
+    $('cc-name').addEventListener('input', () => setFieldError('cc-name', ''));
+    $('card-form').addEventListener('submit', (e) => { e.preventDefault(); onCardPayClick(); });
+    $('card-pay-btn').addEventListener('click', onCardPayClick);
+    $('demo-fill').addEventListener('click', fillDemoCard);
+    $('change-method').addEventListener('click', leaveCardView);
+
+    window.addEventListener('popstate', (e) => {
+      const view = e.state && e.state.view === 'card' ? 'card' : 'checkout';
+      state.pushedCardView = view === 'card';
+      if (view !== state.view) showView(view, { push: false });
     });
 
     $('back-link').addEventListener('click', (e) => {
+      if (state.view === 'card') { e.preventDefault(); leaveCardView(); return; }
       if (history.length > 1) { e.preventDefault(); history.back(); }
     });
     $('edit-link').addEventListener('click', (e) => {
       if (history.length > 1) { e.preventDefault(); history.back(); }
     });
-
   }
 
   async function boot() {
@@ -512,6 +746,7 @@
     if (config && config.mode === 'live') {
       state.mode = 'live';
       state.scriptUrl = config.scriptUrl;
+      $('card-form').remove(); // live card data only ever goes into MyFatoorah's fields
       try {
         state.data = await api('/api/order');
       } catch (e) {
@@ -519,10 +754,12 @@
         return;
       }
       render();
-      if (state.applePayAvailable) initApplePay(config.scriptUrl);
+      initMyFatoorah();
     } else {
       state.mode = 'demo';
       state.data = demoData();
+      $('mf-card').hidden = true;
+      $('demo-fill').hidden = false;
       render();
     }
   }

@@ -14,6 +14,7 @@
   --on-brand: #ffffff;
   --ok: #15803d;
   --danger: #b42318;
+  --danger-soft: #fdecec;
   --scrim: rgb(9 24 22 / 0.45);
   --shadow: 0 1px 2px rgb(15 37 34 / 0.05), 0 10px 28px -16px rgb(15 37 34 / 0.18);
 
@@ -149,39 +150,7 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
 .action-row .grow, .applied .grow { flex: 1; min-width: 0; font-weight: 500; }
 .lead { font-size: 20px; color: var(--brand-ink); }
 .lead.ok { color: var(--ok); }
-.promo-panel { display: grid; gap: 10px; padding-block: 6px 4px; }
-.promo-input { display: flex; gap: 8px; }
-.promo-input input {
-  flex: 1; min-width: 0; height: 46px; padding-inline: 16px;
-  border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
-  font-size: 16px; /* below 16px iOS Safari zooms the page on focus */
-  text-transform: uppercase;
-}
-.promo-input input::placeholder { text-transform: none; color: var(--muted); }
-.promo-input input:focus { outline: none; border-color: var(--brand); }
-.btn-soft {
-  height: 46px; padding-inline: 20px; border-radius: 999px;
-  border: 1px solid var(--line); background: var(--surface); color: var(--brand-ink); font-weight: 600;
-}
-.btn-soft:disabled { opacity: .5; cursor: default; }
-.field-error { margin: 0; color: var(--danger); font-size: 13px; }
-.mini-label { margin: 0 0 6px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
-.vouchers ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.voucher {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; border: 1px solid var(--brand); border-radius: 14px;
-}
-.voucher .v-text { flex: 1; min-width: 0; }
-.voucher code { font: 600 14px/1.3 var(--font-display); }
-.voucher .tag {
-  display: inline-block; margin-inline-start: 6px; padding: 1px 8px; border-radius: 999px;
-  background: var(--brand-soft); color: var(--brand-ink); font-size: 11px; font-weight: 700;
-}
-.voucher small { display: block; color: var(--muted); font-size: 12px; }
-.voucher button {
-  padding: 6px 14px; border-radius: 10px; border: 0;
-  background: var(--brand); color: var(--on-brand); font-size: 13px; font-weight: 600;
-}
+.mini-label { margin: 0 0 8px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
 
 /* Receipt with scalloped edges */
 .receipt {
@@ -425,6 +394,177 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
   .ap-ic-side, .ap-ic-done { width: 34px; height: 34px; }
   .ap-ic-done { padding: 7px; }
 }
+
+/* Shared form fields */
+.field { display: grid; gap: 6px; min-width: 0; }
+.field > label { font-weight: 600; font-size: 14px; }
+.field input {
+  width: 100%; height: 50px; padding-inline: 14px;
+  border: 1px solid var(--line); border-radius: 14px;
+  background: var(--surface-2); color: var(--ink);
+  font-size: 16px; /* below 16px iOS Safari zooms the page on focus */
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+.field input::placeholder { color: var(--muted); opacity: .75; }
+.field input:focus { outline: none; border-color: var(--brand); background: var(--surface); box-shadow: 0 0 0 4px var(--brand-soft); }
+.field input[aria-invalid="true"] { border-color: var(--danger); }
+.field input[aria-invalid="true"]:focus { box-shadow: 0 0 0 4px var(--danger-soft); }
+.field-msg { margin: 0; color: var(--danger); font-size: 12.5px; }
+.field-msg:empty { display: none; }
+.field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+/* Card payment view */
+.is-offstage {
+  position: absolute !important; inset-inline: 0; top: 0;
+  height: 0; overflow: hidden; visibility: hidden; pointer-events: none;
+}
+.page-card { padding-block-end: 40px; }
+.secure-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 999px;
+  background: var(--brand-soft); color: var(--brand-ink);
+  font-size: 13px; font-weight: 600;
+}
+.paycard { padding: 0; }
+.paycard-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px var(--pad); border-block-end: 1px solid var(--line);
+}
+.paycard-head h2 { margin: 0; font: 600 17px/1.3 var(--font-display); color: var(--brand-ink); }
+.paycard-brands { display: flex; gap: 6px; }
+.paycard-inner { display: grid; gap: 16px; padding: 18px var(--pad) var(--pad); }
+.paycard-total {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 18px; border-radius: 16px;
+  background: linear-gradient(135deg, var(--brand), var(--brand-deep));
+  color: var(--on-brand); font: 700 16px/1.2 var(--font-display);
+  box-shadow: 0 12px 24px -16px var(--brand-deep);
+}
+.paycard-amount { display: grid; justify-items: end; gap: 2px; }
+.paycard-amount .money { font-size: 21px; }
+.paycard-amount small { font: 500 12px/1 var(--font-body); opacity: .85; }
+.card-form { display: grid; gap: 14px; }
+.input-wrap { position: relative; }
+.input-wrap input { padding-right: 86px; }
+.cc-brand {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 6px; pointer-events: none; direction: ltr;
+}
+.cc-brand b { color: #1a1f71; font: italic 800 12px/1 Arial, sans-serif; transition: opacity .2s ease; }
+.cc-brand .mc { display: inline-flex; transition: opacity .2s ease; }
+.cc-brand .mc i { width: 15px; height: 15px; border-radius: 50%; background: #eb001b; }
+.cc-brand .mc i + i { margin-inline-start: -6px; background: #f79e1b; mix-blend-mode: multiply; }
+.cc-brand.is-visa .mc, .cc-brand.is-mc b { opacity: .18; }
+/* Very narrow phones: show only the recognised brand (the card header already lists accepted cards). */
+@media (max-width: 360px) {
+  .input-wrap input { padding-right: 14px; }
+  .input-wrap:has(.is-visa, .is-mc) input { padding-right: 58px; }
+  .cc-brand:not(.is-visa):not(.is-mc) { display: none; }
+  .cc-brand.is-visa .mc, .cc-brand.is-mc b { display: none; }
+}
+.mf-card { min-height: 250px; }
+.mf-fallback { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); color: var(--muted); font-size: 13.5px; }
+#card-pay-btn { height: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.paycard-note { display: flex; justify-content: center; align-items: center; gap: 6px; margin: -4px 0 0; color: var(--muted); font-size: 12.5px; text-align: center; }
+.paycard-note svg { flex: none; color: var(--brand-ink); }
+.demo-fill {
+  justify-self: center; margin-top: -6px; padding: 4px 10px; border: 0; background: none;
+  color: var(--brand-ink); font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px;
+}
+.change-method {
+  display: flex; align-items: center; gap: 6px; width: fit-content; margin: 16px auto 0; padding: 8px 12px;
+  border: 0; background: none; color: var(--muted); font-weight: 600;
+}
+
+/* Promo popup */
+.modal {
+  width: min(100% - 32px, 440px); max-width: 100%; max-height: calc(100% - 32px);
+  padding: 0; border: 0; border-radius: 24px;
+  background: var(--surface); color: var(--ink);
+  box-shadow: 0 30px 80px -24px rgb(0 0 0 / 0.45);
+  overflow: auto; overscroll-behavior: contain;
+}
+.modal::backdrop { background: var(--scrim); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+.modal[open] { animation: modal-in .22s ease-out; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+.modal-body { display: grid; gap: 16px; padding: 22px; }
+.modal-head { display: flex; align-items: flex-start; gap: 12px; }
+.modal-icon {
+  display: grid; place-items: center; flex: none;
+  width: 46px; height: 46px; border-radius: 14px;
+  background: var(--brand-soft); color: var(--brand-ink); font-size: 24px;
+}
+.modal-titles { flex: 1; min-width: 0; }
+.modal-titles h3 { margin: 0; font: 700 19px/1.3 var(--font-display); text-wrap: balance; }
+.modal-titles p { margin: 3px 0 0; color: var(--muted); font-size: 13.5px; }
+.modal-x {
+  display: grid; place-items: center; flex: none;
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 0; background: var(--surface-2); color: var(--muted); font-size: 16px;
+}
+.promo-field { position: relative; }
+.promo-field svg { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--brand-ink); font-size: 20px; pointer-events: none; }
+.promo-field input {
+  height: 54px; padding-inline: 14px 46px;
+  font-family: var(--font-display); font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  text-align: right;
+}
+.promo-field input::placeholder { letter-spacing: 0; text-transform: none; font-weight: 400; }
+.modal-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.modal-actions .btn-pay { min-width: 0; width: 100%; }
+.btn-cancel {
+  height: 48px; border: 0; border-radius: 999px;
+  background: var(--danger-soft); color: var(--danger);
+  font: 700 16px/1 var(--font-display);
+}
+
+/* Voucher tickets */
+.tickets { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ticket {
+  --stub: 86px;
+  position: relative; display: flex; align-items: stretch;
+  min-height: 72px; border-radius: 16px; background: var(--brand-soft);
+}
+.ticket::before, .ticket::after {
+  content: ""; position: absolute; inset-inline-start: calc(var(--stub) - 9px);
+  width: 18px; height: 18px; border-radius: 50%; background: var(--surface);
+}
+.ticket::before { top: -9px; }
+.ticket::after { bottom: -9px; }
+.ticket-value {
+  display: grid; place-content: center; justify-items: center; flex: none;
+  width: var(--stub); padding: 10px 6px;
+  border-start-start-radius: 16px; border-end-start-radius: 16px;
+  background: linear-gradient(160deg, var(--brand), var(--brand-deep)); color: var(--on-brand);
+}
+.ticket-value b { font: 700 24px/1 var(--font-display); }
+.ticket-value small { margin-top: 4px; font-size: 12px; opacity: .9; }
+.ticket-body {
+  flex: 1; min-width: 0; display: grid; align-content: center; gap: 3px;
+  padding: 10px 16px; border-inline-start: 2px dashed rgb(255 255 255 / 0.7);
+}
+.ticket-body code { font: 700 15px/1.2 var(--font-display); letter-spacing: .04em; overflow-wrap: anywhere; }
+.ticket-body small { color: var(--muted); font-size: 12.5px; }
+.ticket-use {
+  align-self: center; flex: none; margin-inline-end: 12px; padding: 8px 14px;
+  border: 0; border-radius: 999px; background: var(--surface); color: var(--brand-ink);
+  font: 700 13px/1 var(--font-display); box-shadow: 0 1px 2px rgb(15 37 34 / 0.12);
+}
+.ticket[aria-disabled="true"] { opacity: .55; }
+.ticket-use:disabled { cursor: default; }
+
+@media (max-width: 560px) {
+  .modal {
+    width: 100%; margin: auto 0 0; max-height: calc(100% - 24px);
+    border-radius: 26px 26px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .modal[open] { animation: sheet-up .3s cubic-bezier(.2,.9,.25,1); }
+  .modal-body::before {
+    content: ""; justify-self: center; width: 40px; height: 5px; margin: -10px 0 -4px;
+    border-radius: 3px; background: var(--line);
+  }
+}
+@keyframes sheet-up { from { transform: translateY(100%); } }
 
 /* Toast */
 .toast {
