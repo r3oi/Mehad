@@ -20,9 +20,10 @@
   };
   const VAT_RATE = 0.15;
   // Display currencies. The charge itself is always in SAR; SAR is pegged at 3.75 per USD.
+  const FLAG_SA_SRC = 'flag-sa.png';
   const CURRENCIES = {
-    SAR: { perSar: 1, flag: 'i-flag-sa' },
-    USD: { perSar: 1 / 3.75, flag: 'i-flag-us' },
+    SAR: { perSar: 1, flag: { img: FLAG_SA_SRC } },
+    USD: { perSar: 1 / 3.75, flag: { symbol: 'i-flag-us' } },
   };
   const CURRENCY_KEY = 'mehad.checkout.currency';
   const APPLE_PAY_NETWORKS = ['mada', 'visa', 'masterCard'];
@@ -167,10 +168,17 @@
     renderMethods();
   }
 
+  function flagHtml(code) {
+    const f = CURRENCIES[code].flag;
+    return f.img
+      ? `<img class="flag" src="${f.img}" alt="" width="20" height="20">`
+      : `<svg class="flag" aria-hidden="true"><use href="#${f.symbol}"/></svg>`;
+  }
+
   function renderCurrency() {
     const cur = state.currency;
     $('currency-code').textContent = cur;
-    $('currency-flag').firstElementChild.setAttribute('href', `#${CURRENCIES[cur].flag}`);
+    $('currency-flag').innerHTML = flagHtml(cur);
     const menu = $('currency-menu');
     menu.replaceChildren(...Object.keys(CURRENCIES).map((code) => {
       const li = document.createElement('li');
@@ -178,7 +186,7 @@
       li.setAttribute('aria-selected', String(code === cur));
       li.tabIndex = 0;
       li.dataset.code = code;
-      li.innerHTML = `<svg class="flag" aria-hidden="true"><use href="#${CURRENCIES[code].flag}"/></svg>` +
+      li.innerHTML = flagHtml(code) +
         `<span>${code}</span><svg class="check" aria-hidden="true"><use href="#i-check"/></svg>`;
       return li;
     }));

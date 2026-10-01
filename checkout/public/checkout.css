@@ -83,7 +83,8 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
   color: var(--on-brand); font: 600 14px/1 var(--font-display);
   direction: ltr;
 }
-.flag { width: 20px; height: 20px; border-radius: 50%; }
+.flag-slot { display: inline-flex; }
+.flag { display: block; width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
 .currency-btn .flag { box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.55); }
 .currency-btn .caret { font-size: 14px; transition: transform .2s ease; }
 .currency-btn[aria-expanded="true"] .caret { transform: rotate(180deg); }
