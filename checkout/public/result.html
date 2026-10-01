@@ -20,18 +20,38 @@
 </div>
 <script>
   (() => {
+    const T = {
+      ar: {
+        title: 'نتيجة الدفع · مهاد',
+        paidTitle: 'تم الدفع بنجاح', failTitle: 'لم يكتمل الدفع',
+        paidBody: (ref) => `تم تأكيد طلبك ${ref}. ستجد تفاصيل الحصة في لوحة الطالب.`,
+        failBody: 'لم يتم خصم أي مبلغ. يمكنك المحاولة مرة أخرى أو اختيار طريقة دفع مختلفة.',
+        paidAction: 'الذهاب للوحة الطالب', failAction: 'المحاولة مرة أخرى',
+      },
+      en: {
+        title: 'Payment result · Mehad',
+        paidTitle: 'Payment successful', failTitle: 'Payment not completed',
+        paidBody: (ref) => `Your order ${ref} is confirmed. You'll find the session details in your student dashboard.`,
+        failBody: 'Nothing was charged. You can try again or choose a different payment method.',
+        paidAction: 'Go to my dashboard', failAction: 'Try again',
+      },
+    };
+    let lang = 'ar';
+    try { if (localStorage.getItem('mehad.checkout.lang') === 'en') lang = 'en'; } catch { /* storage unavailable */ }
+    const t = T[lang];
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.title = t.title;
+
     const q = new URLSearchParams(location.search);
     const paid = q.get('status') === 'paid';
     const ref = q.get('ref') || '';
     const icon = document.getElementById('r-icon');
     icon.className = 'result-icon ' + (paid ? 'ok' : 'fail');
     icon.textContent = paid ? '✓' : '!';
-    document.getElementById('r-title').textContent = paid ? 'تم الدفع بنجاح' : 'لم يكتمل الدفع';
-    document.getElementById('r-body').textContent = paid
-      ? `تم تأكيد طلبك ${ref}. ستجد تفاصيل الحصة في لوحة الطالب.`
-      : 'لم يتم خصم أي مبلغ. يمكنك المحاولة مرة أخرى أو اختيار طريقة دفع مختلفة.';
-    const action = document.getElementById('r-action');
-    action.textContent = paid ? 'الذهاب للوحة الطالب' : 'المحاولة مرة أخرى';
+    document.getElementById('r-title').textContent = paid ? t.paidTitle : t.failTitle;
+    document.getElementById('r-body').textContent = paid ? t.paidBody(ref) : t.failBody;
+    document.getElementById('r-action').textContent = paid ? t.paidAction : t.failAction;
   })();
 </script>
 </body>

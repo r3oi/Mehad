@@ -24,13 +24,13 @@ const CARD_METHOD_CODES = { mada: 'md', card: 'vm' };
 // Stand-in for Mehad's orders table. In the platform, load the order by id and check it belongs to the signed-in user.
 const order = {
   id: 'ORD-24117',
-  packageName: 'الحصة المفردة',
-  subject: 'تأسيس',
   teacher: 'Rayyan AL-jaadi',
   student: 'Rayyan Test3',
-  mode: 'أونلاين',
   sessions: 1,
-  unitLabel: 'حصة',
+  text: {
+    ar: { packageName: 'الحصة المفردة', subject: 'تأسيس', mode: 'أونلاين', unitLabel: 'حصة' },
+    en: { packageName: 'Single session', subject: 'Foundations', mode: 'Online', unitLabel: 'session' },
+  },
   price: 100,
   currency: 'SAR',
   promoCode: null,
@@ -39,10 +39,51 @@ const order = {
 };
 const VOUCHERS = { VOUCHAR_26: { percent: 99, minTotal: 10 } };
 
+// Customer-facing messages. The page sends its language in the X-Lang header.
+const MESSAGES = {
+  ar: {
+    gateway: 'بوابة الدفع لم تستجب. حاول مرة أخرى بعد قليل.',
+    paid: 'تم دفع هذا الطلب مسبقاً.',
+    badPromo: 'رمز الخصم غير صحيح أو منتهي.',
+    minTotal: (n) => `هذا الرمز صالح للطلبات بقيمة ${n} ريال أو أكثر.`,
+    badSession: 'جلسة الدفع غير صالحة.',
+    badMethod: 'طريقة الدفع غير مدعومة.',
+    methodOff: 'طريقة الدفع هذه غير مفعّلة حالياً. اختر طريقة أخرى.',
+    tooLarge: 'الطلب كبير جداً.',
+    badJson: 'صيغة الطلب غير صحيحة.',
+    notConfigured: 'الدفع غير مفعّل: أضف MYFATOORAH_TOKEN في إعدادات الخادم.',
+    notFound: 'المسار غير موجود.',
+    notAllowed: 'Method not allowed',
+    unexpected: 'حدث خطأ غير متوقع. حاول مرة أخرى.',
+  },
+  en: {
+    gateway: "The payment gateway didn't respond. Please try again shortly.",
+    paid: 'This order has already been paid.',
+    badPromo: 'This promo code is invalid or has expired.',
+    minTotal: (n) => `This code is valid on orders of ${n} SAR or more.`,
+    badSession: 'Invalid payment session.',
+    badMethod: 'Unsupported payment method.',
+    methodOff: 'This payment method is not available right now. Please choose another.',
+    tooLarge: 'Request too large.',
+    badJson: 'Malformed request.',
+    notConfigured: 'Payments are not enabled: set MYFATOORAH_TOKEN on the server.',
+    notFound: 'Not found.',
+    notAllowed: 'Method not allowed',
+    unexpected: 'Something went wrong. Please try again.',
+  },
+};
+
+function message(lang, key, args = []) {
+  const m = MESSAGES[lang][key];
+  return typeof m === 'function' ? m(...args) : m;
+}
+
 class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
+  constructor(status, key, ...args) {
+    super(key);
     this.status = status;
+    this.key = key;
+    this.args = args;
   }
 }
 
@@ -56,10 +97,10 @@ function quote(o) {
   return { subtotal, discount, total, vat: round2(total - total / (1 + VAT_RATE)), currency: o.currency };
 }
 
-function orderPayload() {
-  const { id, packageName, subject, teacher, student, mode, sessions, unitLabel } = order;
+function orderPayload(lang) {
+  const { id, teacher, student, sessions } = order;
   return {
-    order: { id, packageName, subject, teacher, student, mode, sessions, unitLabel },
+    order: { id, teacher, student, sessions, ...order.text[lang] },
     quote: quote(order),
     promoCode: order.promoCode,
     vouchers: Object.entries(VOUCHERS).map(([code, v]) => ({ code, ...v })),
@@ -76,26 +117,26 @@ async function myfatoorah(endpoint, body) {
   if (!res.ok || !data || !data.IsSuccess) {
     const detail = data?.ValidationErrors?.map((e) => `${e.Name}: ${e.Error}`).join(' | ') || data?.Message || res.statusText;
     console.error(`MyFatoorah ${endpoint} failed (${res.status}): ${detail}`);
-    throw new HttpError(502, 'بوابة الدفع لم تستجب. حاول مرة أخرى بعد قليل.');
+    throw new HttpError(502, 'gateway');
   }
   return data.Data;
 }
 
-function invoiceFields(q) {
+function invoiceFields(q, lang) {
   return {
     InvoiceValue: q.total,
     DisplayCurrencyIso: q.currency,
     CustomerName: order.student,
     CustomerReference: order.id,
-    Language: 'ar',
+    Language: lang,
     CallBackUrl: `${PUBLIC_URL}/payment/callback`,
     ErrorUrl: `${PUBLIC_URL}/payment/callback`,
-    InvoiceItems: [{ ItemName: order.packageName, Quantity: 1, UnitPrice: q.total }],
+    InvoiceItems: [{ ItemName: order.text[lang].packageName, Quantity: 1, UnitPrice: q.total }],
   };
 }
 
 function assertPayable() {
-  if (order.status === 'paid') throw new HttpError(409, 'تم دفع هذا الطلب مسبقاً.');
+  if (order.status === 'paid') throw new HttpError(409, 'paid');
 }
 
 /* ---------- routes ---------- */
@@ -103,22 +144,22 @@ function assertPayable() {
 const routes = {
   'GET /api/config': () => ({ mode: MF.token ? 'live' : 'demo', scriptUrl: MF.scriptUrl }),
 
-  'GET /api/order': () => orderPayload(),
+  'GET /api/order': ({ lang }) => orderPayload(lang),
 
-  'POST /api/promo': ({ body }) => {
+  'POST /api/promo': ({ body, lang }) => {
     assertPayable();
     const code = String(body.code || '').trim().toUpperCase();
     const v = VOUCHERS[code];
-    if (!v) throw new HttpError(400, 'رمز الخصم غير صحيح أو منتهي.');
-    if (order.price < v.minTotal) throw new HttpError(400, `هذا الرمز صالح للطلبات بقيمة ${v.minTotal} ريال أو أكثر.`);
+    if (!v) throw new HttpError(400, 'badPromo');
+    if (order.price < v.minTotal) throw new HttpError(400, 'minTotal', v.minTotal);
     order.promoCode = code;
-    return orderPayload();
+    return orderPayload(lang);
   },
 
-  'DELETE /api/promo': () => {
+  'DELETE /api/promo': ({ lang }) => {
     assertPayable();
     order.promoCode = null;
-    return orderPayload();
+    return orderPayload(lang);
   },
 
   // Step 1 of Apple Pay: a session the page hands to myfatoorah.init().
@@ -131,25 +172,25 @@ const routes = {
 
   // Step 2 of Apple Pay: the customer approved in the Apple Pay sheet; charge the session.
   // Do not send PaymentMethodId here, it overrides SessionId.
-  'POST /api/payments/execute': async ({ body }) => {
+  'POST /api/payments/execute': async ({ body, lang }) => {
     assertPayable();
     const sessionId = String(body.sessionId || '');
-    if (!/^[\w-]{8,64}$/.test(sessionId)) throw new HttpError(400, 'جلسة الدفع غير صالحة.');
-    const d = await myfatoorah('ExecutePayment', { SessionId: sessionId, ...invoiceFields(quote(order)) });
+    if (!/^[\w-]{8,64}$/.test(sessionId)) throw new HttpError(400, 'badSession');
+    const d = await myfatoorah('ExecutePayment', { SessionId: sessionId, ...invoiceFields(quote(order), lang) });
     order.invoiceId = d.InvoiceId;
     return { paymentUrl: d.PaymentURL };
   },
 
   // mada / Visa / Mastercard: send the customer to MyFatoorah's hosted card page.
-  'POST /api/payments/redirect': async ({ body }) => {
+  'POST /api/payments/redirect': async ({ body, lang }) => {
     assertPayable();
     const code = CARD_METHOD_CODES[body.method];
-    if (!code) throw new HttpError(400, 'طريقة الدفع غير مدعومة.');
+    if (!code) throw new HttpError(400, 'badMethod');
     const q = quote(order);
     const init = await myfatoorah('InitiatePayment', { InvoiceAmount: q.total, CurrencyIso: q.currency });
     const pm = init.PaymentMethods.find((m) => String(m.PaymentMethodCode).toLowerCase() === code);
-    if (!pm) throw new HttpError(400, 'طريقة الدفع هذه غير مفعّلة حالياً. اختر طريقة أخرى.');
-    const d = await myfatoorah('ExecutePayment', { PaymentMethodId: pm.PaymentMethodId, ...invoiceFields(q) });
+    if (!pm) throw new HttpError(400, 'methodOff');
+    const d = await myfatoorah('ExecutePayment', { PaymentMethodId: pm.PaymentMethodId, ...invoiceFields(q, lang) });
     order.invoiceId = d.InvoiceId;
     return { paymentUrl: d.PaymentURL };
   },
@@ -197,13 +238,13 @@ async function readJson(req) {
   let raw = '';
   for await (const chunk of req) {
     raw += chunk;
-    if (raw.length > 10_000) throw new HttpError(413, 'الطلب كبير جداً.');
+    if (raw.length > 10_000) throw new HttpError(413, 'tooLarge');
   }
   if (!raw) return {};
   try {
     return JSON.parse(raw);
   } catch {
-    throw new HttpError(400, 'صيغة الطلب غير صحيحة.');
+    throw new HttpError(400, 'badJson');
   }
 }
 
@@ -237,24 +278,25 @@ async function serveStatic(pathname, res) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, PUBLIC_URL);
+  const lang = req.headers['x-lang'] === 'en' ? 'en' : 'ar';
   try {
     if (url.pathname === '/payment/callback') return await paymentCallback(url, res);
 
     const handler = routes[`${req.method} ${url.pathname}`];
     if (handler) {
       if (url.pathname.startsWith('/api/payments') && !MF.token) {
-        throw new HttpError(503, 'الدفع غير مفعّل: أضف MYFATOORAH_TOKEN في إعدادات الخادم.');
+        throw new HttpError(503, 'notConfigured');
       }
       const body = req.method === 'POST' ? await readJson(req) : {};
-      return sendJson(res, 200, await handler({ body, url }));
+      return sendJson(res, 200, await handler({ body, url, lang }));
     }
-    if (url.pathname.startsWith('/api/')) throw new HttpError(404, 'المسار غير موجود.');
-    if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'Method not allowed');
+    if (url.pathname.startsWith('/api/')) throw new HttpError(404, 'notFound');
+    if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'notAllowed');
     return await serveStatic(url.pathname, res);
   } catch (e) {
     const status = e instanceof HttpError ? e.status : 500;
     if (status === 500) console.error(e);
-    sendJson(res, status, { error: status === 500 ? 'حدث خطأ غير متوقع. حاول مرة أخرى.' : e.message });
+    sendJson(res, status, { error: message(lang, status === 500 ? 'unexpected' : e.key, e.args) });
   }
 });
 

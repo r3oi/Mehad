@@ -30,10 +30,13 @@
   <symbol id="i-side" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="21"/><path d="M17 37V15a5 5 0 0 1 5-5h3v9"/><path d="M36 24h-8m3.5-3.5L28 24l3.5 3.5"/></g></symbol>
 </svg>
 
-<nav class="navbar" aria-label="التنقل">
+<nav class="navbar" aria-label="التنقل" data-i18n-aria="nav">
   <div class="navbar-inner">
-    <a class="nav-back" href="#" id="back-link" aria-label="رجوع"><svg><use href="#i-back"/></svg></a>
-    <img class="nav-logo" src="mehad-icon.png" alt="مهاد" width="36" height="35">
+    <a class="nav-back" href="#" id="back-link" aria-label="رجوع" data-i18n-aria="back"><svg><use href="#i-back"/></svg></a>
+    <div class="nav-end">
+      <button type="button" class="lang-btn" id="lang-btn" lang="en">English</button>
+      <img class="nav-logo" src="mehad-icon.png" alt="مهاد" data-i18n-alt="brand" width="36" height="35">
+    </div>
   </div>
 </nav>
 
@@ -41,14 +44,14 @@
 <div class="page">
 
   <header class="topbar">
-    <h1>إتمام الشراء</h1>
+    <h1 data-i18n="checkoutTitle">إتمام الشراء</h1>
     <div class="currency">
-      <button type="button" class="currency-btn" id="currency-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="currency-menu" aria-label="عملة عرض الأسعار">
+      <button type="button" class="currency-btn" id="currency-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="currency-menu" aria-label="عملة عرض الأسعار" data-i18n-aria="currency">
         <span class="flag-slot" id="currency-flag"></span>
         <span id="currency-code">SAR</span>
         <svg class="caret"><use href="#i-down"/></svg>
       </button>
-      <ul class="currency-menu" id="currency-menu" role="listbox" aria-label="عملة عرض الأسعار" hidden></ul>
+      <ul class="currency-menu" id="currency-menu" role="listbox" aria-label="عملة عرض الأسعار" data-i18n-aria="currency" hidden></ul>
     </div>
   </header>
 
@@ -57,8 +60,8 @@
     <!-- 1. Order summary -->
     <section class="card" aria-labelledby="order-h">
       <div class="card-head">
-        <h2 id="order-h">ملخص الطلب</h2>
-        <a class="link" href="#" id="edit-link">تعديل<svg><use href="#i-chev"/></svg></a>
+        <h2 id="order-h" data-i18n="orderSummary">ملخص الطلب</h2>
+        <a class="link" href="#" id="edit-link"><span data-i18n="edit">تعديل</span><svg><use href="#i-chev"/></svg></a>
       </div>
       <p class="pkg-name" id="pkg-name">—</p>
       <p class="pkg-sub"><svg><use href="#i-book"/></svg><span id="pkg-sub">—</span></p>
@@ -69,42 +72,42 @@
         <span class="price-strong" id="pkg-price"></span>
       </div>
       <dl class="details" id="details" hidden>
-        <div><dt>المعلم</dt><dd id="d-teacher"></dd></div>
-        <div><dt>الطالب</dt><dd id="d-student"></dd></div>
-        <div><dt>المادة</dt><dd id="d-subject"></dd></div>
-        <div><dt>طريقة التعليم</dt><dd id="d-mode"></dd></div>
-        <div><dt>عدد الحصص</dt><dd id="d-sessions"></dd></div>
+        <div><dt data-i18n="teacher">المعلم</dt><dd id="d-teacher"></dd></div>
+        <div><dt data-i18n="student">الطالب</dt><dd id="d-student"></dd></div>
+        <div><dt data-i18n="subject">المادة</dt><dd id="d-subject"></dd></div>
+        <div><dt data-i18n="mode">طريقة التعليم</dt><dd id="d-mode"></dd></div>
+        <div><dt data-i18n="sessions">عدد الحصص</dt><dd id="d-sessions"></dd></div>
       </dl>
     </section>
 
     <!-- 2. Payment summary -->
     <section class="card" aria-labelledby="pay-h">
-      <div class="card-head"><h2 id="pay-h">ملخص الدفع</h2></div>
+      <div class="card-head"><h2 id="pay-h" data-i18n="paymentSummary">ملخص الدفع</h2></div>
 
       <button type="button" class="action-row" id="promo-toggle" aria-haspopup="dialog" aria-controls="promo-dialog">
         <svg class="lead"><use href="#i-percent"/></svg>
-        <span class="grow">أضف رمز خصم</span>
-        <span class="link">أدخل الرمز<svg><use href="#i-chev"/></svg></span>
+        <span class="grow" data-i18n="addPromo">أضف رمز خصم</span>
+        <span class="link"><span data-i18n="enterCode">أدخل الرمز</span><svg><use href="#i-chev"/></svg></span>
       </button>
 
       <div class="applied" id="promo-applied" hidden>
         <svg class="lead ok"><use href="#i-check"/></svg>
-        <span class="grow">تم تطبيق <b id="promo-applied-code" dir="ltr"></b></span>
-        <button type="button" class="link danger" id="promo-remove">إزالة</button>
+        <span class="grow"><span data-i18n="applied">تم تطبيق</span> <b id="promo-applied-code" dir="ltr"></b></span>
+        <button type="button" class="link danger" id="promo-remove" data-i18n="remove">إزالة</button>
       </div>
 
       <div class="receipt">
-        <div class="line"><span>المجموع الفرعي</span><span id="q-subtotal"></span></div>
-        <div class="line discount" id="q-discount-row" hidden><span>الخصم</span><span id="q-discount"></span></div>
-        <div class="line"><span>ضريبة القيمة المضافة ١٥٪ <small>(مشمولة)</small></span><span id="q-vat"></span></div>
-        <div class="line total"><span>الإجمالي</span><span id="q-total"></span></div>
-        <p class="charge-note" id="charge-note" hidden>الأسعار بالدولار للعرض فقط، ويتم الدفع بالريال السعودي: <span id="charge-sar"></span></p>
+        <div class="line"><span data-i18n="subtotal">المجموع الفرعي</span><span id="q-subtotal"></span></div>
+        <div class="line discount" id="q-discount-row" hidden><span data-i18n="discount">الخصم</span><span id="q-discount"></span></div>
+        <div class="line"><span><span data-i18n="vat">ضريبة القيمة المضافة ١٥٪</span> <small data-i18n="included">(مشمولة)</small></span><span id="q-vat"></span></div>
+        <div class="line total"><span data-i18n="total">الإجمالي</span><span id="q-total"></span></div>
+        <p class="charge-note" id="charge-note" hidden><span data-i18n="chargeNote">الأسعار بالدولار للعرض فقط، ويتم الدفع بالريال السعودي:</span> <span id="charge-sar"></span></p>
       </div>
     </section>
 
     <!-- 3. Payment method -->
     <section class="card" aria-labelledby="method-h">
-      <div class="card-head"><h2 id="method-h">طريقة الدفع</h2></div>
+      <div class="card-head"><h2 id="method-h" data-i18n="paymentMethod">طريقة الدفع</h2></div>
       <div class="methods" role="radiogroup" aria-labelledby="method-h">
         <label class="method" id="method-applepay">
           <span class="logo logo-applepay"><svg><use href="#i-apple"/></svg>Pay</span>
@@ -113,18 +116,18 @@
         </label>
         <label class="method">
           <span class="logo logo-mada" aria-hidden="true"><span class="bars"><i></i><i></i></span><b>mada</b></span>
-          <span class="method-name">مدى</span>
+          <span class="method-name" data-i18n="mada">مدى</span>
           <input type="radio" name="method" value="mada" id="m-mada">
         </label>
         <label class="method">
           <span class="logo logo-cards" aria-hidden="true"><b>VISA</b><i class="mc"><i></i><i></i></i></span>
-          <span class="method-name">فيزا / ماستركارد</span>
+          <span class="method-name" data-i18n="cards">فيزا / ماستركارد</span>
           <input type="radio" name="method" value="card" id="m-card">
         </label>
       </div>
     </section>
 
-    <p class="note"><svg><use href="#i-info"/></svg>تتم معالجة بيانات الدفع عبر بوابة ماي فاتورة الآمنة، ولا تحفظ مهاد أي بيانات للبطاقات.</p>
+    <p class="note"><svg><use href="#i-info"/></svg><span data-i18n="gatewayNote">تتم معالجة بيانات الدفع عبر بوابة ماي فاتورة الآمنة، ولا تحفظ مهاد أي بيانات للبطاقات.</span></p>
   </main>
 </div>
 
@@ -132,10 +135,10 @@
 <div class="paybar">
   <div class="paybar-inner">
     <div class="paybar-total">
-      <p>الإجمالي <span id="bar-total"></span></p>
+      <p><span data-i18n="total">الإجمالي</span> <span id="bar-total"></span></p>
       <small id="bar-sub">شامل الضريبة</small>
     </div>
-    <button type="button" class="btn-pay" id="pay-btn">ادفع الآن</button>
+    <button type="button" class="btn-pay" id="pay-btn" data-i18n="payNow">ادفع الآن</button>
   </div>
 </div>
 
@@ -145,35 +148,35 @@
 <div class="view-card is-offstage" id="view-card" aria-hidden="true" inert>
   <div class="page page-card">
     <header class="topbar">
-      <h1>الدفع بالبطاقة</h1>
-      <span class="secure-chip"><svg><use href="#i-lock"/></svg>اتصال آمن</span>
+      <h1 data-i18n="cardTitle">الدفع بالبطاقة</h1>
+      <span class="secure-chip"><svg><use href="#i-lock"/></svg><span data-i18n="secure">اتصال آمن</span></span>
     </header>
 
     <section class="card paycard" aria-labelledby="paycard-h">
       <div class="paycard-head">
-        <h2 id="paycard-h">بيانات البطاقة</h2>
+        <h2 id="paycard-h" data-i18n="cardDetails">بيانات البطاقة</h2>
         <span class="paycard-brands" id="paycard-brands"></span>
       </div>
 
       <div class="paycard-inner">
         <div class="paycard-total">
-          <span>المبلغ المستحق</span>
+          <span data-i18n="amountDue">المبلغ المستحق</span>
           <span class="paycard-amount"><span id="pc-total"></span><small id="pc-total-alt" hidden></small></span>
         </div>
 
         <!-- Live: MyFatoorah's secure card fields render here, so card data never touches Mehad's servers. -->
         <div id="mf-card" class="mf-card"></div>
-        <p class="mf-fallback" id="mf-fallback" hidden>تعذّر تحميل نموذج البطاقة الآن. اضغط «ادفع» وسننقلك لصفحة الدفع الآمنة في ماي فاتورة.</p>
+        <p class="mf-fallback" id="mf-fallback" data-i18n="mfFallback" hidden>تعذّر تحميل نموذج البطاقة الآن. اضغط «ادفع» وسننقلك لصفحة الدفع الآمنة في ماي فاتورة.</p>
 
         <!-- Preview only: stand-in fields. Nothing typed here leaves the page. -->
         <form class="card-form" id="card-form" novalidate>
           <div class="field">
-            <label for="cc-name">اسم حامل البطاقة</label>
-            <input id="cc-name" name="cc-name" type="text" autocomplete="cc-name" placeholder="الاسم كما يظهر على البطاقة" dir="auto" spellcheck="false" autocapitalize="characters" aria-describedby="cc-name-err">
+            <label for="cc-name" data-i18n="ccName">اسم حامل البطاقة</label>
+            <input id="cc-name" name="cc-name" type="text" autocomplete="cc-name" placeholder="الاسم كما يظهر على البطاقة" data-i18n-ph="ccNamePh" dir="auto" spellcheck="false" autocapitalize="characters" aria-describedby="cc-name-err">
             <p class="field-msg" id="cc-name-err" role="alert"></p>
           </div>
           <div class="field">
-            <label for="cc-number">رقم البطاقة</label>
+            <label for="cc-number" data-i18n="ccNumber">رقم البطاقة</label>
             <div class="input-wrap">
               <input id="cc-number" name="cc-number" type="text" inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000" dir="ltr" maxlength="23" aria-describedby="cc-number-err">
               <span class="cc-brand" id="cc-brand" aria-hidden="true"><b>VISA</b><i class="mc"><i></i><i></i></i></span>
@@ -182,25 +185,25 @@
           </div>
           <div class="field-row">
             <div class="field">
-              <label for="cc-exp">تاريخ الانتهاء</label>
+              <label for="cc-exp" data-i18n="ccExp">تاريخ الانتهاء</label>
               <input id="cc-exp" name="cc-exp" type="text" inputmode="numeric" autocomplete="cc-exp" placeholder="MM / YY" dir="ltr" maxlength="7" aria-describedby="cc-exp-err">
               <p class="field-msg" id="cc-exp-err" role="alert"></p>
             </div>
             <div class="field">
-              <label for="cc-cvv">رمز الأمان</label>
+              <label for="cc-cvv" data-i18n="ccCvv">رمز الأمان</label>
               <input id="cc-cvv" name="cc-cvv" type="text" inputmode="numeric" autocomplete="cc-csc" placeholder="CVV" dir="ltr" maxlength="4" aria-describedby="cc-cvv-err">
               <p class="field-msg" id="cc-cvv-err" role="alert"></p>
             </div>
           </div>
         </form>
 
-        <button type="button" class="btn-pay wide" id="card-pay-btn">ادفع <span id="card-pay-amount"></span></button>
+        <button type="button" class="btn-pay wide" id="card-pay-btn"><span data-i18n="pay">ادفع</span> <span id="card-pay-amount"></span></button>
         <p class="paycard-note" id="paycard-note"><svg><use href="#i-lock"/></svg><span id="paycard-note-text"></span></p>
-        <button type="button" class="demo-fill" id="demo-fill" hidden>تعبئة بطاقة تجريبية</button>
+        <button type="button" class="demo-fill" id="demo-fill" data-i18n="fillTest" hidden>تعبئة بطاقة تجريبية</button>
       </div>
     </section>
 
-    <button type="button" class="change-method" id="change-method"><svg><use href="#i-back"/></svg>تغيير طريقة الدفع</button>
+    <button type="button" class="change-method" id="change-method"><svg><use href="#i-back"/></svg><span data-i18n="changeMethod">تغيير طريقة الدفع</span></button>
   </div>
 </div>
 
@@ -216,7 +219,7 @@
   <form method="dialog">
     <h3 id="sheet-title"></h3>
     <p id="sheet-body"></p>
-    <button class="btn-pay wide" id="sheet-close" value="close">تمام</button>
+    <button class="btn-pay wide" id="sheet-close" value="close" data-i18n="ok">تمام</button>
   </form>
 </dialog>
 
@@ -225,29 +228,29 @@
     <div class="modal-head">
       <span class="modal-icon"><svg><use href="#i-ticket"/></svg></span>
       <div class="modal-titles">
-        <h3 id="promo-title">استخدم رمز الخصم</h3>
-        <p>اكتب الرمز أو اختر قسيمة من القسائم المتاحة لك.</p>
+        <h3 id="promo-title" data-i18n="promoTitle">استخدم رمز الخصم</h3>
+        <p data-i18n="promoSub">اكتب الرمز أو اختر قسيمة من القسائم المتاحة لك.</p>
       </div>
-      <button type="button" class="modal-x" id="promo-x" aria-label="إغلاق"><svg><use href="#i-x"/></svg></button>
+      <button type="button" class="modal-x" id="promo-x" aria-label="إغلاق" data-i18n-aria="close"><svg><use href="#i-x"/></svg></button>
     </div>
 
     <div class="field">
-      <label for="promo-code">رمز الخصم</label>
+      <label for="promo-code" data-i18n="promoLabel">رمز الخصم</label>
       <div class="promo-field">
         <svg><use href="#i-percent"/></svg>
-        <input id="promo-code" name="promo-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="مثال: MEHAD10" dir="ltr" aria-describedby="promo-error">
+        <input id="promo-code" name="promo-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="مثال: MEHAD10" data-i18n-ph="promoPh" dir="ltr" aria-describedby="promo-error">
       </div>
       <p class="field-msg" id="promo-error" role="alert" hidden></p>
     </div>
 
     <div class="vouchers" id="vouchers" hidden>
-      <p class="mini-label">القسائم المتاحة لك</p>
+      <p class="mini-label" data-i18n="yourVouchers">القسائم المتاحة لك</p>
       <ul class="tickets" id="voucher-list"></ul>
     </div>
 
     <div class="modal-actions">
-      <button type="button" class="btn-cancel" id="promo-cancel">إلغاء</button>
-      <button type="submit" class="btn-pay" id="promo-apply">تطبيق</button>
+      <button type="button" class="btn-cancel" id="promo-cancel" data-i18n="cancel">إلغاء</button>
+      <button type="submit" class="btn-pay" id="promo-apply" data-i18n="apply">تطبيق</button>
     </div>
   </form>
 </dialog>

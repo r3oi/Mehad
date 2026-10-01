@@ -4,16 +4,94 @@
 (() => {
   'use strict';
 
+  const I18N = {
+    ar: {
+      docTitle: 'دفع مهاد', nav: 'التنقل', back: 'رجوع', brand: 'مهاد', currency: 'عملة عرض الأسعار',
+      checkoutTitle: 'إتمام الشراء', orderSummary: 'ملخص الطلب', edit: 'تعديل',
+      teacher: 'المعلم', student: 'الطالب', subject: 'المادة', mode: 'طريقة التعليم', sessions: 'عدد الحصص',
+      paymentSummary: 'ملخص الدفع', addPromo: 'أضف رمز خصم', enterCode: 'أدخل الرمز', applied: 'تم تطبيق', remove: 'إزالة',
+      subtotal: 'المجموع الفرعي', discount: 'الخصم', vat: 'ضريبة القيمة المضافة ١٥٪', included: '(مشمولة)', total: 'الإجمالي',
+      chargeNote: 'الأسعار بالدولار للعرض فقط، ويتم الدفع بالريال السعودي:',
+      paymentMethod: 'طريقة الدفع', mada: 'مدى', cards: 'فيزا / ماستركارد',
+      gatewayNote: 'تتم معالجة بيانات الدفع عبر بوابة ماي فاتورة الآمنة، ولا تحفظ مهاد أي بيانات للبطاقات.',
+      payNow: 'ادفع الآن', inclVat: 'شامل الضريبة', inclVatSar: 'شامل الضريبة · الدفع بالريال',
+      cardTitle: 'الدفع بالبطاقة', secure: 'اتصال آمن', cardDetails: 'بيانات البطاقة', amountDue: 'المبلغ المستحق',
+      mfFallback: 'تعذّر تحميل نموذج البطاقة الآن. اضغط «ادفع» وسننقلك لصفحة الدفع الآمنة في ماي فاتورة.',
+      ccName: 'اسم حامل البطاقة', ccNamePh: 'الاسم كما يظهر على البطاقة', ccNumber: 'رقم البطاقة',
+      ccExp: 'تاريخ الانتهاء', ccCvv: 'رمز الأمان', pay: 'ادفع', fillTest: 'تعبئة بطاقة تجريبية',
+      changeMethod: 'تغيير طريقة الدفع', ok: 'تمام',
+      promoTitle: 'استخدم رمز الخصم', promoSub: 'اكتب الرمز أو اختر قسيمة من القسائم المتاحة لك.', close: 'إغلاق',
+      promoLabel: 'رمز الخصم', promoPh: 'مثال: MEHAD10', yourVouchers: 'القسائم المتاحة لك', cancel: 'إلغاء', apply: 'تطبيق',
+      switchTo: 'English',
+      riyal: 'ريال', percent: (n) => `${n}٪`, off: 'خصم', use: 'استخدم',
+      minOrder: (m) => `للطلبات بقيمة ${m} أو أكثر`,
+      promoEmpty: 'اكتب رمز الخصم أولاً.', promoBad: 'رمز الخصم غير صحيح أو منتهي.',
+      promoMin: (n) => `هذا الرمز صالح للطلبات بقيمة ${n} ريال أو أكثر.`, promoApplied: (c) => `تم تطبيق الرمز ${c}`,
+      noteLive: 'تُرسل بيانات البطاقة مشفّرة إلى ماي فاتورة مباشرة، ولا تحفظها مهاد.',
+      noteDemo: 'معاينة: بيانات البطاقة لا تُرسل ولا تُحفظ.',
+      errName: 'اكتب الاسم كما يظهر على البطاقة.', errNumberEmpty: 'اكتب رقم البطاقة.', errNumber: 'رقم البطاقة غير صحيح.',
+      errExp: 'تاريخ غير صحيح.', errExpired: 'البطاقة منتهية الصلاحية.', errCvv: 'رمز غير صحيح.',
+      busyProcessing: 'جارٍ معالجة الدفع…', busyConfirming: 'جارٍ تأكيد الدفع…', busyRedirect: 'جارٍ تحويلك لصفحة الدفع الآمنة…',
+      paidTitle: 'تم الدفع بنجاح',
+      paidCardBody: 'على الموقع الفعلي يتحقق البنك من العملية برمز التحقق (OTP) ثم يُنقل العميل لصفحة تأكيد الحجز. هذه معاينة: لم تُرسل بيانات البطاقة ولم يُخصم أي مبلغ.',
+      paidApBody: 'على الموقع الفعلي يُنقل العميل بعدها لصفحة تأكيد الحجز. هذه معاينة ولم يتم خصم أي مبلغ.',
+      apUnavailableTitle: 'Apple Pay غير متاح على هذا الجهاز',
+      apUnavailableBody: 'يعمل Apple Pay على الآيفون والآيباد والماك من متصفح Safari. اختر مدى أو فيزا / ماستركارد لإكمال الدفع من هذا الجهاز.',
+      apPreparing: 'Apple Pay يتجهّز، حاول بعد لحظات.',
+      cardFailed: 'تحقّق من بيانات البطاقة وحاول مرة أخرى.', payFailed: 'لم تكتمل عملية الدفع. حاول مرة أخرى أو اختر طريقة دفع أخرى.',
+      network: 'تعذّر الاتصال بالخادم. تحقّق من الإنترنت وحاول مرة أخرى.', scriptFailed: 'تعذّر تحميل مكتبة ماي فاتورة',
+      madaAria: 'مدى', cardsAria: 'فيزا وماستركارد',
+    },
+    en: {
+      docTitle: 'Mehad Checkout', nav: 'Navigation', back: 'Back', brand: 'Mehad', currency: 'Display currency',
+      checkoutTitle: 'Checkout', orderSummary: 'Order summary', edit: 'Edit',
+      teacher: 'Teacher', student: 'Student', subject: 'Subject', mode: 'Learning mode', sessions: 'Sessions',
+      paymentSummary: 'Payment summary', addPromo: 'Add promo code', enterCode: 'Enter code', applied: 'Applied', remove: 'Remove',
+      subtotal: 'Subtotal', discount: 'Discount', vat: 'VAT 15%', included: '(included)', total: 'Total',
+      chargeNote: 'USD prices are for display only. You will be charged in Saudi riyals:',
+      paymentMethod: 'Payment method', mada: 'mada', cards: 'Visa / Mastercard',
+      gatewayNote: "Payments are processed by MyFatoorah's secure gateway. Mehad never stores card details.",
+      payNow: 'Pay now', inclVat: 'Including VAT', inclVatSar: 'Including VAT · charged in SAR',
+      cardTitle: 'Card payment', secure: 'Secure connection', cardDetails: 'Card details', amountDue: 'Amount due',
+      mfFallback: "The card form couldn't load right now. Tap Pay and we'll take you to MyFatoorah's secure payment page.",
+      ccName: 'Cardholder name', ccNamePh: 'Name as shown on the card', ccNumber: 'Card number',
+      ccExp: 'Expiry date', ccCvv: 'Security code', pay: 'Pay', fillTest: 'Fill a test card',
+      changeMethod: 'Change payment method', ok: 'OK',
+      promoTitle: 'Redeem a promo code', promoSub: 'Enter a code or pick one of your vouchers.', close: 'Close',
+      promoLabel: 'Promo code', promoPh: 'e.g. MEHAD10', yourVouchers: 'Your vouchers', cancel: 'Cancel', apply: 'Apply',
+      switchTo: 'العربية',
+      riyal: 'SAR', percent: (n) => `${n}%`, off: 'off', use: 'Use',
+      minOrder: (m) => `On orders of ${m} or more`,
+      promoEmpty: 'Enter a promo code first.', promoBad: 'This promo code is invalid or has expired.',
+      promoMin: (n) => `This code is valid on orders of ${n} SAR or more.`, promoApplied: (c) => `Promo code ${c} applied`,
+      noteLive: "Card details go encrypted straight to MyFatoorah. Mehad doesn't store them.",
+      noteDemo: "Preview: card details aren't sent or stored.",
+      errName: 'Enter the name as shown on the card.', errNumberEmpty: 'Enter the card number.', errNumber: 'This card number is not valid.',
+      errExp: 'Invalid date.', errExpired: 'This card has expired.', errCvv: 'Invalid code.',
+      busyProcessing: 'Processing payment…', busyConfirming: 'Confirming payment…', busyRedirect: 'Taking you to the secure payment page…',
+      paidTitle: 'Payment successful',
+      paidCardBody: "On the live site the bank verifies the payment with a one-time code (OTP), then the customer lands on the booking confirmation. This is a preview: no card details were sent and nothing was charged.",
+      paidApBody: 'On the live site the customer then lands on the booking confirmation. This is a preview and nothing was charged.',
+      apUnavailableTitle: "Apple Pay isn't available on this device",
+      apUnavailableBody: 'Apple Pay works in Safari on iPhone, iPad and Mac. Choose mada or Visa / Mastercard to pay on this device.',
+      apPreparing: 'Apple Pay is getting ready. Try again in a moment.',
+      cardFailed: 'Check your card details and try again.', payFailed: "The payment wasn't completed. Try again or choose another payment method.",
+      network: "Couldn't reach the server. Check your connection and try again.", scriptFailed: "Couldn't load the MyFatoorah library",
+      madaAria: 'mada', cardsAria: 'Visa and Mastercard',
+    },
+  };
+  const LANG_KEY = 'mehad.checkout.lang';
+  // Order text the server sends in the requested language; the preview keeps both here.
+  const DEMO_TEXT = {
+    ar: { packageName: 'الحصة المفردة', subject: 'تأسيس', mode: 'أونلاين', unitLabel: 'حصة' },
+    en: { packageName: 'Single session', subject: 'Foundations', mode: 'Online', unitLabel: 'session' },
+  };
   const DEMO_ORDER = {
     order: {
       id: 'ORD-24117',
-      packageName: 'الحصة المفردة',
-      subject: 'تأسيس',
       teacher: 'Rayyan AL-jaadi',
       student: 'Rayyan Test3',
-      mode: 'أونلاين',
       sessions: 1,
-      unitLabel: 'حصة',
     },
     price: 100,
     vouchers: [{ code: 'VOUCHAR_26', percent: 99, minTotal: 10 }],
@@ -27,12 +105,11 @@
   };
   const CURRENCY_KEY = 'mehad.checkout.currency';
   const CARD_NETWORKS = ['mada', 'visa', 'masterCard'];
-  const BRAND_LOGOS = {
-    mada: '<span class="logo logo-mada" aria-label="مدى"><span class="bars"><i></i><i></i></span><b>mada</b></span>',
-    card: '<span class="logo logo-cards" aria-label="فيزا وماستركارد"><b>VISA</b><i class="mc"><i></i><i></i></i></span>',
-  };
+  const brandLogo = (method) => (method === 'mada'
+    ? `<span class="logo logo-mada" role="img" aria-label="${t('madaAria')}"><span class="bars"><i></i><i></i></span><b>mada</b></span>`
+    : `<span class="logo logo-cards" role="img" aria-label="${t('cardsAria')}"><b>VISA</b><i class="mc"><i></i><i></i></i></span>`);
   // MyFatoorah draws its card fields in an iframe, so they get literal values instead of our CSS tokens.
-  const MF_CARD_STYLE = {
+  const mfCardStyle = () => ({
     hideNetworkIcons: false,
     cardHeight: '250px',
     input: {
@@ -44,7 +121,7 @@
       backgroundColor: '#f5f8f7',
       borderRadius: '14px',
       placeHolder: {
-        holderName: 'الاسم كما يظهر على البطاقة',
+        holderName: t('ccNamePh'),
         cardNumber: '0000 0000 0000 0000',
         expiryDate: 'MM / YY',
         securityCode: 'CVV',
@@ -57,16 +134,16 @@
       fontWeight: '600',
       fontFamily: 'Cairo, Tahoma, sans-serif',
       text: {
-        holderName: 'اسم حامل البطاقة',
-        cardNumber: 'رقم البطاقة',
-        expiryDate: 'تاريخ الانتهاء',
-        securityCode: 'رمز الأمان',
+        holderName: t('ccName'),
+        cardNumber: t('ccNumber'),
+        expiryDate: t('ccExp'),
+        securityCode: t('ccCvv'),
       },
     },
     error: { borderColor: '#b42318', borderRadius: '14px' },
     button: { useCustomButton: true }, // our "ادفع" button calls submitCardPayment()
     separator: { useCustomSeparator: true },
-  };
+  });
 
   const $ = (id) => document.getElementById(id);
   const state = {
@@ -79,7 +156,13 @@
     currency: 'SAR',
     view: 'checkout',
     pushedCardView: false,
+    lang: 'ar',
   };
+
+  function t(key, ...args) {
+    const v = I18N[state.lang][key] ?? I18N.ar[key];
+    return typeof v === 'function' ? v(...args) : v;
+  }
 
   /* ---------- helpers ---------- */
 
@@ -96,19 +179,19 @@
       const v = usd.format(round2(n * CURRENCIES.USD.perSar));
       return `<span class="money" dir="ltr" aria-label="${sign}${v}">${sign}${v}</span>`;
     }
-    return `<span class="money" dir="ltr" aria-label="${sign}${fmt.format(n)} ريال">` +
+    return `<span class="money" dir="ltr" aria-label="${sign}${fmt.format(n)} ${t('riyal')}">` +
       `${sign}<svg aria-hidden="true"><use href="#i-sar"/></svg><span>${fmt.format(n)}</span></span>`;
   }
 
   async function api(path, body, method) {
     const res = await fetch(path, {
       method: method || (body ? 'POST' : 'GET'),
-      headers: body ? { 'Content-Type': 'application/json' } : {},
+      headers: { 'X-Lang': state.lang, ...(body ? { 'Content-Type': 'application/json' } : {}) },
       body: body ? JSON.stringify(body) : undefined,
       credentials: 'same-origin',
     });
     const data = await res.json().catch(() => null);
-    if (!res.ok || !data) throw new Error((data && data.error) || 'تعذّر الاتصال بالخادم. تحقّق من الإنترنت وحاول مرة أخرى.');
+    if (!res.ok || !data) throw new Error((data && data.error) || t('network'));
     return data;
   }
 
@@ -140,7 +223,7 @@
       const s = document.createElement('script');
       s.src = src;
       s.onload = resolve;
-      s.onerror = () => reject(new Error('تعذّر تحميل مكتبة ماي فاتورة'));
+      s.onerror = () => reject(new Error(t('scriptFailed')));
       document.head.appendChild(s);
     });
   }
@@ -167,7 +250,7 @@
 
   function demoData() {
     return {
-      order: DEMO_ORDER.order,
+      order: { ...DEMO_ORDER.order, ...DEMO_TEXT[state.lang] },
       quote: demoQuote(),
       promoCode: state.demoPromo,
       vouchers: DEMO_ORDER.vouchers,
@@ -198,7 +281,7 @@
     const foreign = state.currency !== 'SAR';
     $('charge-note').hidden = !foreign;
     $('charge-sar').innerHTML = money(quote.total, '', 'SAR');
-    $('bar-sub').textContent = foreign ? 'شامل الضريبة · الدفع بالريال' : 'شامل الضريبة';
+    $('bar-sub').textContent = foreign ? t('inclVatSar') : t('inclVat');
     renderCurrency();
 
     $('promo-toggle').hidden = Boolean(promoCode);
@@ -261,9 +344,9 @@
     li.className = 'ticket';
     if (!eligible) li.setAttribute('aria-disabled', 'true');
     li.innerHTML =
-      `<div class="ticket-value"><b>${v.percent}٪</b><small>خصم</small></div>` +
-      `<div class="ticket-body"><code dir="ltr"></code><small>للطلبات بقيمة ${money(v.minTotal)} أو أكثر</small></div>` +
-      `<button type="button" class="ticket-use"${eligible ? '' : ' disabled'}>استخدم</button>`;
+      `<div class="ticket-value"><b>${t('percent', v.percent)}</b><small>${t('off')}</small></div>` +
+      `<div class="ticket-body"><code dir="ltr"></code><small>${t('minOrder', money(v.minTotal))}</small></div>` +
+      `<button type="button" class="ticket-use"${eligible ? '' : ' disabled'}>${t('use')}</button>`;
     li.querySelector('code').textContent = v.code;
     li.querySelector('button').addEventListener('click', () => applyPromo(v.code));
     return li;
@@ -304,7 +387,7 @@
     $('promo-error').hidden = true;
     $('promo-code').removeAttribute('aria-invalid');
     if (!code) {
-      showPromoError('اكتب رمز الخصم أولاً.');
+      showPromoError(t('promoEmpty'));
       $('promo-code').focus();
       return;
     }
@@ -314,15 +397,15 @@
         state.data = await api('/api/promo', { code });
       } else {
         const v = DEMO_ORDER.vouchers.find((x) => x.code === code);
-        if (!v) throw new Error('رمز الخصم غير صحيح أو منتهي.');
-        if (DEMO_ORDER.price < v.minTotal) throw new Error(`هذا الرمز صالح للطلبات بقيمة ${v.minTotal} ريال أو أكثر.`);
+        if (!v) throw new Error(t('promoBad'));
+        if (DEMO_ORDER.price < v.minTotal) throw new Error(t('promoMin', v.minTotal));
         state.demoPromo = code;
         state.data = demoData();
       }
       closePromo();
       render();
       onTotalChanged();
-      toast(`تم تطبيق الرمز ${code}`);
+      toast(t('promoApplied', code));
     } catch (e) {
       showPromoError(e.message);
     } finally {
@@ -387,12 +470,10 @@
     $('pc-total-alt').hidden = !foreign;
     $('pc-total-alt').innerHTML = foreign ? `≈ ${money(quote.total)}` : '';
     $('card-pay-amount').innerHTML = money(quote.total, '', 'SAR');
-    $('paycard-brands').innerHTML = BRAND_LOGOS[state.method === 'mada' ? 'mada' : 'card'];
+    $('paycard-brands').innerHTML = brandLogo(state.method);
     $('mf-fallback').hidden = !(state.mode === 'live' && state.mf.failed);
     if (state.mode === 'live') $('mf-card').hidden = state.mf.failed;
-    $('paycard-note-text').textContent = state.mode === 'live'
-      ? 'تُرسل بيانات البطاقة مشفّرة إلى ماي فاتورة مباشرة، ولا تحفظها مهاد.'
-      : 'معاينة: بيانات البطاقة لا تُرسل ولا تُحفظ.';
+    $('paycard-note-text').textContent = state.mode === 'live' ? t('noteLive') : t('noteDemo');
   }
 
   /* ---------- card form (preview mode) ---------- */
@@ -436,14 +517,14 @@
     const exp = digits($('cc-exp').value);
     const cvv = digits($('cc-cvv').value);
 
-    if (name.length < 2) errors['cc-name'] = 'اكتب الاسم كما يظهر على البطاقة.';
-    if (!num) errors['cc-number'] = 'اكتب رقم البطاقة.';
-    else if (num.length < 13 || !luhn(num)) errors['cc-number'] = 'رقم البطاقة غير صحيح.';
+    if (name.length < 2) errors['cc-name'] = t('errName');
+    if (!num) errors['cc-number'] = t('errNumberEmpty');
+    else if (num.length < 13 || !luhn(num)) errors['cc-number'] = t('errNumber');
     const mm = Number(exp.slice(0, 2));
     const yy = Number(exp.slice(2));
-    if (exp.length !== 4 || mm < 1 || mm > 12) errors['cc-exp'] = 'تاريخ غير صحيح.';
-    else if (new Date(2000 + yy, mm, 1) <= new Date()) errors['cc-exp'] = 'البطاقة منتهية الصلاحية.';
-    if (cvv.length < 3) errors['cc-cvv'] = 'رمز غير صحيح.';
+    if (exp.length !== 4 || mm < 1 || mm > 12) errors['cc-exp'] = t('errExp');
+    else if (new Date(2000 + yy, mm, 1) <= new Date()) errors['cc-exp'] = t('errExpired');
+    if (cvv.length < 3) errors['cc-cvv'] = t('errCvv');
 
     ['cc-name', 'cc-number', 'cc-exp', 'cc-cvv'].forEach((id) => setFieldError(id, errors[id]));
     const first = Object.keys(errors)[0];
@@ -474,14 +555,10 @@
       return;
     }
     if (!validateCard()) return;
-    setBusy(true, 'جارٍ معالجة الدفع…');
+    setBusy(true, t('busyProcessing'));
     setTimeout(() => {
       setBusy(false);
-      showSheet(
-        'تم الدفع بنجاح',
-        'على الموقع الفعلي يتحقق البنك من العملية برمز التحقق (OTP) ثم يُنقل العميل لصفحة تأكيد الحجز. هذه معاينة: لم تُرسل بيانات البطاقة ولم يُخصم أي مبلغ.',
-        () => { resetCardForm(); leaveCardView(); }
-      );
+      showSheet(t('paidTitle'), t('paidCardBody'), () => { resetCardForm(); leaveCardView(); });
     }, 1400);
   }
 
@@ -505,14 +582,14 @@
         containerId: 'mf-card',
         paymentOptions: options,
         supportedNetworks: CARD_NETWORKS,
-        language: 'ar',
+        language: state.lang,
         settings: {
-          card: { style: MF_CARD_STYLE },
+          card: { style: mfCardStyle() },
           applePay: {
             containerId: 'mf-applepay',
             callback: onMyFatoorahPayment,
             supportedNetworks: CARD_NETWORKS,
-            language: 'ar',
+            language: state.lang,
             useCustomButton: true, // our own button calls initApplePayPayment()
             sessionStarted: () => {},
             sessionCanceled: () => setBusy(false),
@@ -532,12 +609,10 @@
   async function onMyFatoorahPayment(response) {
     if (!response || !response.isSuccess) {
       setBusy(false);
-      toast(response && response.paymentType === 'Card'
-        ? 'تحقّق من بيانات البطاقة وحاول مرة أخرى.'
-        : 'لم تكتمل عملية الدفع. حاول مرة أخرى أو اختر طريقة دفع أخرى.');
+      toast(response && response.paymentType === 'Card' ? t('cardFailed') : t('payFailed'));
       return;
     }
-    setBusy(true, 'جارٍ تأكيد الدفع…');
+    setBusy(true, t('busyConfirming'));
     try {
       const r = await api('/api/payments/execute', { sessionId: response.sessionId || state.mf.sessionId });
       window.location.assign(r.paymentUrl); // 3-D Secure for cards, straight to the result for Apple Pay
@@ -549,7 +624,7 @@
   }
 
   async function redirectToHostedPage() {
-    setBusy(true, 'جارٍ تحويلك لصفحة الدفع الآمنة…');
+    setBusy(true, t('busyRedirect'));
     try {
       const r = await api('/api/payments/redirect', { method: state.method });
       window.location.assign(r.paymentUrl);
@@ -597,7 +672,7 @@
       setApStage('done');
       setTimeout(() => {
         closeApplePayPreview();
-        showSheet('تم الدفع بنجاح', 'على الموقع الفعلي يُنقل العميل بعدها لصفحة تأكيد الحجز. هذه معاينة ولم يتم خصم أي مبلغ.');
+        showSheet(t('paidTitle'), t('paidApBody'));
       }, 900);
     }, 1300);
   }
@@ -610,23 +685,52 @@
       return;
     }
     if (!state.applePayAvailable || state.mf.failed) {
-      showSheet(
-        'Apple Pay غير متاح على هذا الجهاز',
-        'يعمل Apple Pay على الآيفون والآيباد والماك من متصفح Safari. اختر مدى أو فيزا / ماستركارد لإكمال الدفع من هذا الجهاز.'
-      );
+      showSheet(t('apUnavailableTitle'), t('apUnavailableBody'));
       return;
     }
     if (!state.mf.ready) {
-      toast('Apple Pay يتجهّز، حاول بعد لحظات.');
+      toast(t('apPreparing'));
       return;
     }
     // Must run synchronously inside the tap, or Safari refuses to open the sheet.
     window.myfatoorah.initApplePayPayment();
   }
 
+  /* ---------- language ---------- */
+
+  function applyLang() {
+    const root = document.documentElement;
+    root.lang = state.lang;
+    root.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
+    document.title = t('docTitle');
+    document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
+    document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+    document.querySelectorAll('[data-i18n-alt]').forEach((el) => { el.alt = t(el.dataset.i18nAlt); });
+    $('lang-btn').textContent = t('switchTo');
+    $('lang-btn').lang = state.lang === 'ar' ? 'en' : 'ar';
+  }
+
+  async function switchLang() {
+    state.lang = state.lang === 'ar' ? 'en' : 'ar';
+    try { localStorage.setItem(LANG_KEY, state.lang); } catch { /* storage unavailable */ }
+    applyLang();
+    if ($('card-form')) ['cc-name', 'cc-number', 'cc-exp', 'cc-cvv'].forEach((id) => setFieldError(id, ''));
+    $('promo-error').hidden = true;
+    if (state.mode === 'live') {
+      try { state.data = await api('/api/order'); } catch (e) { toast(e.message); }
+      render();
+      initMyFatoorah(); // MyFatoorah's card labels and Apple Pay sheet follow the new language
+    } else {
+      state.data = demoData();
+      render();
+    }
+  }
+
   /* ---------- wiring ---------- */
 
   function wire() {
+    $('lang-btn').addEventListener('click', switchLang);
     $('currency-btn').addEventListener('click', () => toggleCurrencyMenu($('currency-menu').hidden));
     $('currency-menu').addEventListener('click', (e) => {
       const li = e.target.closest('li[data-code]');
@@ -733,6 +837,17 @@
       const saved = localStorage.getItem(CURRENCY_KEY);
       if (CURRENCIES[saved]) state.currency = saved;
     } catch { /* storage unavailable */ }
+    // A page built as English (<html data-default-lang="en">) always opens in English;
+    // otherwise the page opens in the customer's last choice, Arabic by default.
+    const pageLang = document.documentElement.dataset.defaultLang;
+    state.lang = pageLang === 'en' ? 'en' : 'ar';
+    if (!pageLang) {
+      try {
+        const savedLang = localStorage.getItem(LANG_KEY);
+        if (I18N[savedLang]) state.lang = savedLang;
+      } catch { /* storage unavailable */ }
+    }
+    applyLang();
     wire();
     state.applePayAvailable = detectApplePay();
 
