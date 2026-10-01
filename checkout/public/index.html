@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>دفع مهاد</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Readex+Pro:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="checkout.css">
+</head>
+<body>
+
+<!-- Icon sprite. The riyal glyph is from Saudi-Riyal-Font by Emran Alhaddad (SIL OFL 1.1). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-sar" viewBox="0 0 1256 1256"><path fill="currentColor" d="M750,1119C730,1163,716,1211,711,1262L1136,1172C1156,1127,1169,1079,1174,1028ZM1136,901C1156,857,1169,809,1174,758L843,828V693L1136,631C1156,587,1169,538,1174,488L843,558V72C793,100,748,138,711,183V586L579,614V6C528,34,483,72,447,117V642L151,705C131,750,117,798,112,849L447,777V948L88,1024C68,1068,55,1117,50,1167L425,1088C456,1081,482,1063,499,1038L568,936C575,926,579,913,579,899V749L711,721V992Z"/></symbol>
+  <symbol id="i-apple" viewBox="0 0 24 24"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></g></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></g></symbol>
+  <symbol id="i-percent" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m15 9-6 6M9 9h.01M15 15h.01"/></g></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></g></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M18 6 6 18M6 6l12 12"/></symbol>
+</svg>
+
+<div class="page">
+
+  <aside class="demo-strip" id="demo-strip" hidden>
+    <p><strong>وضع المعاينة.</strong> بيانات تجريبية ولا يتم خصم أي مبلغ.</p>
+    <label class="switch" id="demo-ap-switch" hidden>
+      <input type="checkbox" id="demo-ap-toggle">
+      <span>إظهار Apple Pay للمعاينة</span>
+    </label>
+  </aside>
+
+  <header class="topbar">
+    <a class="icon-btn" href="#" id="back-link" aria-label="رجوع">
+      <svg><use href="#i-back"/></svg>
+    </a>
+    <h1>إتمام الشراء</h1>
+    <span class="secure-pill"><svg><use href="#i-lock"/></svg>دفع آمن</span>
+  </header>
+
+  <main class="stack">
+
+    <!-- 1. Order summary -->
+    <section class="card" aria-labelledby="order-h">
+      <div class="card-head">
+        <h2 id="order-h">ملخص الطلب</h2>
+        <a class="link" href="#" id="edit-link">تعديل<svg><use href="#i-chev"/></svg></a>
+      </div>
+      <p class="pkg-name" id="pkg-name">—</p>
+      <p class="pkg-sub"><svg><use href="#i-book"/></svg><span id="pkg-sub">—</span></p>
+      <div class="pkg-row">
+        <button type="button" class="qty-toggle" id="details-toggle" aria-expanded="false" aria-controls="details">
+          <span id="qty-label">—</span><svg><use href="#i-down"/></svg>
+        </button>
+        <span class="price-strong" id="pkg-price"></span>
+      </div>
+      <dl class="details" id="details" hidden>
+        <div><dt>المعلم</dt><dd id="d-teacher"></dd></div>
+        <div><dt>الطالب</dt><dd id="d-student"></dd></div>
+        <div><dt>المادة</dt><dd id="d-subject"></dd></div>
+        <div><dt>طريقة التعليم</dt><dd id="d-mode"></dd></div>
+        <div><dt>عدد الحصص</dt><dd id="d-sessions"></dd></div>
+      </dl>
+    </section>
+
+    <!-- 2. Payment summary -->
+    <section class="card" aria-labelledby="pay-h">
+      <div class="card-head"><h2 id="pay-h">ملخص الدفع</h2></div>
+
+      <button type="button" class="action-row" id="promo-toggle" aria-expanded="false" aria-controls="promo-panel">
+        <svg class="lead"><use href="#i-percent"/></svg>
+        <span class="grow">أضف رمز خصم</span>
+        <span class="link">أدخل الرمز<svg><use href="#i-chev"/></svg></span>
+      </button>
+
+      <div class="applied" id="promo-applied" hidden>
+        <svg class="lead ok"><use href="#i-check"/></svg>
+        <span class="grow">تم تطبيق <b id="promo-applied-code" dir="ltr"></b></span>
+        <button type="button" class="link danger" id="promo-remove">إزالة</button>
+      </div>
+
+      <form class="promo-panel" id="promo-panel" hidden novalidate>
+        <div class="promo-input">
+          <label class="sr-only" for="promo-code">رمز الخصم</label>
+          <input id="promo-code" name="promo-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="أدخل رمز الخصم" dir="auto">
+          <button type="submit" class="btn-soft" id="promo-apply">تطبيق</button>
+        </div>
+        <p class="field-error" id="promo-error" role="alert" hidden></p>
+        <div class="vouchers" id="vouchers" hidden>
+          <p class="mini-label">القسائم المتاحة لك</p>
+          <ul id="voucher-list"></ul>
+        </div>
+      </form>
+
+      <div class="receipt">
+        <div class="line"><span>المجموع الفرعي</span><span id="q-subtotal"></span></div>
+        <div class="line discount" id="q-discount-row" hidden><span>الخصم</span><span id="q-discount"></span></div>
+        <div class="line"><span>ضريبة القيمة المضافة ١٥٪ <small>(مشمولة)</small></span><span id="q-vat"></span></div>
+        <div class="line total"><span>الإجمالي</span><span id="q-total"></span></div>
+      </div>
+    </section>
+
+    <!-- 3. Payment method -->
+    <section class="card" aria-labelledby="method-h">
+      <div class="card-head"><h2 id="method-h">طريقة الدفع</h2></div>
+      <div class="methods" role="radiogroup" aria-labelledby="method-h">
+        <label class="method" id="method-applepay" hidden>
+          <span class="logo logo-applepay"><svg><use href="#i-apple"/></svg>Pay</span>
+          <span class="method-name">Apple Pay</span>
+          <input type="radio" name="method" value="applepay" id="m-applepay">
+        </label>
+        <label class="method">
+          <span class="logo logo-mada" aria-hidden="true"><span class="bars"><i></i><i></i></span><b>mada</b></span>
+          <span class="method-name">مدى</span>
+          <input type="radio" name="method" value="mada" id="m-mada">
+        </label>
+        <label class="method">
+          <span class="logo logo-cards" aria-hidden="true"><b>VISA</b><i class="mc"><i></i><i></i></i></span>
+          <span class="method-name">فيزا / ماستركارد</span>
+          <input type="radio" name="method" value="card" id="m-card">
+        </label>
+      </div>
+    </section>
+
+    <p class="note"><svg><use href="#i-info"/></svg>تتم معالجة بيانات الدفع عبر بوابة ماي فاتورة الآمنة، ولا تحفظ مهاد أي بيانات للبطاقات.</p>
+  </main>
+</div>
+
+<!-- Sticky pay bar -->
+<div class="paybar">
+  <div class="paybar-inner">
+    <div class="paybar-total">
+      <p>الإجمالي <span id="bar-total"></span></p>
+      <small>شامل الضريبة</small>
+    </div>
+    <button type="button" class="btn-pay" id="pay-btn">ادفع الآن</button>
+    <button type="button" class="btn-applepay" id="applepay-btn" lang="en" aria-label="Pay with Apple Pay" hidden>
+      <span class="fallback"><svg><use href="#i-apple"/></svg>Pay</span>
+    </button>
+  </div>
+</div>
+
+<!-- MyFatoorah renders its Apple Pay frame here. We use our own button, so it stays visually hidden, not display:none. -->
+<div id="mf-applepay" class="mf-host" aria-hidden="true"></div>
+
+<div class="busy" id="busy" hidden>
+  <div class="spinner" aria-hidden="true"></div>
+  <p id="busy-text">جارٍ تأكيد الدفع…</p>
+</div>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-title">
+  <form method="dialog">
+    <h3 id="sheet-title"></h3>
+    <p id="sheet-body"></p>
+    <button class="btn-pay wide" id="sheet-close" value="close">تمام</button>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="checkout.js"></script>
+</body>
+</html>

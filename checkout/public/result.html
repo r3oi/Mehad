@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>نتيجة الدفع · مهاد</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Readex+Pro:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="checkout.css">
+</head>
+<body>
+<div class="page">
+  <section class="card result" aria-live="polite">
+    <div class="result-icon" id="r-icon"></div>
+    <h1 id="r-title"></h1>
+    <p id="r-body"></p>
+    <a class="btn-pay" id="r-action" href="/"></a>
+  </section>
+</div>
+<script>
+  (() => {
+    const q = new URLSearchParams(location.search);
+    const paid = q.get('status') === 'paid';
+    const ref = q.get('ref') || '';
+    const icon = document.getElementById('r-icon');
+    icon.className = 'result-icon ' + (paid ? 'ok' : 'fail');
+    icon.textContent = paid ? '✓' : '!';
+    document.getElementById('r-title').textContent = paid ? 'تم الدفع بنجاح' : 'لم يكتمل الدفع';
+    document.getElementById('r-body').textContent = paid
+      ? `تم تأكيد طلبك ${ref}. ستجد تفاصيل الحصة في لوحة الطالب.`
+      : 'لم يتم خصم أي مبلغ. يمكنك المحاولة مرة أخرى أو اختيار طريقة دفع مختلفة.';
+    const action = document.getElementById('r-action');
+    action.textContent = paid ? 'الذهاب للوحة الطالب' : 'المحاولة مرة أخرى';
+  })();
+</script>
+</body>
+</html>

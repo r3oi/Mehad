@@ -1,0 +1,11 @@
+{
+  "name": "mehad-checkout",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mehad checkout page prototype with Apple Pay through MyFatoorah",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}
