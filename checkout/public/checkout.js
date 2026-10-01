@@ -6,15 +6,14 @@
 
   const I18N = {
     ar: {
-      docTitle: 'دفع مهاد', nav: 'التنقل', back: 'رجوع', brand: 'مهاد', currency: 'عملة عرض الأسعار',
+      docTitle: 'دفع مهاد', nav: 'التنقل', back: 'رجوع', brand: 'مهاد',
       checkoutTitle: 'إتمام الشراء', orderSummary: 'ملخص الطلب', edit: 'تعديل',
       teacher: 'المعلم', student: 'الطالب', subject: 'المادة', mode: 'طريقة التعليم', sessions: 'عدد الحصص',
       paymentSummary: 'ملخص الدفع', addPromo: 'أضف رمز خصم', enterCode: 'أدخل الرمز', applied: 'تم تطبيق', remove: 'إزالة',
       subtotal: 'المجموع الفرعي', discount: 'الخصم', vat: 'ضريبة القيمة المضافة ١٥٪', included: '(مشمولة)', total: 'الإجمالي',
-      chargeNote: 'الأسعار بالدولار للعرض فقط، ويتم الدفع بالريال السعودي:',
       paymentMethod: 'طريقة الدفع', mada: 'مدى', cards: 'فيزا / ماستركارد',
       gatewayNote: 'تتم معالجة بيانات الدفع عبر بوابة ماي فاتورة الآمنة، ولا تحفظ مهاد أي بيانات للبطاقات.',
-      payNow: 'ادفع الآن', inclVat: 'شامل الضريبة', inclVatSar: 'شامل الضريبة · الدفع بالريال',
+      payNow: 'ادفع الآن', inclVat: 'شامل الضريبة',
       cardTitle: 'الدفع بالبطاقة', secure: 'اتصال آمن', cardDetails: 'بيانات البطاقة', amountDue: 'المبلغ المستحق',
       mfFallback: 'تعذّر تحميل نموذج البطاقة الآن. اضغط «ادفع» وسننقلك لصفحة الدفع الآمنة في ماي فاتورة.',
       ccName: 'اسم حامل البطاقة', ccNamePh: 'الاسم كما يظهر على البطاقة', ccNumber: 'رقم البطاقة',
@@ -43,15 +42,14 @@
       madaAria: 'مدى', cardsAria: 'فيزا وماستركارد',
     },
     en: {
-      docTitle: 'Mehad Checkout', nav: 'Navigation', back: 'Back', brand: 'Mehad', currency: 'Display currency',
+      docTitle: 'Mehad Checkout', nav: 'Navigation', back: 'Back', brand: 'Mehad',
       checkoutTitle: 'Checkout', orderSummary: 'Order summary', edit: 'Edit',
       teacher: 'Teacher', student: 'Student', subject: 'Subject', mode: 'Learning mode', sessions: 'Sessions',
       paymentSummary: 'Payment summary', addPromo: 'Add promo code', enterCode: 'Enter code', applied: 'Applied', remove: 'Remove',
       subtotal: 'Subtotal', discount: 'Discount', vat: 'VAT 15%', included: '(included)', total: 'Total',
-      chargeNote: 'USD prices are for display only. You will be charged in Saudi riyals:',
       paymentMethod: 'Payment method', mada: 'mada', cards: 'Visa / Mastercard',
       gatewayNote: "Payments are processed by MyFatoorah's secure gateway. Mehad never stores card details.",
-      payNow: 'Pay now', inclVat: 'Including VAT', inclVatSar: 'Including VAT · charged in SAR',
+      payNow: 'Pay now', inclVat: 'Including VAT',
       cardTitle: 'Card payment', secure: 'Secure connection', cardDetails: 'Card details', amountDue: 'Amount due',
       mfFallback: "The card form couldn't load right now. Tap Pay and we'll take you to MyFatoorah's secure payment page.",
       ccName: 'Cardholder name', ccNamePh: 'Name as shown on the card', ccNumber: 'Card number',
@@ -97,13 +95,6 @@
     vouchers: [{ code: 'VOUCHAR_26', percent: 99, minTotal: 10 }],
   };
   const VAT_RATE = 0.15;
-  // Display currencies. The charge itself is always in SAR; SAR is pegged at 3.75 per USD.
-  const FLAG_SA_SRC = 'flag-sa.png';
-  const CURRENCIES = {
-    SAR: { perSar: 1, flag: { img: FLAG_SA_SRC } },
-    USD: { perSar: 1 / 3.75, flag: { symbol: 'i-flag-us' } },
-  };
-  const CURRENCY_KEY = 'mehad.checkout.currency';
   const CARD_NETWORKS = ['mada', 'visa', 'masterCard'];
   const brandLogo = (method) => (method === 'mada'
     ? `<span class="logo logo-mada" role="img" aria-label="${t('madaAria')}"><span class="bars"><i></i><i></i></span><b>mada</b></span>`
@@ -153,7 +144,6 @@
     applePayAvailable: false,
     mf: { ready: false, failed: false, sessionId: null },
     demoPromo: null,
-    currency: 'SAR',
     view: 'checkout',
     pushedCardView: false,
     lang: 'ar',
@@ -171,14 +161,7 @@
   const digits = (s) => String(s).replace(/\D/g, '');
   const isTouch = () => window.matchMedia('(pointer: coarse)').matches;
 
-  const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
-
-  // n is always in SAR; it is shown in the selected display currency unless cur says otherwise.
-  function money(n, sign = '', cur = state.currency) {
-    if (cur === 'USD') {
-      const v = usd.format(round2(n * CURRENCIES.USD.perSar));
-      return `<span class="money" dir="ltr" aria-label="${sign}${v}">${sign}${v}</span>`;
-    }
+  function money(n, sign = '') {
     return `<span class="money" dir="ltr" aria-label="${sign}${fmt.format(n)} ${t('riyal')}">` +
       `${sign}<svg aria-hidden="true"><use href="#i-sar"/></svg><span>${fmt.format(n)}</span></span>`;
   }
@@ -278,11 +261,6 @@
     $('q-vat').innerHTML = money(quote.vat);
     $('q-total').innerHTML = money(quote.total);
     $('bar-total').innerHTML = money(quote.total);
-    const foreign = state.currency !== 'SAR';
-    $('charge-note').hidden = !foreign;
-    $('charge-sar').innerHTML = money(quote.total, '', 'SAR');
-    $('bar-sub').textContent = foreign ? t('inclVatSar') : t('inclVat');
-    renderCurrency();
 
     $('promo-toggle').hidden = Boolean(promoCode);
     $('promo-applied').hidden = !promoCode;
@@ -294,48 +272,6 @@
 
     renderMethods();
     if (state.view === 'card') renderCardView();
-  }
-
-  function flagHtml(code) {
-    const f = CURRENCIES[code].flag;
-    return f.img
-      ? `<img class="flag" src="${f.img}" alt="" width="20" height="20">`
-      : `<svg class="flag" aria-hidden="true"><use href="#${f.symbol}"/></svg>`;
-  }
-
-  function renderCurrency() {
-    const cur = state.currency;
-    $('currency-code').textContent = cur;
-    $('currency-flag').innerHTML = flagHtml(cur);
-    const menu = $('currency-menu');
-    menu.replaceChildren(...Object.keys(CURRENCIES).map((code) => {
-      const li = document.createElement('li');
-      li.setAttribute('role', 'option');
-      li.setAttribute('aria-selected', String(code === cur));
-      li.tabIndex = 0;
-      li.dataset.code = code;
-      li.innerHTML = flagHtml(code) +
-        `<span>${code}</span><svg class="check" aria-hidden="true"><use href="#i-check"/></svg>`;
-      return li;
-    }));
-  }
-
-  function toggleCurrencyMenu(open) {
-    $('currency-menu').hidden = !open;
-    $('currency-btn').setAttribute('aria-expanded', String(open));
-    if (open) {
-      const sel = $('currency-menu').querySelector('[aria-selected="true"]');
-      if (sel) sel.focus();
-    }
-  }
-
-  function setCurrency(code) {
-    if (!CURRENCIES[code]) return;
-    state.currency = code;
-    try { localStorage.setItem(CURRENCY_KEY, code); } catch { /* storage unavailable */ }
-    toggleCurrencyMenu(false);
-    $('currency-btn').focus();
-    render();
   }
 
   function voucherItem(v) {
@@ -465,11 +401,8 @@
 
   function renderCardView() {
     const { quote } = state.data;
-    const foreign = state.currency !== 'SAR';
-    $('pc-total').innerHTML = money(quote.total, '', 'SAR');
-    $('pc-total-alt').hidden = !foreign;
-    $('pc-total-alt').innerHTML = foreign ? `≈ ${money(quote.total)}` : '';
-    $('card-pay-amount').innerHTML = money(quote.total, '', 'SAR');
+    $('pc-total').innerHTML = money(quote.total);
+    $('card-pay-amount').innerHTML = money(quote.total);
     $('paycard-brands').innerHTML = brandLogo(state.method);
     $('mf-fallback').hidden = !(state.mode === 'live' && state.mf.failed);
     if (state.mode === 'live') $('mf-card').hidden = state.mf.failed;
@@ -731,25 +664,6 @@
 
   function wire() {
     $('lang-btn').addEventListener('click', switchLang);
-    $('currency-btn').addEventListener('click', () => toggleCurrencyMenu($('currency-menu').hidden));
-    $('currency-menu').addEventListener('click', (e) => {
-      const li = e.target.closest('li[data-code]');
-      if (li) setCurrency(li.dataset.code);
-    });
-    $('currency-menu').addEventListener('keydown', (e) => {
-      const li = e.target.closest('li[data-code]');
-      if (!li) return;
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrency(li.dataset.code); }
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        const next = e.key === 'ArrowDown' ? li.nextElementSibling : li.previousElementSibling;
-        if (next) next.focus();
-      }
-      if (e.key === 'Escape') { toggleCurrencyMenu(false); $('currency-btn').focus(); }
-    });
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.currency')) toggleCurrencyMenu(false);
-    });
 
     document.querySelectorAll('[data-ap-close]').forEach((el) => el.addEventListener('click', () => {
       if ($('ap').dataset.stage === 'ready') closeApplePayPreview();
@@ -833,10 +747,6 @@
   }
 
   async function boot() {
-    try {
-      const saved = localStorage.getItem(CURRENCY_KEY);
-      if (CURRENCIES[saved]) state.currency = saved;
-    } catch { /* storage unavailable */ }
     // A page built as English (<html data-default-lang="en">) always opens in English;
     // otherwise the page opens in the customer's last choice, Arabic by default.
     const pageLang = document.documentElement.dataset.defaultLang;
