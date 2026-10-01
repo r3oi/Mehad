@@ -158,8 +158,8 @@
 <!-- Preview only: a stand-in for the native Apple Pay sheet. On the live site iOS draws the real one. -->
 <div class="ap" id="ap" hidden>
   <div class="ap-scrim" data-ap-close></div>
-  <section class="ap-sheet" role="dialog" aria-modal="true" aria-label="Apple Pay" lang="en" dir="ltr">
-    <div class="ap-hint" aria-hidden="true"><span>Double Click<br>to Pay</span></div>
+  <div class="ap-hint" id="ap-hint" aria-hidden="true" dir="ltr"><span>Double Click<br>to Pay</span></div>
+  <section class="ap-sheet" id="ap-sheet" role="dialog" aria-modal="true" aria-label="Apple Pay" lang="en" dir="ltr">
     <header class="ap-head">
       <span class="ap-logo"><svg><use href="#i-apple"/></svg>Pay</span>
       <button type="button" class="ap-x" data-ap-close aria-label="Cancel"><svg><use href="#i-x"/></svg></button>

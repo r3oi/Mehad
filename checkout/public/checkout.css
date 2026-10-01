@@ -36,6 +36,7 @@ body {
 [hidden] { display: none !important; }
 button, input { font: inherit; color: inherit; }
 button { cursor: pointer; }
+button, a, label, input { -webkit-tap-highlight-color: transparent; }
 a { color: inherit; }
 svg { width: 1em; height: 1em; flex: none; overflow: visible; }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 8px; }
@@ -121,6 +122,7 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
 .promo-input input {
   flex: 1; min-width: 0; height: 46px; padding-inline: 16px;
   border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
+  font-size: 16px; /* below 16px iOS Safari zooms the page on focus */
   text-transform: uppercase;
 }
 .promo-input input::placeholder { text-transform: none; color: var(--muted); }
@@ -258,7 +260,7 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
   position: fixed; inset: 0; z-index: 30;
   display: grid; place-content: center; justify-items: center; gap: 14px;
   background: var(--scrim); color: var(--on-brand); font-weight: 600;
-  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
 .spinner {
   width: 40px; height: 40px; border-radius: 50%;
@@ -294,7 +296,7 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
 .ap-scrim { position: absolute; inset: 0; background: rgb(28 28 30 / 0.42); opacity: 0; transition: opacity .25s ease; }
 .ap.open .ap-scrim { opacity: 1; }
 .ap-hint {
-  position: absolute; bottom: calc(100% + 22px); right: -8px;
+  position: absolute; right: 0; top: 0;
   display: flex; align-items: center; gap: 10px;
   color: #ffffff; font-size: 17px; font-weight: 600; line-height: 1.2; text-align: right;
   text-shadow: 0 1px 8px rgb(0 0 0 / 0.35);
@@ -313,6 +315,8 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
   background: var(--ap-bg);
   backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
   box-shadow: 0 20px 60px -10px rgb(0 0 0 / 0.35);
+  max-height: calc(100% - 16px - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px));
+  overflow-y: auto; overscroll-behavior: contain;
   transform: translateY(calc(100% + 24px));
   transition: transform .35s cubic-bezier(.2,.9,.25,1);
 }
@@ -373,6 +377,20 @@ svg { width: 1em; height: 1em; flex: none; overflow: visible; }
 .ap-confirm[data-stage="ready"] .ap-ic-spin, .ap-confirm[data-stage="ready"] .ap-ic-done,
 .ap-confirm[data-stage="processing"] .ap-ic-side, .ap-confirm[data-stage="processing"] .ap-ic-done,
 .ap-confirm[data-stage="done"] .ap-ic-side, .ap-confirm[data-stage="done"] .ap-ic-spin { display: none; }
+
+@media (max-height: 640px) {
+  .ap-sheet { gap: 6px; padding: 12px 12px 8px; border-radius: 30px; }
+  .ap-logo { font-size: 26px; }
+  .ap-x { width: 32px; height: 32px; font-size: 16px; }
+  .ap-group { padding: 9px 14px; border-radius: 18px; }
+  .ap-grow b, .ap-last4, .ap-link .ap-grow, .ap-contact .ap-grow { font-size: 15.5px; }
+  .ap-grow small, .ap-total small { font-size: 13.5px; }
+  .ap-sep { margin: 5px 0; }
+  .ap-total strong { font-size: 24px; }
+  .ap-confirm-icon { width: 36px; height: 36px; }
+  .ap-ic-side, .ap-ic-done { width: 34px; height: 34px; }
+  .ap-ic-done { padding: 7px; }
+}
 
 /* Toast */
 .toast {

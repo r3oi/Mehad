@@ -90,7 +90,8 @@
     try {
       return Boolean(window.ApplePaySession && window.ApplePaySession.canMakePayments());
     } catch {
-      return false; // e.g. inside a cross-origin frame
+      // Thrown on non-HTTPS pages and in cross-origin frames; the object still means an Apple device.
+      return Boolean(window.ApplePaySession);
     }
   }
 
@@ -293,7 +294,13 @@
     setApStage('ready');
     $('ap').hidden = false;
     document.body.style.overflow = 'hidden';
-    requestAnimationFrame(() => requestAnimationFrame(() => $('ap').classList.add('open')));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const hint = $('ap-hint');
+      const top = $('ap-sheet').offsetTop - hint.offsetHeight - 22; // offsetTop ignores the slide-in transform
+      hint.hidden = top < 8;
+      hint.style.top = `${Math.max(top, 0)}px`;
+      $('ap').classList.add('open');
+    }));
     $('ap-confirm').focus({ preventScroll: true });
   }
 
