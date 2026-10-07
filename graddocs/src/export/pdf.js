@@ -1,5 +1,7 @@
-// Minimal PDF writer: one page per image, lossless (FlateDecode RGB) when the
-// browser has CompressionStream, high-quality JPEG otherwise. No dependencies.
+// PDF export. svgToPdfBlob() produces a real vector PDF (pdf-vector.js: paths, selectable text,
+// embedded images) and only falls back to the raster writer below -- one image per page,
+// lossless FlateDecode RGB when the browser has CompressionStream, JPEG otherwise -- when the
+// vector conversion throws. No dependencies.
 import { svgToCanvas } from './png.js';
 
 const enc = new TextEncoder();
@@ -68,8 +70,26 @@ export async function canvasesToPdf(pages, { title = 'GradDocs export', margin =
   return new Blob(chunks, { type: 'application/pdf' });
 }
 
-/** SVG (as produced by renderFigureSVG / renderTableSVG) → single-page PDF Blob. */
-export async function svgToPdfBlob(svg, width, height, { scale = 3, title } = {}) {
+/** Raster fallback: the SVG drawn to a canvas at `scale` and embedded as one image. */
+export async function rasterSvgToPdfBlob(svg, width, height, { scale = 3, title } = {}) {
   const canvas = await svgToCanvas(svg, width, height, { scale, background: '#ffffff' });
   return canvasesToPdf([{ canvas, widthPt: width * 0.75, heightPt: height * 0.75 }], { title });
+}
+
+/**
+ * SVG (as produced by renderFigureSVG / renderTableSVG) → single-page PDF Blob.
+ * Vector by default (sharp at any zoom, selectable text, small); `opts.vector === false` forces the
+ * raster path, which is also used automatically if the vector conversion throws.
+ * opts: { scale (raster fallback only), title, vector, margin (pt) }
+ */
+export async function svgToPdfBlob(svg, width, height, { scale = 3, title, vector = true, margin } = {}) {
+  if (vector !== false) {
+    try {
+      const { svgToVectorPdf } = await import('./pdf-vector.js');
+      return await svgToVectorPdf(svg, { title, width, height, margin });
+    } catch (err) {
+      console.warn('[pdf] vector export failed, falling back to a raster PDF:', err);
+    }
+  }
+  return rasterSvgToPdfBlob(svg, width, height, { scale, title });
 }

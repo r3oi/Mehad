@@ -17,7 +17,7 @@ index.html → src/main.js
   structure/ project structure (outline) view, chapters (writing) view
   acronyms/ acronyms manager + automatic detection
   preview/  Word-like paginated preview
-  export/   zip/png/pdf/docx writers + export view
+  export/   zip/png/pdf (vector: pdf-vector.js + pdf-fonts.js)/docx writers + export view
   projects/ dashboard/ settings/  — remaining views
 ```
 
@@ -116,6 +116,7 @@ source for Document Preview and the Word export. Body blocks: chapter, heading, 
   `renderThumbnail(figureOrDiagram) → svg markup that scales to its container`.
 - `tables/table-render.js`: `renderTableHTML(project, table, opts) → string`, `renderTableSVG(project, table, opts) → { svg, width, height }`.
 - `export/png.js`: `svgToPngBlob(svg, width, height, { scale, dpi })`.
+- `export/pdf.js`: `svgToPdfBlob(svg, width, height, { title })` → vector PDF (selectable text; falls back to raster only on failure).
 
 ## UI kit
 

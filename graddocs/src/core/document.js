@@ -12,8 +12,8 @@ export const sortAcronyms = (list) => [...list].sort((a, b) => compareText(a.acr
  *   titlePage: { name, type, description, university, college, department, supervisor, students[], academicYear },
  *   front:   [{ id, kind, title, generated, blocks: [{type:'p'|'li', text}] }]   (only included items, in order)
  *   toc:     [{ id, kind: 'chapter'|'section', level: 1..4, number, title, text }]
- *   figures: [{ id, figure, label, number, code, caption }]   (document order)
- *   tables:  [{ id, table,  label, number, code, caption }]
+ *   figures: [{ id, figure, label, number, code, caption, chapterId, sectionId, placed }]   (document order)
+ *   tables:  [{ id, table,  label, number, code, caption, chapterId, sectionId, placed }]
  *   acronyms:[{ id, acronym, meaning, description }]           (alphabetical)
  *   body:    blocks in reading order:
  *     { type: 'chapter', id, number, title, heading }
@@ -22,6 +22,10 @@ export const sortAcronyms = (list) => [...list].sort((a, b) => compareText(a.acr
  *     { type: 'figure', id, figure, label, number, caption }
  *     { type: 'table',  id, table,  label, number, caption }
  * }
+ *
+ * A figure/table whose placement line ({{figure:id}} / {{table:id}} alone on a line) is in a chapter/section body is
+ * emitted exactly there, between the paragraphs. The ones merely assigned to a chapter/section follow the text of
+ * that chapter/section (figures first, then tables). Every figure/table is emitted exactly once.
  */
 export function buildDocument(project) {
   const n = getNumbering(project);
@@ -29,19 +33,33 @@ export function buildDocument(project) {
 
   const figures = n.figureOrder.map((figure) => {
     const info = n.figures.get(figure.id);
-    return { id: figure.id, figure, label: info.label, number: info.number, code: info.code, caption: captionText(project, 'figure', figure), chapterId: info.chapterId, sectionId: info.sectionId };
+    return { id: figure.id, figure, label: info.label, number: info.number, code: info.code, caption: captionText(project, 'figure', figure), chapterId: info.chapterId, sectionId: info.sectionId, placed: info.placed };
   });
   const tables = n.tableOrder.map((table) => {
     const info = n.tables.get(table.id);
-    return { id: table.id, table, label: info.label, number: info.number, code: info.code, caption: captionText(project, 'table', table), chapterId: info.chapterId, sectionId: info.sectionId };
+    return { id: table.id, table, label: info.label, number: info.number, code: info.code, caption: captionText(project, 'table', table), chapterId: info.chapterId, sectionId: info.sectionId, placed: info.placed };
   });
 
-  const itemsAt = (list, chapterId, sectionId) => list.filter((x) => x.sectionId === sectionId && (sectionId || x.chapterId === chapterId));
+  const figureById = new Map(figures.map((f) => [f.id, f]));
+  const tableById = new Map(tables.map((tb) => [tb.id, tb]));
+  // Items assigned to a chapter/section that are not placed in its text (placed ones were emitted in the text).
+  const itemsAt = (list, chapterId, sectionId) => list.filter((x) => !x.placed && x.sectionId === sectionId && (sectionId || x.chapterId === chapterId));
 
   const toc = [];
   const body = [];
+  const emitted = new Set(); // 'figure:id' / 'table:id' already placed in a body
   const pushBody = (ownerId, text) => {
-    for (const b of parseBlocks(text)) body.push({ type: b.type === 'li' ? 'bullet' : 'paragraph', text: b.text, ownerId });
+    for (const b of parseBlocks(text)) {
+      if (b.type === 'figure' || b.type === 'table') {
+        // Only the item's effective placement counts (first line in document order); anything else is ignored.
+        const entry = (b.type === 'figure' ? figureById : tableById).get(b.id);
+        const info = (b.type === 'figure' ? n.figures : n.tables).get(b.id);
+        const key = `${b.type}:${b.id}`;
+        if (!entry || info?.placement?.ownerId !== ownerId || emitted.has(key)) continue;
+        emitted.add(key);
+        body.push({ type: b.type, ...entry });
+      } else body.push({ type: b.type === 'li' ? 'bullet' : 'paragraph', text: b.text, ownerId });
+    }
   };
   // A section's figures follow its text, then its tables (each in numbering order).
   const pushItemsOrdered = (chapterId, sectionId) => {
@@ -79,7 +97,8 @@ export function buildDocument(project) {
   }
 
   const front = project.frontMatter.filter((f) => f.include !== false).map((f) => ({
-    id: f.id, kind: f.kind, title: f.title, generated: !!FRONT_MATTER_KINDS[f.kind]?.generated, blocks: parseBlocks(f.body),
+    // Placement lines only mean something in chapter / section text; front-matter pages show text only.
+    id: f.id, kind: f.kind, title: f.title, generated: !!FRONT_MATTER_KINDS[f.kind]?.generated, blocks: parseBlocks(f.body).filter((b) => b.type === 'p' || b.type === 'li'),
   }));
 
   return {

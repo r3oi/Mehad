@@ -3,7 +3,7 @@
 // order whenever the project changes, so references never go stale.
 import { pad } from './utils.js';
 import { findNode } from './model.js';
-import { placementsIn, makePlacement, removePlacements } from './references.js';
+import { placementsIn } from './references.js';
 import { t } from '../i18n/index.js';
 
 const cache = new WeakMap();
@@ -158,10 +158,8 @@ export function moveInDocumentOrder(project, collection, id, direction) {
     const owner = findNode(project, a.placement.ownerId)?.node;
     if (!owner || a.placement.ownerId !== b.placement.ownerId) return false;
     const lines = String(owner.body || '').split('\n');
-    const kind = collection === 'figures' ? 'figure' : 'table';
-    lines[a.placement.line] = makePlacement(kind, id);
-    lines[b.placement.line] = makePlacement(kind, neighbour.id);
-    [lines[a.placement.line], lines[b.placement.line]] = [lines[b.placement.line], lines[a.placement.line]];
+    const la = a.placement.line; const lb = b.placement.line;
+    [lines[la], lines[lb]] = [lines[lb], lines[la]];
     owner.body = lines.join('\n');
     invalidateNumbering(project);
     return true;

@@ -3,7 +3,10 @@
 import assert from 'node:assert/strict';
 import { createProject, createChapter, createSection, createFigure, createTable, createAcronym, normalizeProject } from '../src/core/model.js';
 import { getNumbering, invalidateNumbering, moveInDocumentOrder, captionText } from '../src/core/numbering.js';
-import { makeRef, resolveText, linkPlainReferences, findBrokenReferences, parseBlocks } from '../src/core/references.js';
+import {
+  makeRef, resolveText, linkPlainReferences, findBrokenReferences, parseBlocks,
+  PLACE_RE, makePlacement, placementsIn, stripPlacements, insertPlacement, removePlacements, removeLine, moveLine, clearPlacement, findBrokenPlacements, placementOf,
+} from '../src/core/references.js';
 import { scanText, detectAcronymSuggestions } from '../src/acronyms/detection.js';
 import { diffDiagrams, summarizeDiff } from '../src/figures/diff.js';
 import { addVersion, isDirty, restoreVersion } from '../src/figures/versions.js';
@@ -160,6 +163,193 @@ test('normalizeProject repairs partial imports', () => {
   assert.ok(Array.isArray(p.figures[0].diagram.elements));
   assert.equal(p.tables[0].rows[0].length, 2);
   assert.equal(p.settings.captions.figure.label, 'Figure');
+});
+
+console.log('placement in the text');
+/** sampleProject + a second figure `second` stored in 1.4.2 (after `fishbone`). */
+function placementProject() {
+  const base = sampleProject();
+  const { p, s142 } = base;
+  const second = createFigure({ title: 'Second Figure', chapterId: p.chapters[0].id, sectionId: s142.id });
+  p.figures.push(second); invalidateNumbering(p);
+  const A = p.figures.find((f) => f.title === 'Feature Fishbone Diagram');
+  return { ...base, second, A, B: second };
+}
+const fig = (id) => makePlacement('figure', id);
+test('PLACE_RE and helpers: a line holding only the token', () => {
+  assert.ok(PLACE_RE.test('{{figure:fig_1}}') && PLACE_RE.test('  {{table:tbl-2}}  '));
+  assert.ok(!PLACE_RE.test('see {{figure:fig_1}}') && !PLACE_RE.test('{{ref:fig:fig_1}}') && !PLACE_RE.test('{{figure:fig_1}} text'));
+  assert.equal(makePlacement('table', 'tbl_9'), '{{table:tbl_9}}');
+  assert.deepEqual(placementsIn('a\n{{figure:f1}}\n\n{{table:t1}}\nb {{figure:f2}}'), [{ kind: 'figure', id: 'f1', line: 1 }, { kind: 'table', id: 't1', line: 3 }]);
+  assert.deepEqual(placementsIn(''), []);
+  assert.equal(stripPlacements('a\n{{figure:f1}}\nb'), 'a\nb');
+});
+test('numbering follows the placement order inside a section', () => {
+  const { p, s142, A, B } = placementProject();
+  assert.equal(getNumbering(p).figures.get(A.id).label, 'Figure 1');
+  assert.equal(getNumbering(p).figures.get(B.id).label, 'Figure 2');
+  s142.body = `Intro\n${fig(B.id)}\nMiddle\n${fig(A.id)}\nEnd`; invalidateNumbering(p);
+  const n = getNumbering(p);
+  assert.equal(n.figures.get(B.id).label, 'Figure 1', 'B is placed first');
+  assert.equal(n.figures.get(A.id).label, 'Figure 2');
+  assert.equal(n.figures.get(B.id).code, 'FIG-001');
+  assert.deepEqual(n.figureOrder.slice(0, 2).map((f) => f.id), [B.id, A.id]);
+  assert.equal(n.figures.get(B.id).placed, true);
+  assert.equal(n.figures.get(B.id).placement.ownerId, s142.id);
+  assert.equal(n.figures.get(B.id).placement.line, 1);
+});
+test('placed items come before items that are only assigned to the section', () => {
+  const { p, s142, A, B } = placementProject();
+  s142.body = `Text\n${fig(B.id)}\nMore text`; invalidateNumbering(p);
+  const n = getNumbering(p);
+  assert.equal(n.figures.get(B.id).label, 'Figure 1');
+  assert.equal(n.figures.get(A.id).label, 'Figure 2', 'unplaced A follows at the end of the section');
+  assert.equal(n.figures.get(A.id).placed, false);
+  assert.equal(n.figures.get(A.id).placement, null);
+});
+test('a placement in another section moves the item there (it wins over sectionId)', () => {
+  const { p, s11, ch1, arch } = sampleProject();
+  s11.body = `Intro\n${fig(arch.id)}\nMore`; invalidateNumbering(p);
+  const info = getNumbering(p).figures.get(arch.id);
+  assert.equal(info.sectionId, s11.id);
+  assert.equal(info.chapterId, ch1.id);
+  assert.equal(info.location, 'Chapter 1 · Section 1.1');
+  assert.equal(info.label, 'Figure 1', 'section 1.1 comes before 1.4.2');
+  assert.equal(getNumbering(p).figures.get(p.figures.find((f) => f.title === 'Feature Fishbone Diagram').id).label, 'Figure 2');
+  // the stored location is untouched, so removing the line sends it back to the end of its own section
+  assert.equal(p.figures.find((f) => f.id === arch.id).sectionId, p.chapters[1].sections[1].id);
+  s11.body = 'Intro\nMore'; invalidateNumbering(p);
+  assert.equal(getNumbering(p).figures.get(arch.id).label, 'Figure 2');
+  assert.equal(getNumbering(p).figures.get(arch.id).placed, false);
+});
+test('chapter bodies place items before the chapter\'s section items; per-chapter numbering uses the placement', () => {
+  const { p, ch2, fishbone, arch } = sampleProject();
+  ch2.body = `Chapter intro\n${fig(arch.id)}`; invalidateNumbering(p);
+  assert.equal(getNumbering(p).figures.get(arch.id).sectionId, null);
+  assert.equal(getNumbering(p).figures.get(arch.id).chapterId, ch2.id);
+  assert.equal(getNumbering(p).figures.get(arch.id).location, 'Chapter 2');
+  // the fishbone joins chapter 2's intro after arch: numbered right after it, before the chapter's own sections
+  ch2.body = `${fig(arch.id)}\n${fig(fishbone.id)}`; invalidateNumbering(p);
+  assert.equal(getNumbering(p).figures.get(arch.id).label, 'Figure 1');
+  assert.equal(getNumbering(p).figures.get(fishbone.id).label, 'Figure 2');
+  p.settings.captions.figure.numbering = 'chapter'; invalidateNumbering(p);
+  assert.equal(getNumbering(p).figures.get(arch.id).label, 'Figure 2.1');
+  assert.equal(getNumbering(p).figures.get(fishbone.id).label, 'Figure 2.2');
+});
+test('duplicates and missing items are ignored but reported', () => {
+  const { p, s11, s142, s42, A, B } = placementProject();
+  s42.body = fig(A.id); // later in the document than 1.4.2: ignored
+  s142.body = `${fig(B.id)}\n${fig('fig_gone')}\n${fig(A.id)}\n${fig(A.id)}\n${makePlacement('table', A.id)}`; // missing, duplicate in same body, a "table" with a figure id
+  s11.body = `${fig('fig_gone')}`;
+  invalidateNumbering(p);
+  const n = getNumbering(p);
+  assert.equal(n.figures.get(B.id).label, 'Figure 1');
+  assert.equal(n.figures.get(A.id).label, 'Figure 2');
+  assert.equal(n.figures.get(A.id).placement.ownerId, s142.id);
+  const broken = findBrokenPlacements(p);
+  assert.deepEqual(broken.map((b) => `${b.ownerId === s11.id ? '1.1' : b.ownerId === s142.id ? '1.4.2' : '2.2'}:${b.kind}:${b.reason}`).sort(),
+    ['1.1:figure:missing', '1.4.2:figure:duplicate', '1.4.2:figure:missing', '1.4.2:table:missing', '2.2:figure:duplicate'].sort());
+  assert.equal(findBrokenReferences(p).length, 0, 'placements are not cross references');
+  assert.equal(placementOf(p, 'figure', A.id).ownerId, s142.id);
+});
+test('the same id as a figure and a table are different items', () => {
+  const { p, s142, features } = sampleProject();
+  s142.body = `${makePlacement('table', features.id)}`; invalidateNumbering(p);
+  assert.equal(getNumbering(p).tables.get(features.id).placed, true);
+  assert.equal(getNumbering(p).figures.size, 2);
+});
+test('moveInDocumentOrder swaps the placement lines of two placed items', () => {
+  const { p, s142, A, B } = placementProject();
+  s142.body = `x\n${fig(A.id)}\ny\n${fig(B.id)}`; invalidateNumbering(p);
+  assert.equal(moveInDocumentOrder(p, 'figures', B.id, -1), true);
+  assert.equal(s142.body, `x\n${fig(B.id)}\ny\n${fig(A.id)}`);
+  assert.equal(getNumbering(p).figures.get(B.id).label, 'Figure 1');
+  // a placed item cannot jump over an unplaced one
+  s142.body = `x\n${fig(A.id)}`; invalidateNumbering(p);
+  assert.equal(moveInDocumentOrder(p, 'figures', A.id, 1), false);
+});
+test('body helpers: insert, remove, move and clear placement lines', () => {
+  assert.equal(insertPlacement('a\nb\n\n', 'figure', 'f1'), 'a\nb\n{{figure:f1}}');
+  assert.equal(insertPlacement('a\nb', 'table', 't1', 1), 'a\n{{table:t1}}\nb');
+  assert.equal(insertPlacement('', 'figure', 'f1'), '{{figure:f1}}');
+  assert.equal(removePlacements('a\n{{figure:f1}}\nb\n{{figure:f1}}\n{{figure:f2}}', 'figure', 'f1'), 'a\nb\n{{figure:f2}}');
+  assert.equal(removeLine('a\nb\nc', 1), 'a\nc');
+  const up = moveLine('a\n\nb\n{{figure:f1}}\nc', 3, -1);
+  assert.deepEqual(up, { body: 'a\n\n{{figure:f1}}\nb\nc', line: 2 });
+  assert.deepEqual(moveLine('a\n{{figure:f1}}\n\nb\nc', 1, 1), { body: 'a\n\nb\n{{figure:f1}}\nc', line: 3 });
+  assert.equal(moveLine('{{figure:f1}}\na', 0, -1), null);
+  assert.equal(moveLine('a\n{{figure:f1}}', 1, 1), null);
+  const { p, s11, s142, A } = placementProject();
+  s11.body = `t\n${fig(A.id)}`; s142.body = `${fig(A.id)}\nu`; invalidateNumbering(p);
+  assert.equal(clearPlacement(p, 'figure', A.id), 2);
+  assert.equal(s11.body, 't'); assert.equal(s142.body, 'u');
+  assert.equal(getNumbering(p).figures.get(A.id).placed, false);
+});
+test('resolveText leaves placement lines out (search, word count, acronym scan)', () => {
+  const { p, s11, A } = placementProject();
+  s11.body = `One\n${fig(A.id)}\nTwo`;
+  assert.equal(resolveText(p, s11.body), 'One\nTwo');
+});
+test('parseBlocks: placement lines become figure/table blocks', () => {
+  assert.deepEqual(parseBlocks('Intro\n{{figure:fig_1}}\n  {{table:tbl_2}}  \n- item\ninline {{figure:fig_1}} text\n{{ref:fig:fig_1}}'),
+    [{ type: 'p', text: 'Intro' }, { type: 'figure', id: 'fig_1' }, { type: 'table', id: 'tbl_2' }, { type: 'li', text: 'item' },
+      { type: 'p', text: 'inline {{figure:fig_1}} text' }, { type: 'p', text: '{{ref:fig:fig_1}}' }]);
+  assert.deepEqual(parseBlocks('One\n- two\n\nthree').map((b) => b.type), ['p', 'li', 'p'], 'old behaviour unchanged');
+});
+test('buildDocument emits placed figures/tables at the placement, unplaced ones at the end of the section', () => {
+  const { p, s142, A, B, features } = placementProject();
+  s142.body = `One\n${fig(B.id)}\nTwo\n- bullet\n${makePlacement('table', features.id)}\nThree`; invalidateNumbering(p);
+  const doc = buildDocument(p);
+  const i = doc.body.findIndex((b) => b.type === 'heading' && b.id === s142.id);
+  const shape = doc.body.slice(i + 1, i + 8).map((b) => (b.type === 'figure' || b.type === 'table' ? `${b.type}:${b.id}` : `${b.type}:${b.text}`));
+  assert.deepEqual(shape, ['paragraph:One', `figure:${B.id}`, 'paragraph:Two', 'bullet:bullet', `table:${features.id}`, 'paragraph:Three', `figure:${A.id}`]);
+  // captions carry the numbers that follow the placement order
+  assert.equal(doc.body[i + 2].caption, 'Figure 1: Second Figure');
+  assert.equal(doc.body[i + 7].caption, 'Figure 2: Feature Fishbone Diagram');
+  // nothing twice, nothing lost; the lists (LoF/LoT) are in the same order as the body
+  const emitted = (type) => doc.body.filter((b) => b.type === type).map((b) => b.id);
+  assert.deepEqual(emitted('figure'), doc.figures.map((f) => f.id));
+  assert.deepEqual(emitted('table'), doc.tables.map((x) => x.id));
+  assert.equal(new Set(emitted('figure')).size, p.figures.length);
+  assert.ok(!doc.body.some((b) => b.type === 'chapter' && b.unassigned));
+});
+test('buildDocument: duplicate / missing / foreign placements emit nothing extra', () => {
+  const { p, s11, s142, s42, A, B } = placementProject();
+  s142.body = `${fig(A.id)}\n${fig(A.id)}\n${fig('nope')}`;
+  s42.body = `${fig(A.id)}\n${fig(B.id)}`; // A is already placed in 1.4.2; B moves to 2.2
+  s11.body = `${fig(B.id)}`; // B placed first in 1.1 (earlier in the document), so 2.2's copy is the duplicate
+  invalidateNumbering(p);
+  const doc = buildDocument(p);
+  const count = (id) => doc.body.filter((b) => b.type === 'figure' && b.id === id).length;
+  assert.equal(count(A.id), 1); assert.equal(count(B.id), 1);
+  const at = (secId) => doc.body.findIndex((b) => b.type === 'heading' && b.id === secId);
+  assert.equal(doc.body[at(s11.id) + 1].id, B.id);
+  assert.equal(doc.body[at(s142.id) + 1].id, A.id);
+  assert.equal(doc.body[at(s42.id) + 1].type === 'figure', true, 'arch (assigned to 2.2, unplaced) is still emitted there');
+  assert.equal(doc.figures.length, p.figures.length);
+});
+test('front-matter text never receives placement blocks', () => {
+  const { p, A } = placementProject();
+  p.frontMatter.find((f) => f.kind === 'abstract').body = `Abstract.\n${fig(A.id)}`;
+  const abstract = buildDocument(p).front.find((f) => f.kind === 'abstract');
+  assert.deepEqual(abstract.blocks, [{ type: 'p', text: 'Abstract.' }]);
+});
+test('numbering stays cached between calls and is invalidated by changes', () => {
+  const { p, s142, B } = placementProject();
+  assert.equal(getNumbering(p), getNumbering(p));
+  const before = getNumbering(p);
+  s142.body = fig(B.id); invalidateNumbering(p);
+  assert.notEqual(getNumbering(p), before);
+});
+test('numbering a large document with many placements stays fast', () => {
+  const sections = Array.from({ length: 300 }, (_, i) => createSection({ title: `S${i}` }));
+  const figures = sections.map((s, i) => createFigure({ title: `F${i}` }));
+  sections.forEach((s, i) => { s.body = `text\n${fig(figures[299 - i].id)}\nmore`; });
+  const p = createProject({ chapters: [createChapter({ title: 'Big', sections })], figures });
+  const t0 = Date.now(); const n = getNumbering(p);
+  assert.ok(Date.now() - t0 < 500, 'numbering took too long');
+  assert.equal(n.figures.get(figures[299].id).label, 'Figure 1');
+  assert.equal(n.figures.get(figures[0].id).label, 'Figure 300');
 });
 
 console.log('translations');

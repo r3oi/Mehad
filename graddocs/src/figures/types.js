@@ -29,8 +29,13 @@ registerFigureType({ id: 'hierarchy', name: t('Hierarchy / Organization'), defau
 registerFigureType({ id: 'timeline', name: t('Timeline / Gantt'), defaultTitle: 'Timeline / Gantt', icon: 'tTimeline', description: t('Project schedule with tasks and months.'), template: T.timelineTemplate, libraryGroups: ['Basic'] });
 registerFigureType({ id: 'generic', name: t('Generic Diagram'), defaultTitle: 'Generic Diagram', icon: 'tGeneric', description: t('Blank canvas — draw anything.'), template: T.genericTemplate, libraryGroups: ['Basic', 'Flowchart', 'UML', 'ERD', 'Architecture'] });
 
+/** The font settings new diagrams start with (Settings → Figures). */
+export function figureFonts(project) {
+  const fd = project?.settings?.figureDefaults || {};
+  return { fontFamily: fd.fontFamily || 'Times New Roman', fontSize: Number(fd.fontSize) || 14 };
+}
+
 /** Build a fresh diagram for a figure type using the project's figure defaults. */
 export function buildTemplate(typeId, project) {
-  const fd = project?.settings?.figureDefaults || {};
-  return getFigureType(typeId).template({ fontFamily: fd.fontFamily || 'Times New Roman', fontSize: Number(fd.fontSize) || 14 });
+  return getFigureType(typeId).template(figureFonts(project));
 }

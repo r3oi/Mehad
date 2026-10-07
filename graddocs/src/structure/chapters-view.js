@@ -5,6 +5,7 @@ import { icon } from '../ui/icons.js';
 import { openMenu } from '../ui/menu.js';
 import { SECTION_STATUSES } from '../core/model.js';
 import { getNumbering, captionText, chapterHeading } from '../core/numbering.js';
+import { removeLine, removePlacements, PLACE_RE } from '../core/references.js';
 import { t, isRTL } from '../i18n/index.js';
 import * as ops from './outline-ops.js';
 import { createBodyEditor } from './body-editor.js';
@@ -85,9 +86,22 @@ export default {
         const info = num[kind === 'figure' ? 'figures' : 'tables'].get(item.id);
         const full = captionText(project, kind, item);
         const rest = full.startsWith(info.label) ? full.slice(info.label.length) : full;
-        return `<li><a class="si-item" href="${ctx.href(kind === 'figure' ? 'figures' : 'tables', item.id)}">${icon(kind === 'figure' ? 'figure' : 'table')}<span class="si-label" dir="auto"><strong>${esc(info.label)}</strong>${esc(rest)}</span>${icon('chevronRight', 'si-go')}</a></li>`;
+        const data = `data-kind="${kind}" data-id="${esc(item.id)}" data-owner="${esc(ownerId)}"`;
+        // In text: the figure/table has its own line in this text. Otherwise it follows the text of the section.
+        const state = info.placed
+          ? `<span class="si-state in-text">${icon('check')}${t('In text')}</span><button type="button" class="btn btn-sm btn-ghost si-act" data-action="show-placed" ${data}>${t('Show in text')}</button>`
+          : `<span class="si-state at-end">${isChapter ? t('After the introduction') : t('At end of section')}</span><button type="button" class="btn btn-sm si-act" data-action="place" ${data}>${icon('plus')}${t('Place in text')}</button>`;
+        return `<li class="si-row${info.placed ? ' is-placed' : ''}"><a class="si-item" href="${ctx.href(kind === 'figure' ? 'figures' : 'tables', item.id)}">${icon(kind === 'figure' ? 'figure' : 'table')}<span class="si-label" dir="auto"><strong>${esc(info.label)}</strong>${esc(rest)}</span></a><span class="si-status">${state}</span></li>`;
       };
       const rows = [...figs.map((f) => row('figure', f)), ...tabs.map((tb) => row('table', tb))];
+      // Placement lines that do not work: the item was deleted, or it is placed a second time.
+      const warnings = num.brokenPlacements.filter((b) => b.ownerId === ownerId).map((b) => {
+        const info = num[b.kind === 'figure' ? 'figures' : 'tables'].get(b.id);
+        const text = b.reason === 'missing'
+          ? t(b.kind === 'figure' ? 'A figure placed in the text no longer exists.' : 'A table placed in the text no longer exists.')
+          : t('{label} is placed more than once. Only the first copy counts.', { label: `<strong><bdi>${esc(info?.label || '')}</bdi></strong>` });
+        return `<li class="si-warn">${icon('alert')}<span class="si-warn-text">${text}</span><button type="button" class="btn btn-sm btn-ghost" data-action="drop-placement" data-kind="${b.kind}" data-id="${esc(b.id)}" data-owner="${esc(ownerId)}" data-line="${b.line}" data-reason="${b.reason}">${t('Remove')}</button></li>`;
+      });
       return `
         <div class="si-head">
           <span class="si-title">${isChapter ? t('In this chapter') : t('In this section')}${rows.length ? `<span class="si-count">${rows.length}</span>` : ''}</span>
@@ -96,6 +110,7 @@ export default {
             <a class="btn btn-sm" href="${ctx.href('tables', null, query)}">${icon('plus')}${t('Add table here')}</a>
           </span>
         </div>
+        ${warnings.length ? `<ul class="si-warns">${warnings.join('')}</ul>` : ''}
         ${rows.length ? `<ul class="si-list">${rows.join('')}</ul>` : `<p class="si-empty">${t('No figures or tables placed here yet.')}</p>`}`;
     }
 
@@ -193,6 +208,7 @@ export default {
         const editor = createBodyEditor({
           store,
           getProject: () => store.project,
+          ownerId: id, // lets this text hold figures and tables at exact spots
           value: info.node.body || '',
           label: isChapter ? t('Chapter introduction') : t('Text of {title}', { title: info.node.title }),
           placeholder: isChapter ? t('Write a short introduction for this chapter…') : t('Write the content of this section…'),
@@ -203,6 +219,8 @@ export default {
         editors.push({ id, editor });
       });
     }
+
+    const editorFor = (id) => editors.find((e) => e.id === id)?.editor || null;
 
     function fillItems(project) {
       container.querySelectorAll('[data-items]').forEach((host) => {
@@ -310,6 +328,11 @@ export default {
         if (c) strong.textContent = `${num.chapters.get(c.id).label}: ${c.title}`;
       });
       fillItems(project);
+      // A body can change without this editor knowing (a figure moved here from another section, a broken line removed).
+      for (const { id, editor } of editors) {
+        const info = ops.locate(project, id);
+        if (info) editor.sync(info.node.body || '');
+      }
     }
 
     const stop = store.on('change', () => {
@@ -377,9 +400,35 @@ export default {
       container.querySelector('[data-action="nav-toggle"]')?.setAttribute('aria-expanded', 'false');
     }));
     disposer.add(on(container, 'click', '[data-chapter]', (e, el) => selectChapter(el.dataset.chapter)));
+    /** "In this section" actions: put an item in the text, jump to it, or drop a broken placement line. */
+    function placementAction(action, el) {
+      const { kind, id, owner } = el.dataset;
+      const editor = editorFor(owner);
+      if (!editor) return;
+      if (action === 'place') {
+        if (editor.placeItem(kind, id, 'end')) editor.reveal(kind, id);
+      } else if (action === 'show-placed') {
+        editor.reveal(kind, id);
+      } else if (action === 'drop-placement') {
+        editor.flush(); // the stored body must be current before a line is removed
+        const line = Number(el.dataset.line);
+        store.update((p) => {
+          const node = ops.locate(p, owner)?.node;
+          if (!node) return;
+          const lines = String(node.body || '').split('\n');
+          const m = PLACE_RE.exec(lines[line] || '');
+          // a missing item: every line of it goes; a duplicate: only that second copy
+          if (el.dataset.reason === 'missing') node.body = removePlacements(node.body, kind, id);
+          else if (m && m[1] === kind && m[2] === id) node.body = removeLine(node.body, line);
+        });
+      }
+    }
+
     disposer.add(on(container, 'click', '[data-action]', (e, el) => {
       const action = el.dataset.action;
-      if (action === 'nav-toggle') {
+      if (action === 'place' || action === 'show-placed' || action === 'drop-placement') {
+        placementAction(action, el);
+      } else if (action === 'nav-toggle') {
         const nav = el.closest('.ch-nav');
         const open = nav.classList.toggle('open');
         el.setAttribute('aria-expanded', String(open));

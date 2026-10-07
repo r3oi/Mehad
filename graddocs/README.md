@@ -75,7 +75,7 @@ src/tables     table list, editor, templates, renderers
 src/structure  outline + chapters writing view
 src/acronyms   manager + detection
 src/preview    paginated preview
-src/export     zip, png, pdf, docx, package
+src/export     zip, png, vector pdf, docx, package
 ```
 
 Numbers are **never stored**. "Figure 3", "FIG-003" and "1.4.2" are derived from document order on every change, so internal IDs stay stable and references never go stale.
