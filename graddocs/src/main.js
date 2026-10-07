@@ -8,6 +8,7 @@ import { installTooltips } from './ui/tooltip.js';
 import { toastError } from './ui/toast.js';
 import { href } from './app/routes.js';
 import { createDemoProject } from './demo/meyar.js';
+import { startWordWatcher } from './word/watcher.js';
 
 applyTheme();
 applyDocumentLanguage();
@@ -34,6 +35,7 @@ async function boot() {
       history.replaceState(null, '', lastProjectId ? href(lastProjectId, 'dashboard') : '#/projects');
     }
     await shell.start();
+    startWordWatcher(store, shell);
   } catch (err) {
     console.error(err);
     root.innerHTML = `<div style="padding:48px;font-family:system-ui"><h2>${t('GradDocs could not start')}</h2><p>${String(err.message || err)}</p></div>`;

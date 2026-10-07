@@ -6,10 +6,10 @@
 /* User titles carry dir="auto" so Arabic and English text each read correctly. Their box still has to sit
    flush with the row's reading direction (next to its number), not with the direction of the text itself,
    hence the explicit alignment per interface direction (logical `start` would follow the text instead). */
-.ol-title, .ol-edit, .fm-title, .si-label, .ch-nav-current, .ch-title, .sec-title, .ch-page strong { text-align: left; }
+.ol-title, .ol-edit, .fm-title, .si-label, .ch-nav-current, .ch-title, .sec-title, .ch-page strong, .be-block-caption { text-align: left; }
 .ch-page.next strong { text-align: right; }
 [dir="rtl"] .ol-title, [dir="rtl"] .ol-edit, [dir="rtl"] .fm-title, [dir="rtl"] .si-label, [dir="rtl"] .ch-nav-current,
-[dir="rtl"] .ch-title, [dir="rtl"] .sec-title, [dir="rtl"] .ch-page strong { text-align: right; }
+[dir="rtl"] .ch-title, [dir="rtl"] .sec-title, [dir="rtl"] .ch-page strong, [dir="rtl"] .be-block-caption { text-align: right; }
 [dir="rtl"] .ch-page.next strong { text-align: left; }
 
 /* Arabic letters must stay joined: no tracking on the small-caps style labels or headings. */
@@ -92,7 +92,7 @@
 .be-block-icon .icon { width: 22px; height: 22px; }
 .be-block-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .be-block-eyebrow { font-size: 10.5px; line-height: 1.3; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
-.be-block-caption { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 1.45; color: var(--text); text-align: start; }
+.be-block-caption { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 1.45; color: var(--text); }
 .be-block-caption strong { font-weight: 650; }
 .be-block-note { font-size: 12px; line-height: 1.4; color: var(--muted); }
 .be-block-actions { flex: none; display: inline-flex; align-items: center; gap: 2px; }
@@ -115,8 +115,11 @@
   .be-btn-place { padding: 0 7px; }
 }
 @media (max-width: 520px) {
+  .be-toolbar { flex-wrap: wrap; }
   .be-block-media { width: 56px; height: 42px; }
-  .be-block { gap: 8px; }
+  .be-block { gap: 8px; padding-inline-end: 4px; }
+  .be-block-caption { white-space: normal; overflow-wrap: anywhere; }
+  .be-bk { width: 26px; height: 26px; }
 }
 
 .be-hints {

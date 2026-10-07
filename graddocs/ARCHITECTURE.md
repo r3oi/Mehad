@@ -105,6 +105,15 @@ Bodies store `{{ref:fig:<id>}}`, `{{ref:tab:<id>}}`, `{{ref:sec:<id>}}`, `{{ref:
 `parseBlocks(body) → [{ type: 'p'|'li', text }]` (one paragraph per line; lines starting with "- " are bullets),
 `findPlainReferences`, `linkPlainReferences(project, body) → { body, count }`, `findBrokenReferences`, `findUsages`.
 
+### Placing figures/tables inside text
+
+A body line containing only `{{figure:<id>}}` or `{{table:<id>}}` places that item at that exact spot.
+Numbering follows the real order: inside a body, placed items come in line order, then unplaced items of that
+section. A placement wins over the item's `chapterId`/`sectionId` (first placement counts; missing/duplicate ones
+are reported by `findBrokenPlacements`). Helpers in references.js: `makePlacement`, `placementsIn`,
+`insertPlacement`, `removePlacements`, `clearPlacement(project, kind, id)` (call it when an item moves or is deleted).
+`parseBlocks` returns `{ type: 'figure'|'table', id }` blocks for placement lines.
+
 ## Document model (core/document.js)
 
 `buildDocument(project)` → `{ titlePage, front[], toc[], figures[], tables[], acronyms[], body[] }` — the single

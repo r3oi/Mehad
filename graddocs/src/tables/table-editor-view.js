@@ -13,6 +13,7 @@ import { openModal, formDialog } from '../ui/modal.js';
 import { openMenu } from '../ui/menu.js';
 import { toast } from '../ui/toast.js';
 import { getNumbering } from '../core/numbering.js';
+import { clearPlacement } from '../core/references.js';
 import { uid, clone, clamp, formatDateTime, modKey, modLabel, isTypingTarget } from '../core/utils.js';
 import { prefs } from '../app/prefs.js';
 // `t` is a local variable (the table) all over this file, so the translator is imported as `tr`.
@@ -534,6 +535,7 @@ export default {
     const applyLocation = () => {
       const sectionId = sectionEl.value || null;
       const sec = sectionId ? getNumbering(store.project).sections.get(sectionId) : null;
+      store.update((p) => { clearPlacement(p, 'table', tableId); }, { source: SRC });
       patchTable((t) => { t.sectionId = sectionId; t.chapterId = sec ? sec.chapterId : (chapterEl.value || null); }, `Moved table "${T().title}"`);
       refreshMeta();
     };

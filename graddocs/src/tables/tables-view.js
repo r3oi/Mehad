@@ -8,7 +8,7 @@ import { toast, toastError } from '../ui/toast.js';
 import { openMenu } from '../ui/menu.js';
 import { getNumbering, moveInDocumentOrder } from '../core/numbering.js';
 import { createTable } from '../core/model.js';
-import { findUsages } from '../core/references.js';
+import { findUsages, clearPlacement } from '../core/references.js';
 import { uid, clone, relativeTime, slugify, pad, downloadBlob, downloadText } from '../core/utils.js';
 import { t, isRTL } from '../i18n/index.js';
 import { svgToPngBlob } from '../export/png.js';
@@ -142,7 +142,7 @@ export async function deleteTableWithUndo(store, id, { onDeleted } = {}) {
   });
   if (!ok) return false;
   let removed = null; let index = -1;
-  store.update((p) => { index = p.tables.findIndex((t) => t.id === id); if (index >= 0) [removed] = p.tables.splice(index, 1); },
+  store.update((p) => { index = p.tables.findIndex((t) => t.id === id); if (index >= 0) [removed] = p.tables.splice(index, 1); clearPlacement(p, 'table', id); },
     { activity: { text: `Deleted table "${table.title}"`, kind: 'delete' } });
   onDeleted?.();
   toast(t('Deleted "{title}"', { title: isolate(table.title) }), {
@@ -257,7 +257,10 @@ export function openEditDetailsDialog(ctx, id) {
     if (!v.title) { showTitleError(form, t('Title is required.')); form.elements.title.focus(); return; }
     store.update((p) => {
       const t = p.tables.find((x) => x.id === id);
+      const moved = t.chapterId !== v.chapterId || t.sectionId !== v.sectionId;
       Object.assign(t, { title: v.title, chapterId: v.chapterId, sectionId: v.sectionId, description: v.description, updatedAt: Date.now() });
+      // A new location replaces any spot the table had inside the text.
+      if (moved) clearPlacement(p, 'table', id);
     }, { activity: { text: `Edited details of table "${v.title}"`, targetId: id } });
     modal.close();
     toast(t('Table details saved'), { type: 'success', duration: 1800 });

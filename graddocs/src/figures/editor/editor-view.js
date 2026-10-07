@@ -11,7 +11,8 @@ import { openModal, confirmDialog } from '../../ui/modal.js';
 import { debounce, clone, isTypingTarget, modKey, slugify, downloadBlob, downloadText, uid, formatDateTime } from '../../core/utils.js';
 import { findFigure, createComment } from '../../core/model.js';
 import { getNumbering } from '../../core/numbering.js';
-import { renderFigureSVG, renderThumbnail, isNode, isEdge } from '../render.js';
+import { renderFigureSVG, renderThumbnail, computeBounds, isNode, isEdge } from '../render.js';
+import { autoLayout, layoutUnsuitedReason } from '../layout.js';
 import { getFigureType, buildTemplate } from '../types.js';
 import { diffDiagrams, summarizeDiff, autoLabel, hasChanges } from '../diff.js';
 import { addVersion, isDirty, latestVersion, revisionCount } from '../versions.js';
@@ -84,6 +85,9 @@ export default {
               <span class="ed-tb-sep"></span>
               <button class="ed-tool" data-action="duplicate" data-tip="${t('Duplicate')}" data-kbd="Ctrl D" aria-label="${t('Duplicate')}">${icon('duplicate')}</button>
               <button class="ed-tool" data-action="delete" data-tip="${t('Delete')}" data-kbd="Del" aria-label="${t('Delete')}">${icon('trash')}</button>
+              <span class="ed-tb-sep"></span>
+              <button class="ed-tool" data-action="auto-layout" data-tip="${t('Auto layout')}" aria-label="${t('Auto layout')}" aria-haspopup="menu">${icon('diagram')}</button>
+              <button class="ed-tool" data-action="generate" data-tip="${t('Generate from text…')}" aria-label="${t('Generate from text…')}">${icon('sparkles')}</button>
               <span class="ed-tb-sep"></span>
               <button class="ed-tool" data-action="undo" data-tip="${t('Undo')}" data-kbd="Ctrl Z" aria-label="${t('Undo')}">${icon('undo')}</button>
               <button class="ed-tool" data-action="redo" data-tip="${t('Redo')}" data-kbd="Ctrl Y" aria-label="${t('Redo')}">${icon('redo')}</button>
@@ -342,6 +346,57 @@ export default {
       toast(t('Template applied'), { type: 'success', action: { label: t('Undo'), onClick: () => editor.undo() } });
     }
 
+    // ---------------------------------------------------------- auto layout & generate
+    function runAutoLayout(mode, direction) {
+      if (layoutUnsuitedReason(editor.doc, getFigure()?.type)) {
+        toast(t('Auto layout is not suited to fishbone, sequence or timeline figures — they keep their own layout.'), { type: 'info' });
+        return;
+      }
+      if (!editor.doc.elements.some(isNode)) { toast(t('Nothing to arrange yet.'), { type: 'info' }); return; }
+      const picked = editor.selectedElements().filter(isNode);
+      const ids = picked.length >= 2 ? new Set(picked.map((n) => n.id)) : null;
+      const before = editor.snapshot();
+      editor.mutate((doc) => { autoLayout(doc, { mode, direction, ids }); });
+      editor.fit({ maxZoom: 1 });
+      if (editor.snapshot() === before) { toast(t('Already arranged.'), { type: 'info' }); return; }
+      toast(ids ? t('Arranged {n} selected shapes', { n: ids.size }) : t('Diagram arranged'), { type: 'success', action: { label: t('Undo'), onClick: () => { editor.undo(); editor.fit({ maxZoom: 1 }); } } });
+    }
+
+    function openAutoLayoutMenu(anchor) {
+      const picked = editor.selectedElements().filter(isNode);
+      openMenu(anchor, [
+        { heading: picked.length >= 2 ? t('Arrange {n} selected shapes', { n: picked.length }) : t('Arrange the whole diagram') },
+        { label: t('Top to bottom'), icon: 'arrowDown', onClick: () => runAutoLayout('auto', 'TB') },
+        { label: t('Left to right'), icon: 'arrowRight', onClick: () => runAutoLayout('auto', 'LR') },
+        { label: t('Tree'), icon: 'tHierarchy', onClick: () => runAutoLayout('tree', 'TB') },
+      ]);
+    }
+
+    /** Place a generated diagram beside the existing drawing. */
+    function addToCanvas(diagram) {
+      const here = computeBounds(editor.doc);
+      const gen = computeBounds(diagram);
+      const below = here.w > here.h * 1.3;
+      const dx = Math.round(below ? here.x - gen.x : here.x + here.w + 80 - gen.x);
+      const dy = Math.round(below ? here.y + here.h + 80 - gen.y : here.y - gen.y);
+      const els = clone(diagram.elements);
+      for (const el of els) {
+        if (isNode(el)) { el.x += dx; el.y += dy; } else for (const end of [el.source, el.target]) if (end && !end.id) { end.x += dx; end.y += dy; }
+      }
+      editor.mutate((doc) => { doc.elements.push(...els); });
+      editor.select(els.map((e) => e.id));
+    }
+
+    async function openGenerate() {
+      const { openGenerateDialog } = await import('../generate/generate-dialog.js');
+      const result = await openGenerateDialog({ project: project(), mode: 'insert', hasContent: editor.doc.elements.length > 0 });
+      if (!result) return;
+      if (result.mode === 'replace' || !editor.doc.elements.length) editor.replaceDiagram(result.diagram);
+      else addToCanvas(result.diagram);
+      editor.fit({ maxZoom: 1 });
+      toast(result.mode === 'replace' ? t('Diagram replaced') : t('Diagram added to the canvas'), { type: 'success', action: { label: t('Undo'), onClick: () => { editor.undo(); editor.fit({ maxZoom: 1 }); } } });
+    }
+
     // ---------------------------------------------------------- revision mode
     function refreshHighlights() {
       const banner = q('[data-revision-banner]');
@@ -442,6 +497,8 @@ export default {
       else if (a === 'zoom-in') editor.zoomIn();
       else if (a === 'zoom-out') editor.zoomOut();
       else if (a === 'fit') editor.fit();
+      else if (a === 'auto-layout') openAutoLayoutMenu(el);
+      else if (a === 'generate') openGenerate();
       else if (a === 'grid') editor.setGrid(!editor.grid);
       else if (a === 'snap') editor.setSnap(!editor.snap);
       else if (a === 'zoom-menu') openMenu(el, [50, 75, 100, 150, 200].map((z) => ({ label: `${z}%`, onClick: () => editor.setZoom(z / 100) })).concat(['-', { label: t('Fit to screen'), icon: 'maximize', shortcut: '⇧1', onClick: () => editor.fit() }]));
@@ -462,6 +519,7 @@ export default {
         openMenu(el, [
           { label: t('Duplicate figure'), icon: 'duplicate', onClick: duplicateFigure },
           { label: t('Reset to template…'), icon: 'wand', onClick: applyTemplate },
+          { label: t('Generate from text…'), icon: 'sparkles', onClick: openGenerate },
           { label: t('Keyboard shortcuts'), icon: 'keyboard', shortcut: '?', onClick: async () => (await import('../../app/shortcuts.js')).showShortcutsHelp() },
           '-',
           { label: t('Delete figure'), icon: 'trash', danger: true, onClick: deleteFigure },

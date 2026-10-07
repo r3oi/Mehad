@@ -258,10 +258,10 @@ export function buildPlan(project, parsed) {
     const wt = e.word;
     const requires = pn.isNew ? pn.addItemId : null;
     if (e.isNew) {
-      add({
+      e.addItemId = add({
         group: 'tables', kind: 'add', title: wt.title || 'Untitled Table', context: pn.word.title,
         detail: ['{rows} rows × {cols} columns', { rows: wt.rows.length, cols: wt.cols }], requires, run: (ctx) => ctx.addTable(e),
-      });
+      }).id;
       return;
     }
     const stored = link.hashes.tables[e.proj.id];
@@ -285,10 +285,10 @@ export function buildPlan(project, parsed) {
     const requires = pn.isNew ? pn.addItemId : null;
     if (e.isNew) {
       plan.imageBytes += wi.bytes.length;
-      add({
+      e.addItemId = add({
         group: 'figures', kind: 'add', title: wi.title || wi.descr || 'Untitled Figure', context: pn.word.title,
         detail: ['Picture · {kb} KB', { kb: Math.max(1, Math.round(wi.bytes.length / 1024)) }], requires, run: (ctx) => ctx.addFigure(e),
-      });
+      }).id;
       return;
     }
     e.owned = link.hashes.figures[e.proj.id] !== undefined;
@@ -716,17 +716,6 @@ async function preparePictures(store, plan, selected) {
   const prepared = new Map();
   let total = 0;
   for (const e of plan.fps) {
-    const id = e.isNew ? plan.items.find((i) => i.run && i.title === (e.word.title || e.word.descr || 'Untitled Figure') && i.group === 'figures' && i.kind === 'add')?.id : e.updateItemId;
-    void id;
-  }
-  const wanted = new Set();
-  for (const item of plan.items) if (selected.has(item.id) && item.group === 'figures' && item.kind !== 'remove') wanted.add(item);
-  for (const e of plan.fps) {
-    if (!(e.isNew || e.changed)) continue;
-    const item = [...wanted].find((i) => i.run.target === e);
-    void item;
-  }
-  for (const e of plan.fps) {
     const itemId = e.isNew ? e.addItemId : e.updateItemId;
     if (!itemId || !selected.has(itemId) || !(e.isNew || e.changed)) continue;
     const prep = await prepareImage(e.word);
@@ -771,7 +760,7 @@ export async function applyPlan(store, plan, selectedIds, { fileInfo = {}, backu
     if (applied.length || plan.firstSync) {
       project.wordLink.history = [{ at: Date.now(), summary: summarizeCounts(counts), counts, file: fileInfo.name || project.wordLink.fileName, first: plan.firstSync }, ...project.wordLink.history].slice(0, 20);
     }
-    log.text = applied.length ? `Synced with Word: ${applied.length} change${applied.length === 1 ? '' : 's'}` : 'Linked to Word file';
+    log.text = applied.length ? `Synced with Word: ${applied.length} change${applied.length === 1 ? '' : 's'}` : 'Linked to a Word file';
   }, { activity: activity ? log : undefined, source: 'word-sync' });
   try { await store.flush(); } catch (err) { console.warn('[word] flush failed', err); }
   const counts = countKinds(applied);

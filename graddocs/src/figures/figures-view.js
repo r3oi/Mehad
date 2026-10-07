@@ -67,7 +67,8 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
             <span class="type-icon">${icon(ft.icon)}</span><strong>${esc(ft.name)}</strong><span class="desc">${esc(ft.description)}</span></button>`).join('')}
         </div></div>
         <div class="col" style="gap:14px">
-          <div><div class="section-title">${t('Template preview')}</div><div class="new-fig-preview" data-preview></div></div>
+          <button type="button" class="btn btn-soft nf-generate" data-generate>${icon('sparkles', 'icon-sm')} ${t('Generate from description')}</button>
+          <div><div class="section-title" data-preview-title>${t('Template preview')}</div><div class="new-fig-preview" data-preview></div></div>
           <div class="field"><label for="nf-title">${t('Figure title')} <span style="color:var(--danger)">*</span></label><input id="nf-title" class="input" autofocus${AUTO}></div>
           <div class="field"><label for="nf-loc">${t('Chapter / section')}</label><select id="nf-loc" class="select">${locationOptions(project, initialLoc)}</select></div>
           <div class="field"><label for="nf-desc">${t('Description')}</label><textarea id="nf-desc" class="textarea" rows="2" placeholder="${t('Optional')}"${AUTO}></textarea></div>
@@ -78,10 +79,12 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
       onClose: () => resolve(created),
     });
     const titleEl = modal.$('#nf-title'); const locEl = modal.$('#nf-loc');
+    let generated = null; // a diagram made with "Generate from description" (replaces the template)
     const refresh = () => {
       const ft = getFigureType(selectedType);
-      if (!titleTouched) titleEl.value = ft.defaultTitle;
-      modal.$('[data-preview]').innerHTML = renderThumbnail(buildTemplate(selectedType, project));
+      if (!titleTouched) titleEl.value = generated?.title || ft.defaultTitle;
+      modal.$('[data-preview-title]').textContent = generated ? t('Generated diagram — pick a type to start from a template instead') : t('Template preview');
+      modal.$('[data-preview]').innerHTML = renderThumbnail(generated ? generated.diagram : buildTemplate(selectedType, project));
       const candidate = { id: '__new', title: titleEl.value || ft.defaultTitle, ...parseLocation(project, locEl.value) };
       const n = getNumbering({ ...project, figures: [...project.figures, candidate] }).figures.get('__new');
       const renumbers = project.figures.length && n.index <= project.figures.length;
@@ -94,6 +97,15 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
       const card = e.target.closest('[data-type]');
       if (!card) return;
       selectedType = card.dataset.type;
+      generated = null;
+      refresh();
+    });
+    modal.$('[data-generate]').addEventListener('click', async () => {
+      const { openGenerateDialog } = await import('./generate/generate-dialog.js');
+      const result = await openGenerateDialog({ project, mode: 'new' });
+      if (!result) return;
+      generated = result;
+      selectedType = result.type;
       refresh();
     });
     titleEl.addEventListener('input', () => { titleTouched = true; refresh(); });
@@ -103,7 +115,7 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
       if (!title) { titleEl.classList.add('invalid'); titleEl.focus(); return; }
       const figure = createFigure({
         title, type: selectedType, description: modal.$('#nf-desc').value.trim(),
-        diagram: buildTemplate(selectedType, project), ...parseLocation(project, locEl.value),
+        diagram: generated ? generated.diagram : buildTemplate(selectedType, project), ...parseLocation(project, locEl.value),
       });
       addVersion(figure, { force: true });
       store.update((p) => { p.figures.push(figure); }, { activity: { text: `Created figure “${title}”`, kind: 'create', targetId: figure.id } });

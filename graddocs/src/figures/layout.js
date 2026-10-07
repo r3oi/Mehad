@@ -14,6 +14,9 @@
 //               overlap (contour based). A graph that is not a forest is reduced to a BFS spanning forest.
 //  • auto     – tree when every node has at most one parent (and there is no cycle), otherwise layered.
 //
+// Connectors with a hollow-triangle end (UML inheritance / realisation) are laid out "general class first", so the
+// superclass sits above its subclasses even though the arrow points from the subclass to the superclass.
+//
 // Stays put: points, locked nodes, nodes outside `ids` (when given) and free text labels/images that
 // are not connected to anything. Frames (shape 'frame') are containers: a frame that contains laid-out
 // nodes is shrink-wrapped around them and arranged with them; a frame that is not in `ids` keeps its
@@ -147,6 +150,7 @@ export function autoLayout(diagram, options = {}) {
     return { w: n.w, h: n.h, dx: 0, dy: 0 };
   };
 
+  const backEdges = new Set(); // connectors that run against the flow direction
   const solved = new Map(); // scope id (or null) → { pos: Map(itemId → {x, y}), w, h }
   const frameBox = new Map(); // movable frame id → { w, h }
   const solveScope = (scope) => {
@@ -169,10 +173,13 @@ export function autoLayout(diagram, options = {}) {
       if (!a || !b || a === b) continue;
       const font = resolveEdgeStyle(e, diagram);
       const lab = e.text ? measureLabel(e.text, font, 220) : { w: 0, h: 0 };
-      pairs.push({ a, b, lw: lab.w, lh: lab.h });
+      // Inheritance / realisation arrows point at the general class, which belongs above (or before) the specific one.
+      const general = e.style?.endArrow === 'triangleOpen';
+      pairs.push({ a: general ? b : a, b: general ? a : b, lw: lab.w, lh: lab.h, edge: e });
     }
     const res = layoutItems(boxes.map((b) => ({ id: b.id, w: b.w, h: b.h, ox: orig.get(b.id).x + orig.get(b.id).w / 2, oy: orig.get(b.id).y + orig.get(b.id).h / 2 })), pairs, cfg);
     for (const b of boxes) { const p = res.pos.get(b.id); p.dx = b.dx; p.dy = b.dy; }
+    for (const p of pairs) if (res.back.has(`${p.a}|${p.b}`) && !res.back.has(`${p.b}|${p.a}`)) backEdges.add(p.edge);
     const out = { pos: res.pos, w: res.w, h: res.h };
     solved.set(scope, out);
     return out;
@@ -238,7 +245,14 @@ export function autoLayout(diagram, options = {}) {
       if (!laidOut.has(e.source?.id) || !laidOut.has(e.target?.id)) continue;
       e.source = { id: e.source.id };
       e.target = { id: e.target.id };
-      e.routing = routing === 'straight' ? 'straight' : 'orthogonal';
+      // Use-case style lines (anything touching an actor) stay as straight/curved lines.
+      const keepLine = routing === 'orthogonal' && e.routing && e.routing !== 'orthogonal' && (byId.get(e.source.id)?.shape === 'actor' || byId.get(e.target.id)?.shape === 'actor');
+      if (!keepLine) e.routing = routing === 'straight' ? 'straight' : 'orthogonal';
+      // A connector that runs against the flow loops around the outer side instead of cutting through the diagram.
+      if (backEdges.has(e) && e.routing === 'orthogonal' && e.source.id !== e.target.id) {
+        const side = dir === 'TB' ? { x: 1, y: 0.5 } : { x: 0.5, y: 1 };
+        e.source.anchor = { ...side }; e.target.anchor = { ...side };
+      }
     }
   }
   return diagram;
@@ -296,6 +310,7 @@ function layoutItems(items, pairs, cfg) {
   if (mode === 'auto') mode = isForestGraph(nodes.length, prs) ? 'tree' : 'layered';
 
   const parts = [];
+  const back = new Set(); // "fromId|toId" of connectors that run against the flow
   if (mode === 'tree') {
     for (const tree of buildForest(nodes, prs)) parts.push({ ...treeLayout(tree, nodes, ext, cfg), singleton: tree.order.length === 1, key: nodes[tree.root].oc });
   } else {
@@ -304,6 +319,7 @@ function layoutItems(items, pairs, cfg) {
       const cn = comp.map((g) => nodes[g]);
       const ce = prs.filter(([a, b]) => local.has(a) && local.has(b)).map(([a, b]) => ({ a: local.get(a), b: local.get(b), ext: ext.get(`${a}|${b}`) || 0 }));
       const lay = layeredLayout(cn, ce, cfg);
+      for (const k of lay.back) { const [a, b] = k.split('|').map(Number); back.add(`${items[comp[a]].id}|${items[comp[b]].id}`); }
       parts.push({ ...lay, pos: new Map([...lay.pos].map(([li, p]) => [comp[li], p])), singleton: comp.length === 1, key: Math.min(...cn.map((x) => x.oc)) });
     }
   }
@@ -322,7 +338,7 @@ function layoutItems(items, pairs, cfg) {
       pos.set(items[g].id, tb ? { x: o.x + p.c - n.cs / 2, y: o.y + p.m } : { x: o.x + p.m, y: o.y + p.c - n.cs / 2 });
     }
   });
-  return { pos, w: offsets.w, h: offsets.h };
+  return { pos, w: offsets.w, h: offsets.h, back };
 }
 
 /** Loose nodes in tidy lines (rows for top-to-bottom, columns for left-to-right). → part { pos, cw, mw } */
@@ -388,7 +404,7 @@ function placeLayer(desired, weight, sep) {
 /** nodes: [{ id, cs, ms, oc, om }], edges: [{ a, b, ext }] (indexes into nodes). → { pos: Map(index → { c, m }), cw, mw } */
 function layeredLayout(nodes, edges, cfg) {
   const N = nodes.length;
-  if (N === 1) return { pos: new Map([[0, { c: nodes[0].cs / 2, m: 0 }]]), cw: nodes[0].cs, mw: nodes[0].ms };
+  if (N === 1) return { pos: new Map([[0, { c: nodes[0].cs / 2, m: 0 }]]), cw: nodes[0].cs, mw: nodes[0].ms, back: new Set() };
 
   // --- 1. cycle removal (DFS back edges are reversed)
   const out = nodes.map(() => new Set());
@@ -526,10 +542,12 @@ function layeredLayout(nodes, edges, cfg) {
     const lay = layers[l];
     const desired = []; const weight = [];
     for (const v of lay) {
-      const list = which === 'up' ? v.up : which === 'down' ? v.down : [...v.up, ...v.down];
+      let list = which === 'up' ? v.up : which === 'down' ? v.down : [...v.up, ...v.down];
+      if (!v.dummy && list.some((u) => !u.dummy)) list = list.filter((u) => !u.dummy); // real neighbours decide; long-edge dummies only follow
       if (!list.length) { desired.push(v.x); weight.push(0.02); continue; }
+      // Dummy nodes follow the real nodes they connect (and each other); real nodes are barely pulled aside by them.
       let s = 0; let w = 0;
-      for (const u of list) { const k = (u.dummy || v.dummy) ? ((u.dummy && v.dummy) ? 4 : 2) : 1; s += k * u.x; w += k; }
+      for (const u of list) { const k = v.dummy ? (u.dummy ? 4 : 1) : 1; s += k * u.x; w += k; }
       desired.push(s / w); weight.push(w);
     }
     const xs = placeLayer(desired, weight, seps[l]);
@@ -560,7 +578,7 @@ function layeredLayout(nodes, edges, cfg) {
   const maxC = Math.max(...real.map((v) => v.x + v.cs / 2));
   const pos = new Map();
   for (const v of real) pos.set(v.g, { c: v.x - minC, m: tops[v.layer] + (band[v.layer] - v.ms) / 2 });
-  return { pos, cw: maxC - minC, mw: m - lastGap };
+  return { pos, cw: maxC - minC, mw: m - lastGap, back };
 }
 
 // ---------------------------------------------------------------------------

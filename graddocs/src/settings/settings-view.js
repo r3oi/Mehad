@@ -10,6 +10,7 @@ import { renderThumbnail } from '../figures/render.js';
 import { formatBytes, formatDateTime, downloadText, slugify } from '../core/utils.js';
 import { t, isRTL, lang, LANGUAGES, setLanguage } from '../i18n/index.js';
 import { projectDetailFields, iso, strong, tHTML } from '../projects/projects-view.js';
+import { getAIConfig, setAIConfig, AI_MODELS, modelLabel, maskKey, KEYS_URL } from '../figures/generate/ai.js';
 
 /** Forces left-to-right order for a snippet of report text inside Arabic UI text (no-op in English). */
 const ltr = (s) => (isRTL ? `\u2066${s}\u2069` : String(s));
@@ -261,6 +262,24 @@ export default {
         }).join('')}
       </div>`;
 
+    // AI diagram generation: the key and model live in this browser's prefs, never in the project.
+    const aiStatus = (cfg) => (cfg.apiKey ? t('Saved in this browser: {key}', { key: `${maskKey(cfg.apiKey)}` }) : t('No key saved — AI generation is off. Text, Mermaid and JSON input still work.'));
+    const aiCard = () => {
+      const cfg = getAIConfig();
+      return card(t('AI diagram generation'), t('Optional. Describe a diagram in Arabic or English and Claude (by Anthropic) draws it for you.'), `
+        ${row(t('Claude API key'), t('Stored only in this browser — never in your project, backups or exports. Requests go directly from this browser to Anthropic.'), `
+          <div class="ai-key"><input class="input input-sm ai-key-input" type="password" autocomplete="off" spellcheck="false" dir="ltr" data-ai-key value="${esc(cfg.apiKey)}" placeholder="sk-ant-…" aria-label="${esc(t('Claude API key'))}">
+            <button type="button" class="btn btn-sm btn-icon" data-action="ai-toggle-key" aria-label="${esc(t('Show or hide the key'))}" aria-pressed="false">${icon('eye', 'icon-sm')}</button>
+            <button type="button" class="btn btn-sm" data-action="ai-clear-key" ${cfg.apiKey ? '' : 'disabled'}>${t('Remove key')}</button></div>
+          <div class="ai-status" data-ai-status role="status">${esc(aiStatus(cfg))}</div>`, 'stack-sm')}
+        ${row(t('Model'), t('Sonnet is the best balance. Haiku is faster and the cheapest. Opus is the strongest for large or complex diagrams.'), `
+          <select class="select input-sm" data-ai-model aria-label="${esc(t('Model'))}">${AI_MODELS.map((m) => `<option value="${m.id}" ${m.id === cfg.model ? 'selected' : ''}>${esc(modelLabel(m.id))}</option>`).join('')}</select>`)}
+        <div class="set-row ai-note">
+          <div class="set-label"><div class="t">${t('Where to get a key')}</div>
+            <div class="d">${t('Create an account and a key at {site}. Each diagram is billed to your own Anthropic account.', { site: `<a class="ai-link" href="${KEYS_URL}" target="_blank" rel="noopener noreferrer"><bdi dir="ltr">console.anthropic.com</bdi></a>` })}</div></div>
+        </div>`);
+    };
+
     const figuresTab = (s) => `
       <div class="set-main set-narrow">
         ${card(t('New figures'), t('Defaults applied to text in newly created diagrams.'), `
@@ -270,6 +289,7 @@ export default {
           ${row(t('Resolution'), t('Higher resolution = sharper images, larger files.'), seg('figureDefaults.exportScale', s.figureDefaults.exportScale, [[1, '1×'], [2, '2×'], [3, '3×'], [4, '4×']], { numeric: true, label: t('Export resolution') }), 'stack-sm')}
           ${row(t('Output density'), '', `<span class="dpi-hint" data-dpi dir="ltr">${[96, 192, 288, 384][Math.min(4, Math.max(1, Number(s.figureDefaults.exportScale) || 3)) - 1]} DPI</span>`)}
           ${row(t('Transparent background'), t('Export PNGs without the white page background.'), toggle('figureDefaults.transparentBackground', s.figureDefaults.transparentBackground, t('Transparent')))}`)}
+        ${aiCard()}
       </div>`;
 
     // Typed project data may be English or Arabic: once a field has text it follows that
@@ -433,6 +453,17 @@ export default {
       apply(btn.dataset.path, value);
     }));
 
+    // ----- AI card (prefs, not project data) ----------------------------------------
+    const refreshAIStatus = () => {
+      const cfg = getAIConfig();
+      const status = panel.querySelector('[data-ai-status]');
+      if (status) status.textContent = aiStatus(cfg);
+      const clear = panel.querySelector('[data-action="ai-clear-key"]');
+      if (clear) clear.disabled = !cfg.apiKey;
+    };
+    d.add(on(panel, 'input', 'input[data-ai-key]', (e, el) => { setAIConfig({ apiKey: el.value }); refreshAIStatus(); }));
+    d.add(on(panel, 'change', 'select[data-ai-model]', (e, el) => { setAIConfig({ model: el.value }); toast(t('Model changed.'), { type: 'success', duration: 1600 }); }));
+
     // ----- Project tab ------------------------------------------------------------
     d.add(on(panel, 'submit', '#project-form', (e, form) => {
       e.preventDefault();
@@ -535,6 +566,21 @@ export default {
           toast(t('Deleted “{name}”.', { name: iso(project.name) }), { type: 'success' });
           ctx.navigate('#/projects');
         } catch (err) { toastError(err, t('Could not delete the project')); }
+      },
+      'ai-toggle-key'(el) {
+        const input = panel.querySelector('input[data-ai-key]');
+        if (!input) return;
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        el.setAttribute('aria-pressed', String(show));
+        el.innerHTML = icon(show ? 'eyeOff' : 'eye', 'icon-sm');
+      },
+      'ai-clear-key'() {
+        setAIConfig({ apiKey: '' });
+        const input = panel.querySelector('input[data-ai-key]');
+        if (input) input.value = '';
+        refreshAIStatus();
+        toast(t('Key removed from this browser.'), { type: 'success', duration: 2200 });
       },
       // Interface language: persist everything first, then save the choice and reload.
       async 'set-language'(el) {
