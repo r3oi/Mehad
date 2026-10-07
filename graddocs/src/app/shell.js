@@ -68,7 +68,7 @@ export class Shell {
   setBreadcrumbs(crumbs) {
     this.crumbs = crumbs;
     const project = this.store.project;
-    const base = project ? [{ label: 'Projects', href: '#/projects', hideSm: true }, { label: project.name, href: href(project.id, 'dashboard') }] : [];
+    const base = project && this.viewName !== 'projects' ? [{ label: 'Projects', href: '#/projects', hideSm: true }, { label: project.name, href: href(project.id, 'dashboard') }] : [];
     const all = [...base, ...crumbs];
     this.breadcrumbsEl.innerHTML = all.map((c, i) => {
       const last = i === all.length - 1;
@@ -109,6 +109,7 @@ export class Shell {
     if (token !== this.navToken) return;
 
     this.#unmountCurrent();
+    this.viewName = parsed.view;
     this.app.classList.toggle('no-project', !parsed.projectId);
     this.main.className = `main ${mod.layout === 'flush' ? 'flush' : ''}`;
     this.main.innerHTML = '';

@@ -179,8 +179,13 @@
 .modal-header h2 { font-size: 16.5px; }
 .modal-header p { color: var(--muted); font-size: 13px; margin-top: 3px; }
 .modal-body { padding: 8px 20px 20px; overflow: auto; }
-.modal-footer { display: flex; gap: 8px; justify-content: flex-end; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--surface-2); border-radius: 0 0 var(--radius-xl) var(--radius-xl); }
+.modal-footer { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--surface-2); border-radius: 0 0 var(--radius-xl) var(--radius-xl); }
 .modal-footer .left { margin-right: auto; display: flex; gap: 8px; align-items: center; }
+@media (max-width: 560px) {
+  .modal .form-grid { grid-template-columns: 1fr !important; }
+  .modal-root { padding: 12px; }
+  .modal-body { padding: 8px 16px 16px; }
+}
 @keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
 @keyframes fade-in { from { opacity: 0; } }
 

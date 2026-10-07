@@ -223,8 +223,9 @@ export function renderTableSVG(project, table, { width = 680, caption = false } 
     const isHeader = r < header;
     const fill = isHeader ? st.fill : (st.zebra && (r - header) % 2 === 1 ? ZEBRA : null);
     if (fill) fills.push(`<rect x="${x}" y="${y}" width="${x2 - x}" height="${y2 - y}" fill="${fill}"/>`);
-    if (st.borders === 'all') borders.push(`M${x + 0.5} ${y + 0.5}H${x2 - 0.5}V${y2 - 0.5}H${x + 0.5}Z`);
-    else borders.push(`M${x} ${y + 0.5}H${x2}M${x} ${y2 - 0.5}H${x2}`);
+    // Grid lines sit at p + 0.5 so a border shared by two cells is drawn exactly once (1px wide).
+    if (st.borders === 'all') borders.push(`M${x + 0.5} ${y + 0.5}H${x2 + 0.5}V${y2 + 0.5}H${x + 0.5}Z`);
+    else borders.push(`M${x} ${y + 0.5}H${x2 + 1}M${x} ${y2 + 0.5}H${x2 + 1}`);
     if (String(cell.text ?? '') !== '') {
       const f = fontFor(r, cell);
       const inset = padH - padV; // textSVG applies one padding to both axes

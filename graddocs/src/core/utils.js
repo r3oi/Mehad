@@ -106,6 +106,7 @@ export function pickFile(accept = '*/*') {
     const input = document.createElement('input');
     input.type = 'file'; input.accept = accept;
     input.addEventListener('change', () => resolve(input.files?.[0] || null), { once: true });
+    input.addEventListener('cancel', () => resolve(null), { once: true });
     input.click();
   });
 }

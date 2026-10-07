@@ -231,7 +231,7 @@ class PreviewView {
           <aside class="pv-nav" aria-label="Navigator">
             <div class="pv-nav-head"><span>Navigator</span>
               <button class="btn btn-ghost btn-icon btn-sm" data-act="nav" aria-label="Collapse navigator">${icon('chevronLeft')}</button></div>
-            <div class="pv-nav-list" role="list"></div>
+            <div class="pv-nav-list"></div>
           </aside>
           <div class="pv-stage">
             <div class="pv-canvas" tabindex="0" aria-label="Document pages"><div class="pv-pages"></div></div>
@@ -439,7 +439,7 @@ class PreviewView {
   renderNav() {
     this.navList.innerHTML = this.nav.map((e, i) => (e.group
       ? `<div class="pv-nav-group">${esc(e.group)}</div>`
-      : `<button type="button" class="pv-nav-item lvl-${e.level}${e.chapter ? ' is-ch' : ''}" data-page="${e.page}" data-nav="${i}" role="listitem">
+      : `<button type="button" class="pv-nav-item lvl-${e.level}${e.chapter ? ' is-ch' : ''}" data-page="${e.page}" data-nav="${i}">
           <span class="pv-lbl">${esc(e.label)}</span><span class="pv-pg">${esc(e.pageLabel || '')}</span></button>`)).join('');
     // Heading elements, used to highlight the section that is currently at the top of the viewport.
     this.navEls = this.nav.map((e) => (e.id ? this.pagesEl.querySelector(`[data-a="${CSS.escape(e.id)}"]`) : null));

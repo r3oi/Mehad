@@ -5,21 +5,6 @@
 
 .min0 { min-width: 0; }
 
-/* Shared dialogs: let long forms stack on phones and footers wrap. */
-.modal-footer { flex-wrap: wrap; }
-@media (max-width: 560px) {
-  .modal .form-grid { grid-template-columns: 1fr !important; }
-  .modal-root { padding: 12px; }
-  .modal-body { padding: 8px 16px 16px; }
-}
-
-/* The gallery page hides the sidebar (.app.no-project); on phones the shell's
-   single-column grid must not keep the 0-width sidebar column. */
-@media (max-width: 960px) {
-  .app.no-project { grid-template-columns: minmax(0, 1fr); }
-  .app.no-project .topbar .menu-toggle { display: none; }
-}
-
 /* Tone helpers (soft icon chips, counts) shared by dashboard + settings. */
 .dash-page .tone-primary, .set-page .tone-primary { --tone: var(--primary); --tone-soft: var(--primary-soft); }
 .dash-page .tone-info, .set-page .tone-info { --tone: var(--info); --tone-soft: var(--info-soft); }
