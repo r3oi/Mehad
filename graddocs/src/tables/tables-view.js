@@ -340,6 +340,8 @@ export default {
     const { store } = ctx;
     const state = { query: '', chapter: '' };
     const disposer = new Disposer();
+    const dialogs = new Set();
+    const track = (modal) => { if (modal) dialogs.add(modal); return modal; };
 
     container.innerHTML = `
       <div class="page">
@@ -431,7 +433,7 @@ export default {
       const action = el.dataset.action;
       const id = idOf(el);
       const table = id && store.project.tables.find((t) => t.id === id);
-      if (action === 'new') openNewTableDialog(ctx, { chapterId: state.chapter && state.chapter !== '__none' ? state.chapter : null });
+      if (action === 'new') track(openNewTableDialog(ctx, { chapterId: state.chapter && state.chapter !== '__none' ? state.chapter : null }));
       else if (action === 'clear') { state.query = ''; state.chapter = ''; searchEl.value = ''; chapterEl.value = ''; render(); } else if (action === 'duplicate' && table) {
         const copyId = duplicateTable(store, id);
         toast(`Duplicated "${table.title}"`, { type: 'success', action: { label: 'Open copy', onClick: () => ctx.navigate(ctx.href('tables', copyId)) } });
@@ -442,7 +444,7 @@ export default {
           { label: 'Move up', icon: 'arrowUp', disabled: up === 'top', onClick: () => moveTable(store, id, -1) },
           { label: 'Move down', icon: 'arrowDown', disabled: down === 'bottom', onClick: () => moveTable(store, id, 1) },
           '-',
-          { label: 'Edit details…', icon: 'edit', onClick: () => openEditDetailsDialog(ctx, id) },
+          { label: 'Edit details…', icon: 'edit', onClick: () => track(openEditDetailsDialog(ctx, id)) },
           { label: 'Open editor', icon: 'table', onClick: () => ctx.navigate(ctx.href('tables', id)) },
           '-',
           { label: 'Delete…', icon: 'trash', danger: true, onClick: () => deleteTableWithUndo(store, id) },
@@ -453,11 +455,12 @@ export default {
     if (ctx.params.query?.new === '1') {
       const sectionId = ctx.params.query.section || null;
       const chapterId = ctx.params.query.chapter || null;
+      // Not tracked: cleaning the URL below remounts this view and must not close the dialog.
       openNewTableDialog(ctx, { sectionId, chapterId });
       // Drop ?new=1 from the URL once the dialog is open (after mount has finished).
       setTimeout(() => ctx.navigate(ctx.href('tables'), { replace: true }), 0);
     }
 
-    return { unmount() { disposer.dispose(); } };
+    return { unmount() { for (const m of [...dialogs]) m.close(); disposer.dispose(); } };
   },
 };

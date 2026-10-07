@@ -181,8 +181,9 @@ export function createBodyEditor({
   }
 
   function restoreSelection() {
+    // Read the target range first: focusing a contenteditable moves the caret to its start.
+    const r = currentRange().cloneRange();
     surface.focus({ preventScroll: true });
-    const r = currentRange();
     const sel = window.getSelection();
     sel.removeAllRanges(); sel.addRange(r);
     return r;
@@ -503,6 +504,16 @@ export function createBodyEditor({
     renderList();
     input.focus();
   }
+
+  // Never lose the last keystrokes when the tab is closed or hidden within the debounce window.
+  const onHide = () => {
+    if (timer === null) return;
+    flush();
+    store?.flushSync?.();
+  };
+  listen(window, 'pagehide', onHide);
+  listen(window, 'beforeunload', onHide);
+  listen(document, 'visibilitychange', () => { if (document.visibilityState === 'hidden') onHide(); });
 
   // Keep the editor's focus and selection when clicking toolbar buttons.
   listen(toolbar, 'mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });

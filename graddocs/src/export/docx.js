@@ -223,9 +223,11 @@ export async function buildDocx(project, { figureImages } = {}) {
     const numberText = info ? info.number : '?';
     const dot = numberText.lastIndexOf('.');
     let numberXml;
-    if (cfg.numbering === 'chapter' && dot > 0) {
-      const tail = numberText.slice(dot + 1);
-      numberXml = run(numberText.slice(0, dot + 1), bold) + field(`SEQ ${id} \\r ${tail} \\* ARABIC`, run(tail, bold), bold);
+    if (cfg.numbering === 'chapter') {
+      // "2.1": the chapter part is literal text, the running number is pinned with \r so Word and
+      // GradDocs always agree (items outside any chapter keep their plain index).
+      const tail = dot > 0 ? numberText.slice(dot + 1) : numberText;
+      numberXml = (dot > 0 ? run(numberText.slice(0, dot + 1), bold) : '') + field(`SEQ ${id} \\r ${tail} \\* ARABIC`, run(tail, bold), bold);
     } else {
       numberXml = field(`SEQ ${id} \\* ARABIC`, run(numberText, bold), bold);
     }
@@ -338,14 +340,14 @@ export async function buildDocx(project, { figureImages } = {}) {
     top(t.university, { size: 18, bold: true, after: 80 });
     top(t.college, { size: 16, bold: true, after: 80 });
     top(t.department, { size: 14, after: 80 });
-    line(t.name, { style: 'Title', size: 28, bold: true, before: sp(first ? 3200 : 2800), after: sp(240) });
+    line(t.name, { style: 'Title', size: 28, bold: true, before: sp(first ? 4800 : 3600), after: sp(240) });
     line(t.type, { size: 15, italic: true, after: sp(240) });
     if (t.students.length) {
-      line('Prepared by', { size: 12, italic: true, before: sp(1800), after: 80 });
+      line('Prepared by', { size: 12, italic: true, before: sp(2200), after: 80 });
       t.students.forEach((s) => line(s, { size: 14, bold: true, after: 40 }));
     }
-    if (t.supervisor) line(`Supervised by: ${t.supervisor}`, { size: 13, before: sp(t.students.length ? 400 : 1800), after: 80 });
-    if (t.academicYear) line(t.academicYear, { size: 13, before: sp(500), after: 0 });
+    if (t.supervisor) line(`Supervised by: ${t.supervisor}`, { size: 13, before: sp(t.students.length ? 500 : 2200), after: 80 });
+    if (t.academicYear) line(t.academicYear, { size: 13, before: sp(700), after: 0 });
     return out;
   }
 
@@ -353,23 +355,21 @@ export async function buildDocx(project, { figureImages } = {}) {
   const rightTab = `<w:tab w:val="right" w:leader="dot" w:pos="${textW}"/>`;
   const pageHolder = '–';
 
+  /**
+   * Field-based list (TOC / table of figures) with a cached result. The field starts in the first
+   * entry and ends in the last one, so no stray empty paragraph can spill onto a new page.
+   */
   function listField(instr, entries, emptyText, style) {
     const o = {};
-    if (!entries.length) {
-      return [
-        para(fldChar('begin', o) + `<w:r><w:instrText xml:space="preserve"> ${X(instr)} </w:instrText></w:r>` + fldChar('separate', o) + run(emptyText, { italic: true }), { style }),
-        para(fldChar('end', o), { spacing: { before: 0, after: 0 } }),
-      ];
-    }
-    const out = entries.map((entry, i) => {
-      const begin = i === 0 ? `${fldChar('begin', o)}<w:r><w:instrText xml:space="preserve"> ${X(instr)} </w:instrText></w:r>${fldChar('separate', o)}` : '';
+    const begin = `${fldChar('begin', o)}<w:r><w:instrText xml:space="preserve"> ${X(instr)} </w:instrText></w:r>${fldChar('separate', o)}`;
+    const end = fldChar('end', o);
+    if (!entries.length) return [para(begin + run(emptyText, { italic: true }) + end, { style })];
+    return entries.map((entry, i) => {
       const rtl = isRtlText(entry.text);
       const inner = `${run(entry.text, { rtl })}${tabRun()}${run(pageHolder)}`;
       const linked = entry.anchor ? `<w:hyperlink w:anchor="${entry.anchor}" w:history="1">${inner}</w:hyperlink>` : inner;
-      return para(begin + linked, { style: entry.style || style, bidi: rtl });
+      return para((i === 0 ? begin : '') + linked + (i === entries.length - 1 ? end : ''), { style: entry.style || style, bidi: rtl });
     });
-    out.push(para(fldChar('end', o), { spacing: { before: 0, after: 0 } }));
-    return out;
   }
 
   function frontItem(item, first) {

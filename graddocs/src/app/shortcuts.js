@@ -50,8 +50,12 @@ const GROUPS = [
     [[modLabel, '+'], 'Zoom in'], [[modLabel, '−'], 'Zoom out'], [['⇧', '1'], 'Fit to screen'],
   ]],
   ['Table editor', [
-    [['Tab'], 'Next cell'], [['⇧', 'Tab'], 'Previous cell'],
+    [['Tab'], 'Next cell (adds a row at the end)'], [['⇧', 'Tab'], 'Previous cell'],
+    [['Enter'], 'Cell below'], [['⇧', 'Enter'], 'New line in cell'],
+    [['⇧', 'Click'], 'Select a range (or drag)'],
     [[modLabel, 'B'], 'Bold'], [[modLabel, 'I'], 'Italic'],
+    [[modLabel, 'Z'], 'Undo'], [[modLabel, 'Y'], 'Redo'],
+    [[modLabel, 'S'], 'Save a version'],
   ]],
 ];
 

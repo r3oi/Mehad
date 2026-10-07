@@ -28,6 +28,7 @@
   display: grid; gap: 22px 36px; padding: 26px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
   grid-template-areas: "head includes" "action includes";
+  grid-template-rows: auto 1fr;
   align-items: start;
   background: linear-gradient(135deg, var(--primary-soft) 0%, var(--surface) 62%);
   border-color: color-mix(in srgb, var(--primary) 26%, var(--border));
@@ -43,6 +44,14 @@
 .exp-progress-label { font-size: 12.5px; color: var(--muted); }
 .exp-note { display: flex; gap: 7px; align-items: flex-start; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; line-height: 1.5; }
 .exp-note .icon { margin-top: 2px; }
+
+.exp-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.exp-stats span {
+  display: inline-flex; align-items: baseline; gap: 5px; padding: 6px 11px; border-radius: 20px;
+  font-size: 12.5px; color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 80%, transparent); border: 1px solid var(--border);
+}
+.exp-stats b { font-size: 14px; font-weight: 650; color: var(--text); }
 
 .exp-includes {
   grid-area: includes; list-style: none; margin: 0; padding: 6px; display: grid; gap: 2px;
@@ -69,7 +78,8 @@
 .exp-ticks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13.5px; color: var(--text-2); }
 .exp-ticks li { display: flex; gap: 9px; align-items: flex-start; }
 .exp-ticks .icon { margin-top: 3px; color: var(--success); }
-.exp-backup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.exp-backup-actions { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.exp-backup-actions .btn { justify-content: flex-start; }
 
 /* Row lists (figures, tables, lists) */
 .exp-section { overflow: hidden; }
@@ -78,9 +88,7 @@
 .exp-thumb { width: 88px; height: 58px; flex: none; padding: 4px; }
 .exp-row-main { flex: 1 1 240px; min-width: 0; }
 .exp-row .title { font-size: 14px; }
-.exp-row .meta { margin-top: 3px; flex-wrap: nowrap; min-width: 0; }
-.exp-row .meta > * { flex: none; }
-.exp-row .meta .truncate { flex: 0 1 auto; min-width: 0; }
+.exp-row .meta { margin-top: 3px; min-width: 0; row-gap: 2px; }
 .exp-actions { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; opacity: 1 !important; }
 
 .exp-empty { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 22px 18px; }
@@ -111,10 +119,10 @@
   .exp-tile-xl { width: 46px; height: 46px; border-radius: 13px; }
   .exp-tile-xl svg { width: 22px; height: 22px; }
   .exp-feat-action .btn-lg { width: 100%; }
+  .exp-stats { display: none; }
   .exp-rows .list-item { padding: 14px; gap: 12px; }
   .exp-thumb { width: 72px; height: 50px; }
   .exp-actions { margin-left: 0; width: 100%; justify-content: flex-start; }
   .exp-head-actions { margin-left: 0; width: 100%; }
-  .exp-backup-actions .btn { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .btn.is-busy::after { animation-duration: 1.6s; } }

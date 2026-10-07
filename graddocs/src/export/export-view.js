@@ -162,7 +162,7 @@ export default {
           ${tile(l.icon, 'exp-tile-lg')}
           <div class="exp-row-main">
             <div class="title">${esc(l.title)}</div>
-            <div class="meta"><span>${esc(l.count(doc, p))}</span><span class="sep">&middot;</span><span>dotted leaders, page numbers filled in by Word</span></div>
+            <div class="meta"><span>${esc(l.count(doc, p))} &middot; page numbers are filled in by Word</span></div>
           </div>
           <div class="actions exp-actions">
             <button class="btn btn-sm btn-soft" data-action="list-print" data-list="${l.id}">${icon('printer', 'icon-sm')}Open printable PDF</button>
@@ -217,6 +217,9 @@ export default {
               <div class="exp-progress-label" data-progress-label>Preparing&hellip;</div>
             </div>
             <div class="exp-note" data-package-note>${esc(`${slug()}-documentation-package.zip`)}</div>
+            <div class="exp-stats">
+              <span><b>${p.chapters.length}</b> chapters</span><span><b>${doc.figures.length}</b> figures</span><span><b>${doc.tables.length}</b> tables</span><span><b>${doc.acronyms.length}</b> acronyms</span>
+            </div>
           </div>
         </section>
 

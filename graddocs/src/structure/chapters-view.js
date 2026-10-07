@@ -227,7 +227,7 @@ export default {
           lastShape = '';
           return;
         }
-        let chapter = project.chapters.find((c) => c.id === selectedId) || project.chapters[0];
+        const chapter = project.chapters.find((c) => c.id === selectedId) || project.chapters[0];
         selectedId = chapter.id;
         selectedByProject.set(projectId, selectedId);
         const num = getNumbering(project);
@@ -237,7 +237,6 @@ export default {
         fillItems(project);
         mountEditors(project);
         lastShape = shapeOf(project, selectedId);
-        chapter = null;
       } finally {
         rendering = false;
       }
@@ -345,7 +344,7 @@ export default {
     function updateSpy() {
       const cards = [...container.querySelectorAll('.sec-card')];
       if (!cards.length) return;
-      const limit = container.getBoundingClientRect().top + 110;
+      const limit = container.getBoundingClientRect().top + Math.min(280, Math.max(110, container.clientHeight * 0.3));
       let current = null;
       for (const c of cards) { if (c.getBoundingClientRect().top <= limit) current = c.dataset.id; else break; }
       if (container.scrollTop + container.clientHeight >= container.scrollHeight - 4) current = cards[cards.length - 1].dataset.id;

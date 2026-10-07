@@ -95,7 +95,7 @@ export function renderTableHTML(project, table, { caption = false, forWord = fal
       if (cell.hidden) return;
       const bold = isCellBold(table, r, cell);
       const cs = Math.max(1, Number(cell.colspan) || 1); const rs = Math.max(1, Number(cell.rowspan) || 1);
-      const styles = [border, pad, `text-align:${cell.align || 'left'}`, `vertical-align:${isHeader ? 'middle' : 'top'}`];
+      const styles = [border, pad, 'overflow-wrap:break-word', `text-align:${cell.align || 'left'}`, `vertical-align:${isHeader ? 'middle' : 'top'}`];
       if (isHeader) styles.push(`background-color:${st.fill}`, `color:${st.ink}`);
       else if (st.zebra && bodyIndex % 2 === 1) styles.push(`background-color:${ZEBRA}`);
       if (bold) styles.push('font-weight:bold'); else if (isHeader) styles.push('font-weight:normal');

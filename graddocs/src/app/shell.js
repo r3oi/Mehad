@@ -5,6 +5,7 @@ import { esc, on } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { toast, toastError } from '../ui/toast.js';
 import { closeMenu, openMenu } from '../ui/menu.js';
+import { closeAllModals } from '../ui/modal.js';
 import { formatBytes, relativeTime, modLabel } from '../core/utils.js';
 import { prefs } from './prefs.js';
 
@@ -84,6 +85,7 @@ export class Shell {
     const key = `${parsed.view}|${parsed.projectId}|${parsed.params.id}|${JSON.stringify(parsed.params.query)}`;
     if (!force && this.current?.key === key) return;
     closeMenu();
+    if (this.current && this.current.view !== parsed.view) closeAllModals();
 
     try {
       if (parsed.projectId) {

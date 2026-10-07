@@ -69,8 +69,9 @@ export default {
     let commitTimer = 0; let typingTimer = 0; let typingActive = false;
     let sel = { a: { r: 0, c: 0 }, b: { r: 0, c: 0 } };
     let cellEls = new Map();
-    let drag = null; let resizing = null;
-    let zoom = ZOOMS.includes(Number(prefs.get('tableZoom'))) ? Number(prefs.get('tableZoom')) : 1.15;
+    let drag = null; let resizing = null; let historyModal = null;
+    const narrow = window.matchMedia?.('(max-width: 720px)').matches;
+    let zoom = ZOOMS.includes(Number(prefs.get('tableZoom'))) ? Number(prefs.get('tableZoom')) : (narrow ? 0.9 : 1.15);
 
     // ----- Skeleton ---------------------------------------------------------
     const btn = (act, glyph, tip, kbd) => `<button type="button" class="btn btn-ghost btn-icon btn-sm" data-act="${act}" data-tip="${esc(tip)}"${kbd ? ` data-kbd="${esc(kbd)}"` : ''} aria-label="${esc(tip)}">${glyph}</button>`;
@@ -135,6 +136,7 @@ export default {
     const $ = (sel2) => container.querySelector(sel2);
     const root = $('.te'); const toolbar = $('.te-toolbar'); const gridEl = $('[data-grid]'); const sheet = $('[data-sheet]');
     const titleEl = $('[data-title]'); const chapterEl = $('[data-chapter]'); const sectionEl = $('[data-section]');
+    const canvasEl = $('[data-canvas]');
     const descWrap = $('[data-desc]'); const descEl = $('[data-description]');
 
     // ----- Store helpers ------------------------------------------------------
@@ -189,7 +191,7 @@ export default {
       flushPending(); typingActive = false;
       const before = ops.snapshotContent(T());
       const draft = clone(before);
-      const res = fn(draft, selRect());
+      const res = fn(draft, selRect(), rawRect());
       if (res === false || res?.ok === false) { if (res?.reason) toast(res.reason, { type: 'info', duration: 2800 }); return false; }
       ops.normalizeMerges(draft);
       if (ops.contentKey(draft) === ops.contentKey(before)) return false;
@@ -205,6 +207,8 @@ export default {
     // ----- Selection --------------------------------------------------------------
     function anchorOf(rc) { const g = ops.regionAt(T(), rc.r, rc.c); return { r: g.r1, c: g.c1 }; }
     function selRect() { return ops.expandRect(T(), ops.rectOf(sel.a, sel.b)); }
+    /** The rectangle as dragged, without growing to whole merged regions (used for row / column insert and delete). */
+    function rawRect() { return ops.clampRect(T(), ops.rectOf(sel.a, sel.b)); }
     function clampSel() {
       const t = T(); const maxR = t.rows.length - 1; const maxC = t.columns.length - 1;
       const fix = (p) => ({ r: clamp(p.r, 0, maxR), c: clamp(p.c, 0, maxC) });
@@ -261,7 +265,10 @@ export default {
       sheet.style.setProperty('--te-hdr-ink', st.headerTextColor || '#000000');
       sheet.style.setProperty('--tz', String(zoom));
       const pageW = pageTextWidthPx(project0) * zoom;
-      sheet.style.width = `${Math.round(Math.max(pageW, cols * 84) + GUTTER + 56)}px`;
+      // Page-sized on wide screens; on phones the sheet shrinks to the screen until columns would get too narrow.
+      const chrome = GUTTER + (narrow ? 24 : 56);
+      const available = Math.max(0, canvasEl.clientWidth - (narrow ? 20 : 48));
+      sheet.style.width = `${Math.round(Math.max(Math.min(pageW + chrome, available || Infinity), cols * 78 + chrome))}px`;
       gridEl.classList.toggle('horizontal', st.borders === 'horizontal');
       gridEl.style.gridTemplateColumns = `${GUTTER}px ${t.columns.map((c) => `minmax(0, ${Math.max(1, c.width)}fr)`).join(' ')}`;
 
@@ -355,8 +362,9 @@ export default {
         if (disabled !== undefined) b.disabled = !!disabled;
       };
       set('undo', { disabled: !undoStack.length }); set('redo', { disabled: !redoStack.length });
-      set('rowDelete', { disabled: rect.r2 - rect.r1 + 1 >= t.rows.length });
-      set('colDelete', { disabled: rect.c2 - rect.c1 + 1 >= t.columns.length });
+      const raw = rawRect();
+      set('rowDelete', { disabled: raw.r2 - raw.r1 + 1 >= t.rows.length });
+      set('colDelete', { disabled: raw.c2 - raw.c1 + 1 >= t.columns.length });
       set('merge', { disabled: anchors.length < 2 });
       set('unmerge', { disabled: !anchors.some((a) => ops.isMerged(a.cell)) });
       set('bold', { active: anchors.length > 0 && anchors.every((a) => ops.isCellBold(t, a.r, a.cell)) });
@@ -379,19 +387,19 @@ export default {
     const formatCells = (apply) => structural((d, rect) => { for (const { r, cell } of ops.anchorsIn(d, rect)) apply(d, r, cell); return {}; }, { activity: `Formatted table "${T().title}"` });
     const actions = {
       undo, redo,
-      rowAbove: () => structural((d, rect) => { const i = ops.insertRow(d, rect.r1); return { select: { r1: i, c1: rect.c1, r2: i, c2: rect.c1 } }; }, { activity: 'Added a table row' }),
-      rowBelow: () => structural((d, rect) => { const i = ops.insertRow(d, rect.r2 + 1); return { select: { r1: i, c1: rect.c1, r2: i, c2: rect.c1 } }; }, { activity: 'Added a table row' }),
-      rowDelete: () => structural((d, rect) => {
-        if (!ops.deleteRows(d, rect.r1, rect.r2)) return { ok: false, reason: 'A table needs at least one row.' };
-        const r = Math.min(rect.r1, d.rows.length - 1);
-        return { select: { r1: r, c1: rect.c1, r2: r, c2: rect.c1 } };
+      rowAbove: () => structural((d, rect, raw) => { const i = ops.insertRow(d, raw.r1); return { select: { r1: i, c1: raw.c1, r2: i, c2: raw.c1 } }; }, { activity: 'Added a table row' }),
+      rowBelow: () => structural((d, rect, raw) => { const i = ops.insertRow(d, raw.r2 + 1); return { select: { r1: i, c1: raw.c1, r2: i, c2: raw.c1 } }; }, { activity: 'Added a table row' }),
+      rowDelete: () => structural((d, rect, raw) => {
+        if (!ops.deleteRows(d, raw.r1, raw.r2)) return { ok: false, reason: 'A table needs at least one row.' };
+        const r = Math.min(raw.r1, d.rows.length - 1);
+        return { select: { r1: r, c1: raw.c1, r2: r, c2: raw.c1 } };
       }, { activity: 'Deleted a table row' }),
-      colLeft: () => structural((d, rect) => { const i = ops.insertColumn(d, rect.c1); return { select: { r1: rect.r1, c1: i, r2: rect.r1, c2: i } }; }, { activity: 'Added a table column' }),
-      colRight: () => structural((d, rect) => { const i = ops.insertColumn(d, rect.c2 + 1); return { select: { r1: rect.r1, c1: i, r2: rect.r1, c2: i } }; }, { activity: 'Added a table column' }),
-      colDelete: () => structural((d, rect) => {
-        if (!ops.deleteColumns(d, rect.c1, rect.c2)) return { ok: false, reason: 'A table needs at least one column.' };
-        const c = Math.min(rect.c1, d.columns.length - 1);
-        return { select: { r1: rect.r1, c1: c, r2: rect.r1, c2: c } };
+      colLeft: () => structural((d, rect, raw) => { const i = ops.insertColumn(d, raw.c1); return { select: { r1: raw.r1, c1: i, r2: raw.r1, c2: i } }; }, { activity: 'Added a table column' }),
+      colRight: () => structural((d, rect, raw) => { const i = ops.insertColumn(d, raw.c2 + 1); return { select: { r1: raw.r1, c1: i, r2: raw.r1, c2: i } }; }, { activity: 'Added a table column' }),
+      colDelete: () => structural((d, rect, raw) => {
+        if (!ops.deleteColumns(d, raw.c1, raw.c2)) return { ok: false, reason: 'A table needs at least one column.' };
+        const c = Math.min(raw.c1, d.columns.length - 1);
+        return { select: { r1: raw.r1, c1: c, r2: raw.r1, c2: c } };
       }, { activity: 'Deleted a table column' }),
       merge: () => structural((d, rect) => { const res = ops.mergeCells(d, rect); return res.ok ? { select: res.rect } : res; }, { activity: 'Merged table cells' }),
       unmerge: () => structural((d, rect) => (ops.unmergeCells(d, rect) ? {} : { ok: false, reason: 'There are no merged cells in the selection.' }), { activity: 'Unmerged table cells' }),
@@ -473,7 +481,9 @@ export default {
       const modal = openModal({
         title: 'Version history', subtitle: `${t.title} · ${t.versions.length} saved version${t.versions.length === 1 ? '' : 's'}`, size: 'lg',
         body: `<div class="ver-list">${list}</div>`, footer: '<button class="btn" data-close>Close</button>',
+        onClose: () => { historyModal = null; },
       });
+      historyModal = modal;
       modal.root.addEventListener('click', (e) => {
         const b = e.target.closest('[data-restore]');
         if (!b || b.disabled) return;
@@ -709,7 +719,10 @@ export default {
       const rc = rcOf(ta); const collapsed = ta.selectionStart === ta.selectionEnd;
       switch (e.key) {
         case 'Tab': e.preventDefault(); if (e.shiftKey) goPrev(rc); else goNext(rc); break;
-        case 'Enter': if (e.shiftKey) return; e.preventDefault(); go(rc, 1, 0, 'end'); break;
+        case 'Enter':
+          // Phones have no Shift key: there Enter keeps inserting a line break.
+          if (e.shiftKey || window.matchMedia?.('(pointer: coarse)').matches) return;
+          e.preventDefault(); go(rc, 1, 0, 'end'); break;
         case 'Escape': if (isMulti()) { e.preventDefault(); setSel(sel.a); } break;
         case 'ArrowUp': if (!e.shiftKey && (singleLine(ta) || (collapsed && ta.selectionStart === 0)) && go(rc, -1, 0, 'end')) e.preventDefault(); break;
         case 'ArrowDown': if (!e.shiftKey && (singleLine(ta) || (collapsed && ta.selectionEnd === ta.value.length)) && go(rc, 1, 0, 'end')) e.preventDefault(); break;
@@ -787,6 +800,7 @@ export default {
         commitPending();
         clearTimeout(typingTimer); clearTimeout(titleTimer); clearTimeout(descTimer);
         document.body.classList.remove('te-resizing');
+        historyModal?.close();
         D.dispose();
       },
     };

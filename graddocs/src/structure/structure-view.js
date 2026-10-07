@@ -125,7 +125,7 @@ export default {
           <span class="fm-icon">${icon(FM_ICONS[item.kind] || 'file')}</span>
           <div class="fm-main">
             <div class="fm-title" data-title>${esc(item.title)}</div>
-            <div class="fm-sub">${esc(sub)}</div>
+            <div class="fm-sub">${def.generated ? '<span class="fm-auto-sm">Auto-generated · </span>' : ''}${esc(sub)}</div>
           </div>
           ${def.generated ? `<span class="badge badge-info" data-tip="Filled in automatically from your project">${icon('sparkles')}Auto-generated</span>` : ''}
           <div class="fm-actions">
@@ -284,7 +284,7 @@ export default {
     disposer.add(stop);
 
     // ------------------------------------------------------------------ inline rename
-    function startInline(host, current, onCommit, dragEl) {
+    function startInline(host, current, onCommit, dragEl, focusId = null) {
       const titleEl = host.querySelector('[data-title]');
       if (!titleEl || renaming) return;
       renaming = true;
@@ -301,6 +301,7 @@ export default {
         if (done) return;
         done = true; renaming = false; pendingRender = false;
         const value = input.value.trim();
+        if (focusId) pending.focus = focusId;
         if (commit && value && value !== current) onCommit(value); else render();
       };
       input.addEventListener('keydown', (e) => {
@@ -317,7 +318,7 @@ export default {
       startInline(row, info.node.title, (value) => {
         pending.focus = id; pending.pulse = id;
         store.update((p) => { const n = ops.locate(p, id); if (n) n.node.title = value; }, { activity: { text: `Renamed ${kindName(info.kind)} “${value}”`, kind: 'edit', targetId: id } });
-      }, row);
+      }, row, id);
     }
 
     function startFrontRename(id) {
@@ -389,7 +390,7 @@ export default {
       const impact = ops.deletionImpact(project, id);
       const label = labelOf(project, id);
       const title = info.node.title;
-      const parts = [`<span style="display:block">Delete <strong>${esc(label)}</strong>${impact.subsections ? ` and its ${plural(impact.subsections, 'subsection')}` : ''}? This cannot be undone from the document.</span>`];
+      const parts = [`<span style="display:block">Delete <strong>${esc(label)}</strong>${impact.subsections ? ` and its ${plural(impact.subsections, 'subsection')}` : ''}?</span>`];
       const placed = [impact.figures && plural(impact.figures, 'figure'), impact.tables && plural(impact.tables, 'table')].filter(Boolean).join(' and ');
       if (placed) {
         const dest = info.kind === 'chapter'

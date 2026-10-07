@@ -70,6 +70,9 @@ function trapFocus(e, root) {
 
 export const hasOpenModal = () => stack.length > 0;
 
+/** Close every open dialog (used when the route changes). */
+export function closeAllModals() { [...stack].reverse().forEach((m) => m.close()); }
+
 export function confirmDialog({ title = 'Are you sure?', message = '', confirmText = 'Confirm', cancelText = 'Cancel', danger = false } = {}) {
   return new Promise((resolve) => {
     let result = false;
