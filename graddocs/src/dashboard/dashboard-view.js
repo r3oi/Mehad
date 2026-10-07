@@ -36,6 +36,8 @@ export const ACTIVITY_TEMPLATES = [
   'Resized columns of table “{title}”', 'Cleared cells in table “{title}”', 'Cut cells in table “{title}”', 'Pasted cells into table “{title}”',
   'Deleted table “{title}”', 'Restored table “{title}”', 'Moved table “{title}” up', 'Moved table “{title}” down',
   'Edited details of table “{title}”', 'Created table “{title}”',
+  'Undo in table “{title}”', 'Redo in table “{title}”', 'Saved version {n} of table “{title}”', 'Restored version {n} of table “{title}”',
+  'Moved table “{title}”', 'Edited description of table “{title}”', 'Renamed table “{title}”',
   'Edited figure “{title}”', 'Duplicated figure “{title}”', 'Deleted figure “{title}”', 'Created figure “{title}”', 'Restored figure “{title}”',
   'Saved revision of “{title}”', 'Saved version of “{title}”', 'Updated details of “{title}”', 'Commented on “{title}”', 'Restored v{n} of “{title}”',
   'Edited “{title}”', 'Saved revision #{n} of {title}', 'Updated {title}',
