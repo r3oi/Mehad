@@ -8,14 +8,18 @@
 import { buildDocument } from '../core/document.js';
 import { FRONT_MATTER_KINDS } from '../core/model.js';
 import { resolveHTML } from '../core/references.js';
-import { clamp, debounce, plural } from '../core/utils.js';
+import { clamp, debounce } from '../core/utils.js';
 import { renderFigureSVG } from '../figures/render.js';
 import { fontStack } from '../figures/text-layout.js';
 import { renderTableHTML } from '../tables/table-render.js';
 import { prefs } from '../app/prefs.js';
 import { esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
+import { t, isRTL } from '../i18n/index.js';
 import { createMeasureHost, formatPageNumber, pageMetrics, paginate } from './paginate.js';
+
+// Everything painted INSIDE a page (title page, TOC, headings, captions, page numbers, placeholders) is the
+// user's report and stays in the report language: only the toolbar, navigator and hover hints are translated.
 
 const PREF_KEY = 'preview';
 const ZOOM_MIN = 0.25;
@@ -64,7 +68,7 @@ function figureItem(project, block, m) {
   return {
     kind: 'figure',
     anchors: [block.id],
-    html: `<figure class="pv-figure" data-fig-id="${esc(block.id)}" title="Double-click to edit">${pos === 'above' ? caption : ''}<div class="pv-fig-img">${svgHTML}</div>${pos === 'below' ? caption : ''}</figure>`,
+    html: `<figure class="pv-figure" data-fig-id="${esc(block.id)}" title="${esc(t('Double-click to edit'))}">${pos === 'above' ? caption : ''}<div class="pv-fig-img">${svgHTML}</div>${pos === 'below' ? caption : ''}</figure>`,
   };
 }
 
@@ -81,7 +85,7 @@ function tableItem(project, block) {
     kind: 'table',
     splitMode: 'rows',
     anchors: [block.id],
-    html: `<div class="pv-tblock" data-tbl-id="${esc(block.id)}" title="Double-click to edit">${pos === 'above' ? caption : ''}<div class="pv-tbl">${tableHTML}</div>${pos === 'below' ? caption : ''}</div>`,
+    html: `<div class="pv-tblock" data-tbl-id="${esc(block.id)}" title="${esc(t('Double-click to edit'))}">${pos === 'above' ? caption : ''}<div class="pv-tbl">${tableHTML}</div>${pos === 'below' ? caption : ''}</div>`,
   };
 }
 
@@ -106,7 +110,7 @@ function buildBodyItems(project, doc, m) {
       items.push({ kind: 'h1', breakBefore: newPage, keepWithNext: true, anchors: [b.id], html: `<h1 class="pv-h1" data-a="${esc(b.id)}">${esc(b.heading)}</h1>` });
     } else if (b.type === 'heading') {
       const level = clamp(b.level, 2, 4);
-      items.push({ kind: `h${level}`, keepWithNext: true, anchors: [b.id], html: `<h${level} class="pv-h${level}" data-a="${esc(b.id)}">${esc(b.text)}</h${level}>` });
+      items.push({ kind: `h${level}`, keepWithNext: true, anchors: [b.id], html: `<h${level} class="pv-h${level}" dir="auto" data-a="${esc(b.id)}">${esc(b.text)}</h${level}>` });
     } else if (b.type === 'paragraph') items.push(paragraphItem(project, b.text));
     else if (b.type === 'bullet') items.push(bulletItem(project, b.text, doc.body[i + 1]?.type !== 'bullet'));
     else if (b.type === 'figure') items.push(figureItem(project, b, m));
@@ -149,24 +153,24 @@ function buildFrontItems(project, doc, pageOf) {
 
 const withPrefix = (value, re, prefix) => (!value ? '' : re.test(value.trim()) ? value.trim() : `${prefix}${value.trim()}`);
 
-function titlePageHTML(t) {
-  const college = withPrefix(t.college, /^(college|faculty|school|institute|academy)\b/i, 'College of ');
-  const department = withPrefix(t.department, /^(department|dept\b|school|faculty|division|institute|college)/i, 'Department of ');
+function titlePageHTML(tp) {
+  const college = withPrefix(tp.college, /^(college|faculty|school|institute|academy)\b/i, 'College of ');
+  const department = withPrefix(tp.department, /^(department|dept\b|school|faculty|division|institute|college)/i, 'Department of ');
   const top = [
-    t.university && `<div class="pv-uni">${esc(t.university)}</div>`,
+    tp.university && `<div class="pv-uni">${esc(tp.university)}</div>`,
     college && `<div class="pv-org">${esc(college)}</div>`,
     department && `<div class="pv-org">${esc(department)}</div>`,
   ].filter(Boolean).join('');
-  const students = t.students.length
-    ? `<div class="pv-credit"><div class="pv-label">Prepared by:</div>${t.students.map((s) => `<div class="pv-name">${esc(s)}</div>`).join('')}</div>` : '';
-  const supervisor = t.supervisor ? `<div class="pv-credit"><span class="pv-label">Supervised by:</span> <span class="pv-name">${esc(t.supervisor)}</span></div>` : '';
-  const year = t.academicYear ? `<div class="pv-year">Academic Year: ${esc(t.academicYear)}</div>` : '';
+  const students = tp.students.length
+    ? `<div class="pv-credit"><div class="pv-label">Prepared by:</div>${tp.students.map((s) => `<div class="pv-name">${esc(s)}</div>`).join('')}</div>` : '';
+  const supervisor = tp.supervisor ? `<div class="pv-credit"><span class="pv-label">Supervised by:</span> <span class="pv-name">${esc(tp.supervisor)}</span></div>` : '';
+  const year = tp.academicYear ? `<div class="pv-year">Academic Year: ${esc(tp.academicYear)}</div>` : '';
   return `<div class="pv-title">
     <div class="pv-title-top">${top}</div>
     <div class="pv-title-mid">
       <div class="pv-rule"></div>
-      <div class="pv-project">${esc(t.name)}</div>
-      ${t.type ? `<div class="pv-ptype">${esc(t.type)}</div>` : ''}
+      <div class="pv-project">${esc(tp.name)}</div>
+      ${tp.type ? `<div class="pv-ptype">${esc(tp.type)}</div>` : ''}
       <div class="pv-rule"></div>
     </div>
     <div class="pv-title-bottom">${students}${supervisor}${year}</div>
@@ -209,32 +213,32 @@ class PreviewView {
   start() {
     this.container.innerHTML = `
       <div class="pv-root" id="pv-root">
-        <div class="pv-toolbar" role="toolbar" aria-label="Preview controls">
-          <button class="btn btn-sm btn-icon pv-nav-toggle" data-act="nav" aria-pressed="true" aria-label="Toggle navigator" data-tip="Navigator">${icon('structure')}</button>
-          <div class="btn-group" role="group" aria-label="Zoom">
-            <button class="btn btn-sm btn-icon" data-act="zoom-out" aria-label="Zoom out" data-tip="Zoom out">${icon('minus')}</button>
-            <button class="btn btn-sm pv-zoom" data-act="zoom-reset" data-tip="Reset to 100%" aria-label="Zoom level">100%</button>
-            <button class="btn btn-sm btn-icon" data-act="zoom-in" aria-label="Zoom in" data-tip="Zoom in">${icon('plus')}</button>
+        <div class="pv-toolbar" role="toolbar" aria-label="${esc(t('Preview controls'))}">
+          <button class="btn btn-sm btn-icon pv-nav-toggle" data-act="nav" aria-pressed="true" aria-label="${esc(t('Toggle navigator'))}" data-tip="${esc(t('Navigator'))}">${icon('structure')}</button>
+          <div class="btn-group" role="group" aria-label="${esc(t('Zoom'))}" dir="ltr">
+            <button class="btn btn-sm btn-icon" data-act="zoom-out" aria-label="${esc(t('Zoom out'))}" data-tip="${esc(t('Zoom out'))}">${icon('minus')}</button>
+            <button class="btn btn-sm pv-zoom" data-act="zoom-reset" data-tip="${esc(t('Reset to 100%'))}" aria-label="${esc(t('Zoom level'))}">100%</button>
+            <button class="btn btn-sm btn-icon" data-act="zoom-in" aria-label="${esc(t('Zoom in'))}" data-tip="${esc(t('Zoom in'))}">${icon('plus')}</button>
           </div>
-          <button class="btn btn-sm pv-fit" data-act="fit" data-tip="Fit page width">${icon('maximize')}<span class="pv-tl">Fit width</span></button>
+          <button class="btn btn-sm pv-fit" data-act="fit" data-tip="${esc(t('Fit page width'))}">${icon('maximize')}<span class="pv-tl">${esc(t('Fit width'))}</span></button>
           <span class="pv-count" aria-live="polite"></span>
-          <div class="segmented pv-toggles" role="group" aria-label="Sections to show">
-            <button type="button" data-sec="title" aria-pressed="true">Title page</button>
-            <button type="button" data-sec="front" aria-pressed="true">Front matter</button>
-            <button type="button" data-sec="body" aria-pressed="true">Chapters</button>
+          <div class="segmented pv-toggles" role="group" aria-label="${esc(t('Sections to show'))}">
+            <button type="button" data-sec="title" aria-pressed="true">${esc(t('Title page'))}</button>
+            <button type="button" data-sec="front" aria-pressed="true">${esc(t('Front matter'))}</button>
+            <button type="button" data-sec="body" aria-pressed="true">${esc(t('Chapters'))}</button>
           </div>
           <span class="spacer"></span>
-          <button class="btn btn-sm" data-act="refresh" data-tip="Re-paginate">${icon('refresh')}<span class="pv-tl">Refresh</span></button>
-          <button class="btn btn-sm btn-primary" data-act="print" data-tip="Opens the print dialog; choose “Save as PDF”">${icon('printer')}<span class="pv-tl pv-tl-full">Print / Save as PDF</span><span class="pv-tl-short">Print</span></button>
+          <button class="btn btn-sm" data-act="refresh" data-tip="${esc(t('Re-paginate'))}">${icon('refresh')}<span class="pv-tl">${esc(t('Refresh'))}</span></button>
+          <button class="btn btn-sm btn-primary" data-act="print" data-tip="${esc(t('Opens the print dialog; choose “Save as PDF”'))}">${icon('printer')}<span class="pv-tl pv-tl-full">${esc(t('Print / Save as PDF'))}</span><span class="pv-tl-short">${esc(t('Print'))}</span></button>
         </div>
         <div class="pv-body">
-          <aside class="pv-nav" aria-label="Navigator">
-            <div class="pv-nav-head"><span>Navigator</span>
-              <button class="btn btn-ghost btn-icon btn-sm" data-act="nav" aria-label="Collapse navigator">${icon('chevronLeft')}</button></div>
+          <aside class="pv-nav" aria-label="${esc(t('Navigator'))}">
+            <div class="pv-nav-head"><span>${esc(t('Navigator'))}</span>
+              <button class="btn btn-ghost btn-icon btn-sm" data-act="nav" aria-label="${esc(t('Collapse navigator'))}">${icon('chevronLeft')}</button></div>
             <div class="pv-nav-list"></div>
           </aside>
           <div class="pv-stage">
-            <div class="pv-canvas" tabindex="0" aria-label="Document pages"><div class="pv-pages"></div></div>
+            <div class="pv-canvas" tabindex="0" aria-label="${esc(t('Document pages'))}"><div class="pv-pages"></div></div>
             <div class="pv-indicator" aria-hidden="true"></div>
           </div>
         </div>
@@ -318,9 +322,9 @@ class PreviewView {
       // Navigation model + cross-reference targets (absolute page index).
       const nav = [];
       const refPages = new Map();
-      if (show.title) nav.push({ label: 'Title page', level: 0, page: 0 });
+      if (show.title) nav.push({ label: t('Title page'), level: 0, page: 0 });
       if (show.front && doc.front.length) {
-        nav.push({ group: 'Front matter' });
+        nav.push({ group: t('Front matter') });
         for (const f of doc.front) {
           const idx = front.anchors.get(f.id);
           if (idx === undefined) continue;
@@ -329,7 +333,7 @@ class PreviewView {
         }
       }
       if (show.body) {
-        if (doc.body.length) nav.push({ group: 'Report' });
+        if (doc.body.length) nav.push({ group: t('Report') });
         for (const b of doc.body) {
           if (b.type !== 'chapter' && b.type !== 'heading') continue;
           const idx = body.anchors.get(b.id);
@@ -353,8 +357,8 @@ class PreviewView {
   }
 
   applyVars(m, settings) {
-    const t = settings.typography || {};
-    const sizes = t.headingSizes || {};
+    const typo = settings.typography || {};
+    const sizes = typo.headingSizes || {};
     const set = (k, v) => this.root.style.setProperty(k, v);
     set('--pw', `${m.width}px`);
     set('--ph', `${m.height}px`);
@@ -364,15 +368,15 @@ class PreviewView {
     set('--ml', `${m.margins.left}px`);
     set('--cw', `${m.contentWidth}px`);
     set('--ch', `${m.contentHeight}px`);
-    set('--pv-font', fontStack(t.fontFamily || 'Times New Roman'));
-    set('--pv-size', `${Number(t.fontSize) || 12}pt`);
-    set('--pv-lh', String(Number(t.lineSpacing) || 1.5));
-    set('--pv-para', `${Number.isFinite(Number(t.paragraphSpacing)) ? Number(t.paragraphSpacing) : 6}pt`);
+    set('--pv-font', fontStack(typo.fontFamily || 'Times New Roman'));
+    set('--pv-size', `${Number(typo.fontSize) || 12}pt`);
+    set('--pv-lh', String(Number(typo.lineSpacing) || 1.5));
+    set('--pv-para', `${Number.isFinite(Number(typo.paragraphSpacing)) ? Number(typo.paragraphSpacing) : 6}pt`);
     set('--pv-h1', `${Number(sizes.h1) || 18}pt`);
     set('--pv-h2', `${Number(sizes.h2) || 16}pt`);
     set('--pv-h3', `${Number(sizes.h3) || 14}pt`);
-    set('--pv-align', t.justify === false ? 'left' : 'justify');
-    set('--pv-align-last', t.justify === false ? 'auto' : 'justify');
+    set('--pv-align', typo.justify === false ? 'start' : 'justify');
+    set('--pv-align-last', typo.justify === false ? 'auto' : 'justify');
     this.styleEl.textContent = `@page { size: ${m.cssSize}; margin: 0; }\n`
       + `@media print { .preview-page { width: ${m.mmW}mm !important; height: ${(m.mmH - 0.4).toFixed(2)}mm !important; } }\n`;
   }
@@ -387,7 +391,7 @@ class PreviewView {
       model = this.layout(this.store.project);
     } catch (err) {
       console.error('[preview] pagination failed', err);
-      this.pagesEl.innerHTML = `<div class="pv-error"><strong>The preview could not be generated.</strong><br>${esc(err?.message || err)}</div>`;
+      this.pagesEl.innerHTML = `<div class="pv-error"><strong>${esc(t('The preview could not be generated.'))}</strong><br>${esc(err?.message || err)}</div>`;
       return;
     }
     const { m, pages, nav, refPages } = model;
@@ -404,7 +408,11 @@ class PreviewView {
       wrap.dataset.page = String(i);
       const sheet = document.createElement('section');
       sheet.className = `preview-page pv-page pv-kind-${pg.kind}`;
-      sheet.setAttribute('aria-label', pg.label ? `Page ${pg.label}` : `Page ${i + 1}`);
+      // Paper is left-to-right, report-language (English) paper whatever the app language: the same fonts, the same
+      // glyph fallbacks, the same layout. (Paragraphs carry dir="auto", so Arabic text inside still reads RTL.)
+      sheet.lang = 'en';
+      sheet.dir = 'ltr';
+      sheet.setAttribute('aria-label', pg.label ? t('Page {label}', { label: pg.label }) : t('Page {label}', { label: i + 1 }));
       const content = document.createElement('div');
       content.className = 'pv-content';
       if (pg.node) content.append(pg.node);
@@ -422,14 +430,14 @@ class PreviewView {
     if (!pages.length) {
       const empty = document.createElement('div');
       empty.className = 'pv-empty';
-      empty.textContent = 'Nothing to show. Turn on a section above.';
+      empty.textContent = t('Nothing to show. Turn on a section above.');
       frag.append(empty);
     }
     this.pagesEl.replaceChildren(frag);
     this.applyZoom({ keepScroll: false });
     this.canvas.scrollTop = scrollTop;
 
-    this.countEl.textContent = plural(pages.length, 'page');
+    this.countEl.textContent = pages.length === 1 ? t('1 page') : t('{n} pages', { n: pages.length });
     this.renderNav();
     this.onScroll();
     this.renderMs = Math.round(performance.now() - t0);
@@ -440,7 +448,7 @@ class PreviewView {
     this.navList.innerHTML = this.nav.map((e, i) => (e.group
       ? `<div class="pv-nav-group">${esc(e.group)}</div>`
       : `<button type="button" class="pv-nav-item lvl-${e.level}${e.chapter ? ' is-ch' : ''}" data-page="${e.page}" data-nav="${i}">
-          <span class="pv-lbl">${esc(e.label)}</span><span class="pv-pg">${esc(e.pageLabel || '')}</span></button>`)).join('');
+          <span class="pv-lbl" dir="auto">${esc(e.label)}</span><span class="pv-pg">${esc(e.pageLabel || '')}</span></button>`)).join('');
     // Heading elements, used to highlight the section that is currently at the top of the viewport.
     this.navEls = this.nav.map((e) => (e.id ? this.pagesEl.querySelector(`[data-a="${CSS.escape(e.id)}"]`) : null));
   }
@@ -520,7 +528,9 @@ class PreviewView {
       if (this.destroyed || !this.pages.length) { this.indicator.classList.remove('show'); return; }
       const cur = this.currentPage();
       const pg = this.pages[cur];
-      this.indicator.textContent = `Page ${cur + 1} of ${this.pages.length}${pg?.label ? ` · ${pg.label}` : ''}`;
+      // The page label (i, ii, 1 …) is paper text: keep it left-to-right inside the Arabic pill.
+      const label = pg?.label ? ` · ${isRTL ? `<bdi dir="ltr">${esc(pg.label)}</bdi>` : esc(pg.label)}` : '';
+      this.indicator.innerHTML = `${esc(t('Page {n} of {total}', { n: cur + 1, total: this.pages.length }))}${label}`;
       this.indicator.classList.add('show');
       clearTimeout(this.indicatorTimer);
       this.indicatorTimer = setTimeout(() => this.indicator.classList.remove('show'), 1600);
@@ -562,9 +572,9 @@ class PreviewView {
   }
 
   onClick(e) {
-    const t = e.target instanceof Element ? e.target : null;
-    if (!t) return;
-    const act = t.closest('[data-act]')?.dataset.act;
+    const el = e.target instanceof Element ? e.target : null;
+    if (!el) return;
+    const act = el.closest('[data-act]')?.dataset.act;
     if (act === 'nav') { this.state.navOpen = !this.state.navOpen; this.syncToolbar(); this.savePrefs(); return; }
     if (act === 'zoom-in') { this.stepZoom(1); return; }
     if (act === 'zoom-out') { this.stepZoom(-1); return; }
@@ -572,7 +582,7 @@ class PreviewView {
     if (act === 'fit') { this.setZoom(this.fitZoom(), 'fit'); return; }
     if (act === 'refresh') { this.render(); return; }
     if (act === 'print') { this.print(); return; }
-    const sec = t.closest('[data-sec]')?.dataset.sec;
+    const sec = el.closest('[data-sec]')?.dataset.sec;
     if (sec) {
       this.state.show[sec] = !this.state.show[sec];
       this.syncToolbar();
@@ -580,7 +590,7 @@ class PreviewView {
       this.render();
       return;
     }
-    const navBtn = t.closest('.pv-nav-item');
+    const navBtn = el.closest('.pv-nav-item');
     if (navBtn) {
       // The clicked entry stays highlighted until the reader scrolls by hand.
       this.pinnedNav = Number(navBtn.dataset.nav);
@@ -588,8 +598,8 @@ class PreviewView {
       this.onScroll();
       return;
     }
-    const toc = t.closest('.pv-toc[data-goto]');
-    const ref = t.closest('.doc-ref[data-ref]');
+    const toc = el.closest('.pv-toc[data-goto]');
+    const ref = el.closest('.doc-ref[data-ref]');
     const target = toc ? toc.dataset.goto : ref ? ref.dataset.ref.split(':')[1] : null;
     if (target && this.refPages.has(target)) this.scrollToPage(this.refPages.get(target));
   }

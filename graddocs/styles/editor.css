@@ -143,15 +143,16 @@
 .ed-text-editor {
   position: absolute; z-index: 4; margin: 0; padding: 4px 4px; resize: none; overflow: hidden;
   border: 1.5px solid var(--selection); border-radius: 4px; background: rgba(255, 255, 255, .96);
-  line-height: 1.2; box-shadow: 0 0 0 3px rgba(79, 70, 229, .15); outline: none;
+  line-height: 1.2; box-shadow: 0 0 0 3px rgba(79, 70, 229, .15); outline: none; direction: ltr;
 }
 
 /* Status bar */
 .ed-statusbar {
-  display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 8px 0 12px; flex: none;
+  display: flex; align-items: center; gap: 4px; height: 36px; padding: 0; padding-inline: 12px 8px; flex: none;
   background: var(--surface); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); min-width: 0;
 }
 .ed-statusbar .btn.active { color: var(--primary-text); background: var(--primary-soft); }
+.ed-zoom-group { display: inline-flex; align-items: center; gap: 4px; direction: ltr; } /* − 100% + keeps its order in Arabic */
 .ed-zoom { min-width: 54px; font-variant-numeric: tabular-nums; }
 .ed-save { display: inline-flex; align-items: center; gap: 5px; margin-inline-end: 6px; white-space: nowrap; }
 .ed-save .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warning); animation: pulse 1s infinite; }
@@ -177,11 +178,11 @@
 .ed-range { flex: 1; accent-color: var(--primary); }
 .ed-full { display: flex; width: 100%; }
 .ed-full button { flex: 1; justify-content: center; }
-.ed-color { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); cursor: pointer; background: var(--surface); }
+.ed-color { display: inline-flex; align-items: center; gap: 6px; padding: 2px; padding-inline-end: 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); cursor: pointer; background: var(--surface); }
 .ed-color input { width: 24px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer; }
 .ed-color input::-webkit-color-swatch-wrapper { padding: 0; }
 .ed-color input::-webkit-color-swatch { border: 1px solid rgba(0,0,0,.15); border-radius: 4px; }
-.ed-color span { font-size: 11px; color: var(--muted); }
+.ed-color span { font-size: 11px; color: var(--muted); unicode-bidi: plaintext; }
 .ed-swatches { display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; }
 .ed-swatch { aspect-ratio: 1; border: 1.5px solid; border-radius: 6px; font: 600 11px var(--font-doc); padding: 0; display: grid; place-items: center; transition: transform .1s; }
 .ed-swatch:hover { transform: scale(1.12); }
@@ -211,11 +212,11 @@
 .ed-version-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; background: var(--surface); border: 2px solid var(--primary); flex: none; position: relative; z-index: 1; }
 .ed-version.is-revision .ed-version-dot { border-color: var(--warning); background: var(--warning-soft); }
 .ed-version-label { font-size: 13px; }
-.ed-version-note { font-size: 12.5px; color: var(--text-2); margin-top: 4px; padding: 6px 9px; border-inline-start: 3px solid var(--warning); background: var(--surface-2); border-radius: 0 6px 6px 0; }
+.ed-version-note { font-size: 12.5px; color: var(--text-2); margin-top: 4px; padding: 6px 9px; border-inline-start: 3px solid var(--warning); background: var(--surface-2); border-start-end-radius: 6px; border-end-end-radius: 6px; }
 .ed-changes { margin: 6px 0 0; padding-inline-start: 16px; font-size: 12px; color: var(--text-2); display: flex; flex-direction: column; gap: 2px; }
 .ed-from { text-decoration: line-through; color: var(--danger); }
 .ed-to { color: var(--success); font-weight: 600; }
-.ed-change-list { margin: 0; padding: 10px 12px 10px 28px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; display: flex; flex-direction: column; gap: 3px; max-height: 180px; overflow-y: auto; }
+.ed-change-list { margin: 0; padding: 10px; padding-inline: 28px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; display: flex; flex-direction: column; gap: 3px; max-height: 180px; overflow-y: auto; }
 .ed-version-view { display: grid; grid-template-columns: 1fr 260px; gap: 16px; }
 .ed-version-thumb { height: 460px; padding: 12px; }
 .ed-version-meta p { margin-bottom: 12px; color: var(--text-2); }
@@ -255,3 +256,8 @@
   .ed-statusbar [data-status-info], .ed-statusbar .ed-save { display: none; }
   .ed-toolbar { top: 8px; }
 }
+
+/* ---------- Arabic UI ---------- */
+/* No letter-spacing / capitals on Arabic labels (it would break the joined letters). */
+:root[dir="rtl"] .ed-title-input { text-align: right; } /* dir="auto" picks the typing direction; the title still sits next to the badge */
+:root[lang="ar"] .ed-panel-head, :root[lang="ar"] .ed-label, :root[lang="ar"] .ed-caption-preview .faint { letter-spacing: 0; text-transform: none; }

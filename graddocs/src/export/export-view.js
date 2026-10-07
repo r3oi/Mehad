@@ -1,10 +1,11 @@
 // Export page (#/p/<id>/export): documentation package, Word, figures, tables, printable lists, backup.
 import { esc, on, Disposer } from '../ui/dom.js';
+import { t, isRTL } from '../i18n/index.js';
 import { icon } from '../ui/icons.js';
 import { toast, toastError } from '../ui/toast.js';
 import { openModal } from '../ui/modal.js';
 import {
-  downloadBlob, downloadText, pickFile, readFileAsText, slugify, formatBytes, plural, relativeTime,
+  downloadBlob, downloadText, pickFile, readFileAsText, slugify, formatBytes, relativeTime,
 } from '../core/utils.js';
 import { buildDocument } from '../core/document.js';
 import { getNumbering } from '../core/numbering.js';
@@ -22,25 +23,35 @@ import {
   printHTML, wrapHTMLDocument, tocHTML, listOfFiguresHTML, listOfTablesHTML, acronymsHTML, structureHTML,
 } from './print.js';
 
+// `title` / `file` are the report's own names (print window title, .html files): they stay English.
+// The export page shows t(title) and the counts below in the app language.
+const count = (n, one, many) => (n === 1 ? t(one) : t(many, { n }));
 const LISTS = [
-  { id: 'toc', icon: 'structure', title: 'Table of Contents', file: 'table-of-contents', build: tocHTML, count: (d) => plural(d.toc.length, 'entry', 'entries') },
-  { id: 'lof', icon: 'figure', title: 'List of Figures', file: 'list-of-figures', build: listOfFiguresHTML, count: (d) => plural(d.figures.length, 'figure') },
-  { id: 'lot', icon: 'table', title: 'List of Tables', file: 'list-of-tables', build: listOfTablesHTML, count: (d) => plural(d.tables.length, 'table') },
-  { id: 'loa', icon: 'acronym', title: 'List of Acronyms and Abbreviations', file: 'list-of-acronyms', build: acronymsHTML, count: (d) => plural(d.acronyms.length, 'acronym') },
-  { id: 'structure', icon: 'layers', title: 'Document Structure', file: 'document-structure', build: structureHTML, count: (d, p) => `${plural(p.chapters.length, 'chapter')} with status` },
+  { id: 'toc', icon: 'structure', title: 'Table of Contents', file: 'table-of-contents', build: tocHTML, count: (d) => count(d.toc.length, '1 entry', '{n} entries') },
+  { id: 'lof', icon: 'figure', title: 'List of Figures', file: 'list-of-figures', build: listOfFiguresHTML, count: (d) => count(d.figures.length, '1 figure', '{n} figures') },
+  { id: 'lot', icon: 'table', title: 'List of Tables', file: 'list-of-tables', build: listOfTablesHTML, count: (d) => count(d.tables.length, '1 table', '{n} tables') },
+  { id: 'loa', icon: 'acronym', title: 'List of Acronyms and Abbreviations', file: 'list-of-acronyms', build: acronymsHTML, count: (d) => count(d.acronyms.length, '1 acronym', '{n} acronyms') },
+  { id: 'structure', icon: 'layers', title: 'Document Structure', file: 'document-structure', build: structureHTML, count: (d, p) => count(p.chapters.length, '1 chapter with status', '{n} chapters with status') },
 ];
+
+/** Keep file names, extensions, sizes and shortcuts left-to-right inside Arabic text (markup contexts). */
+const ltr = (html) => (isRTL ? `<bdi dir="ltr">${html}</bdi>` : html);
+/** Same for plain-text contexts (toasts, labels): Unicode LRI … PDI isolates. */
+const ltrText = (text) => (isRTL ? `\u2066${text}\u2069` : String(text));
+/** "5×" scale factor. */
+const times = (n) => ltr(`${n}&times;`);
 
 const isoDate = (ts = Date.now()) => new Date(ts).toISOString().slice(0, 10);
 
 /** Accept a raw project object (or one wrapped as { project }) and refuse anything else. */
 function parseProjectFile(text) {
   let data;
-  try { data = JSON.parse(text); } catch { throw new Error('This file is not valid JSON.'); }
+  try { data = JSON.parse(text); } catch { throw new Error(t('This file is not valid JSON.')); }
   if (data && !Array.isArray(data) && typeof data.project === 'object' && data.project && !Array.isArray(data.chapters)) data = data.project;
   const looksRight = data && typeof data === 'object' && !Array.isArray(data)
     && (typeof data.name === 'string' || typeof data.id === 'string')
     && ['chapters', 'figures', 'tables'].some((k) => Array.isArray(data[k]));
-  if (!looksRight) throw new Error('This file does not look like a GradDocs project export.');
+  if (!looksRight) throw new Error(t('This file does not look like a GradDocs project export.'));
   return data;
 }
 
@@ -48,10 +59,10 @@ function askImportMode(name) {
   return new Promise((resolve) => {
     let choice = null;
     const modal = openModal({
-      title: 'This project already exists',
+      title: t('This project already exists'),
       size: 'sm',
-      body: `<p style="color:var(--text-2)">A project with the same ID (<b>${esc(name)}</b>) is already stored in this browser. Replace it with the imported version, or keep both by importing a copy?</p>`,
-      footer: '<button class="btn" data-close>Cancel</button><button class="btn" data-choice="copy">Import as copy</button><button class="btn btn-danger" data-choice="replace">Replace existing</button>',
+      body: `<p style="color:var(--text-2)">${t('A project with the same ID ({name}) is already stored in this browser. Replace it with the imported version, or keep both by importing a copy?', { name: `<b>${esc(name)}</b>` })}</p>`,
+      footer: `<button class="btn" data-close>${esc(t('Cancel'))}</button><button class="btn" data-choice="copy">${esc(t('Import as copy'))}</button><button class="btn btn-danger" data-choice="replace">${esc(t('Replace existing'))}</button>`,
       onClose: () => resolve(choice),
     });
     modal.root.addEventListener('click', (e) => {
@@ -83,7 +94,7 @@ async function copyTableForWord(project, table) {
   selection.removeAllRanges(); selection.addRange(range);
   const ok = document.execCommand('copy');
   selection.removeAllRanges(); holder.remove();
-  if (!ok) throw new Error('This browser blocked copying. Download the HTML file instead.');
+  if (!ok) throw new Error(t('This browser blocked copying. Download the HTML file instead.'));
 }
 
 export default {
@@ -100,32 +111,35 @@ export default {
 
     // ------------------------------------------------------------------ view
     const tile = (name, cls = '') => `<span class="exp-tile ${cls}">${icon(name)}</span>`;
+    // `title` and `sub` are markup built from t() strings (never user text).
     const cardHead = (iconName, title, sub, actions = '') => `
       <div class="card-header exp-card-head">
         ${tile(iconName)}
-        <div class="exp-head-text"><h2>${esc(title)}</h2>${sub ? `<p>${sub}</p>` : ''}</div>
+        <div class="exp-head-text"><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div>
         ${actions ? `<div class="exp-head-actions">${actions}</div>` : ''}
       </div>`;
+    /** "Download" + a file type / name that stays left-to-right inside Arabic text. */
+    const downloadLabel = (what) => `${esc(t('Download'))} ${ltr(what)}`;
 
     function figureRows(doc, numbering) {
       if (!doc.figures.length) {
-        return `<div class="exp-empty"><div class="exp-empty-icon">${icon('figure')}</div><div><b>No figures yet</b><p>Create a figure and it will appear here, ready to export as SVG, PNG or PDF.</p></div><a class="btn btn-sm" href="${esc(ctx.href('figures'))}">Go to Figures</a></div>`;
+        return `<div class="exp-empty"><div class="exp-empty-icon">${icon('figure')}</div><div><b>${esc(t('No figures yet'))}</b><p>${esc(t('Create a figure and it will appear here, ready to export as SVG, PNG or PDF.'))}</p></div><a class="btn btn-sm" href="${esc(ctx.href('figures'))}">${esc(t('Go to Figures'))}</a></div>`;
       }
       return doc.figures.map((f) => {
         const info = numbering.figures.get(f.id);
         return `<div class="list-item exp-row" data-row="${esc(f.id)}">
           <div class="thumb exp-thumb">${renderThumbnail(f.figure)}</div>
           <div class="exp-row-main">
-            <div class="title truncate">${esc(f.figure.title)}</div>
-            <div class="meta"><span class="badge badge-primary">${esc(f.label)}</span><span class="sep">&middot;</span><span class="truncate">${esc(info?.location || 'Unassigned')}</span></div>
+            <div class="title truncate" dir="auto">${esc(f.figure.title)}</div>
+            <div class="meta"><span class="badge badge-primary">${esc(f.label)}</span><span class="sep">&middot;</span><span class="truncate">${esc(info?.location || t('Unassigned'))}</span></div>
           </div>
           <div class="actions exp-actions">
             <div class="btn-group">
-              <button class="btn btn-sm" data-action="fig-svg" data-id="${esc(f.id)}" data-tip="Vector image, scales without quality loss">SVG</button>
-              <button class="btn btn-sm" data-action="fig-png" data-id="${esc(f.id)}" data-tip="High-resolution image for Word">PNG</button>
+              <button class="btn btn-sm" data-action="fig-svg" data-id="${esc(f.id)}" data-tip="${esc(t('Vector image, scales without quality loss'))}">SVG</button>
+              <button class="btn btn-sm" data-action="fig-png" data-id="${esc(f.id)}" data-tip="${esc(t('High-resolution image for Word'))}">PNG</button>
               <button class="btn btn-sm" data-action="fig-pdf" data-id="${esc(f.id)}">PDF</button>
             </div>
-            <button class="btn btn-sm btn-soft" data-action="fig-copy" data-id="${esc(f.id)}" data-tip="Copy the image, then paste it into Word">${icon('copy', 'icon-sm')}Copy image</button>
+            <button class="btn btn-sm btn-soft" data-action="fig-copy" data-id="${esc(f.id)}" data-tip="${esc(t('Copy the image, then paste it into Word'))}">${icon('copy', 'icon-sm')}${esc(t('Copy image'))}</button>
           </div>
         </div>`;
       }).join('');
@@ -133,25 +147,25 @@ export default {
 
     function tableRows(doc, numbering) {
       if (!doc.tables.length) {
-        return `<div class="exp-empty"><div class="exp-empty-icon">${icon('table')}</div><div><b>No tables yet</b><p>Create a table and it will appear here, ready to export as an image, HTML or CSV.</p></div><a class="btn btn-sm" href="${esc(ctx.href('tables'))}">Go to Tables</a></div>`;
+        return `<div class="exp-empty"><div class="exp-empty-icon">${icon('table')}</div><div><b>${esc(t('No tables yet'))}</b><p>${esc(t('Create a table and it will appear here, ready to export as an image, HTML or CSV.'))}</p></div><a class="btn btn-sm" href="${esc(ctx.href('tables'))}">${esc(t('Go to Tables'))}</a></div>`;
       }
-      return doc.tables.map((t) => {
-        const info = numbering.tables.get(t.id);
-        return `<div class="list-item exp-row" data-row="${esc(t.id)}">
+      return doc.tables.map((tb) => {
+        const info = numbering.tables.get(tb.id);
+        return `<div class="list-item exp-row" data-row="${esc(tb.id)}">
           <span class="exp-tile exp-tile-lg">${icon('table')}</span>
           <div class="exp-row-main">
-            <div class="title truncate">${esc(t.table.title)}</div>
-            <div class="meta"><span class="badge badge-primary">${esc(t.label)}</span><span class="sep">&middot;</span><span class="truncate">${esc(info?.location || 'Unassigned')}</span><span class="sep">&middot;</span><span>${t.table.rows.length} &times; ${t.table.columns.length}</span></div>
+            <div class="title truncate" dir="auto">${esc(tb.table.title)}</div>
+            <div class="meta"><span class="badge badge-primary">${esc(tb.label)}</span><span class="sep">&middot;</span><span class="truncate">${esc(info?.location || t('Unassigned'))}</span><span class="sep">&middot;</span><span>${ltr(`${tb.table.rows.length} &times; ${tb.table.columns.length}`)}</span></div>
           </div>
           <div class="actions exp-actions">
             <div class="btn-group">
-              <button class="btn btn-sm" data-action="tab-svg" data-id="${esc(t.id)}">SVG</button>
-              <button class="btn btn-sm" data-action="tab-png" data-id="${esc(t.id)}">PNG</button>
-              <button class="btn btn-sm" data-action="tab-pdf" data-id="${esc(t.id)}">PDF</button>
-              <button class="btn btn-sm" data-action="tab-html" data-id="${esc(t.id)}">HTML</button>
-              <button class="btn btn-sm" data-action="tab-csv" data-id="${esc(t.id)}">CSV</button>
+              <button class="btn btn-sm" data-action="tab-svg" data-id="${esc(tb.id)}">SVG</button>
+              <button class="btn btn-sm" data-action="tab-png" data-id="${esc(tb.id)}">PNG</button>
+              <button class="btn btn-sm" data-action="tab-pdf" data-id="${esc(tb.id)}">PDF</button>
+              <button class="btn btn-sm" data-action="tab-html" data-id="${esc(tb.id)}">HTML</button>
+              <button class="btn btn-sm" data-action="tab-csv" data-id="${esc(tb.id)}">CSV</button>
             </div>
-            <button class="btn btn-sm btn-soft" data-action="tab-copy" data-id="${esc(t.id)}" data-tip="Copies the table with its formatting, then paste it into Word">${icon('clipboard', 'icon-sm')}Copy for Word</button>
+            <button class="btn btn-sm btn-soft" data-action="tab-copy" data-id="${esc(tb.id)}" data-tip="${esc(t('Copies the table with its formatting, then paste it into Word'))}">${icon('clipboard', 'icon-sm')}${esc(t('Copy for Word'))}</button>
           </div>
         </div>`;
       }).join('');
@@ -161,40 +175,44 @@ export default {
       return LISTS.map((l) => `<div class="list-item exp-row">
           ${tile(l.icon, 'exp-tile-lg')}
           <div class="exp-row-main">
-            <div class="title">${esc(l.title)}</div>
-            <div class="meta"><span>${esc(l.count(doc, p))} &middot; page numbers are filled in by Word</span></div>
+            <div class="title">${esc(t(l.title))}</div>
+            <div class="meta"><span>${esc(l.count(doc, p))} &middot; ${esc(t('page numbers are filled in by Word'))}</span></div>
           </div>
           <div class="actions exp-actions">
-            <button class="btn btn-sm btn-soft" data-action="list-print" data-list="${l.id}">${icon('printer', 'icon-sm')}Open printable PDF</button>
-            <button class="btn btn-sm" data-action="list-html" data-list="${l.id}">${icon('export', 'icon-sm')}Download .html</button>
+            <button class="btn btn-sm btn-soft" data-action="list-print" data-list="${l.id}">${icon('printer', 'icon-sm')}${esc(t('Open printable PDF'))}</button>
+            <button class="btn btn-sm" data-action="list-html" data-list="${l.id}">${icon('export', 'icon-sm')}${downloadLabel('.html')}</button>
           </div>
         </div>`).join('');
     }
 
     function backupLine() {
-      if (backupInfo === undefined) return 'Checking for automatic backups&hellip;';
-      if (!backupInfo) return 'No automatic backup yet. One is saved every 15 minutes while you work.';
-      return `Latest automatic backup: <b>${esc(relativeTime(backupInfo.at))}</b> &middot; ${esc(backupInfo.reason || 'Automatic backup')}`;
+      if (backupInfo === undefined) return `${esc(t('Checking for automatic backups…'))}`;
+      if (!backupInfo) return esc(t('No automatic backup yet. One is saved every 15 minutes while you work.'));
+      return `${t('Latest automatic backup: {time}', { time: `<b>${esc(relativeTime(backupInfo.at))}</b>` })} &middot; ${esc(t(backupInfo.reason || 'Automatic backup'))}`;
     }
 
     function render() {
       const p = project();
       const doc = buildDocument(p);
       const numbering = getNumbering(p);
+      const scale = times(exportScale(p));
       const includes = [
-        ['word', 'documentation.docx', 'Editable Word report: title page, front matter, chapters, numbered figures and tables'],
-        ['figure', `figures/ <span class="exp-count">${doc.figures.length}</span>`, `Every figure as SVG and ${exportScale(p)}× PNG`],
-        ['table', `tables/ <span class="exp-count">${doc.tables.length}</span>`, 'Every table as SVG, PNG, HTML (paste into Word) and CSV'],
-        ['fileText', 'lists/', 'Contents, figures, tables, acronyms and structure as printable HTML'],
-        ['database', 'project.json', 'A full backup you can import again'],
-        ['info', 'README.txt', 'How to insert everything into Word'],
+        ['word', ltr('documentation.docx'), t('Editable Word report: title page, front matter, chapters, numbered figures and tables')],
+        ['figure', ltr(`figures/ <span class="exp-count">${doc.figures.length}</span>`), t('Every figure as SVG and {scale} PNG', { scale })],
+        ['table', ltr(`tables/ <span class="exp-count">${doc.tables.length}</span>`), t('Every table as SVG, PNG, HTML (paste into Word) and CSV')],
+        ['fileText', ltr('lists/'), t('Contents, figures, tables, acronyms and structure as printable HTML')],
+        ['database', ltr('project.json'), t('A full backup you can import again')],
+        ['info', ltr('README.txt'), t('How to insert everything into Word')],
       ];
+      const statChips = [
+        [p.chapters.length, 'chapters'], [doc.figures.length, 'figures'], [doc.tables.length, 'tables'], [doc.acronyms.length, 'acronyms'],
+      ].map(([n, label]) => `<span><b>${n}</b> ${esc(t(label))}</span>`).join('');
       container.innerHTML = `
       <div class="page exp-page">
         <div class="page-header">
           <div class="titles">
-            <h1>Export</h1>
-            <p class="subtitle">Take your documentation out of GradDocs &mdash; a Word document, figures and tables as images, printable lists and a full backup.</p>
+            <h1>${esc(t('Export'))}</h1>
+            <p class="subtitle">${esc(t('Take your documentation out of GradDocs — a Word document, figures and tables as images, printable lists and a full backup.'))}</p>
           </div>
         </div>
 
@@ -202,75 +220,73 @@ export default {
           <div class="exp-feat-head">
             <span class="exp-tile exp-tile-xl">${icon('archive')}</span>
             <div class="exp-head-text">
-              <div class="exp-kicker"><span class="badge badge-primary">Recommended</span></div>
-              <h2>Complete Documentation Package</h2>
-              <p>Everything in a single .zip &mdash; ready to hand in, share with your supervisor, or build your Word document from.</p>
+              <div class="exp-kicker"><span class="badge badge-primary">${esc(t('Recommended'))}</span></div>
+              <h2>${esc(t('Complete Documentation Package'))}</h2>
+              <p>${t('Everything in a single {zip} — ready to hand in, share with your supervisor, or build your Word document from.', { zip: ltr('.zip') })}</p>
             </div>
           </div>
           <ul class="exp-includes">
             ${includes.map(([ic, name, text]) => `<li>${icon(ic)}<div><b>${name}</b><span>${text}</span></div></li>`).join('')}
           </ul>
           <div class="exp-feat-action">
-            <button class="btn btn-primary btn-lg" data-action="package">${icon('export')}Download package (.zip)</button>
+            <button class="btn btn-primary btn-lg" data-action="package">${icon('export')}${esc(t('Download package'))} ${ltr('(.zip)')}</button>
             <div class="exp-progress" data-progress hidden>
               <div class="progress"><span style="width:0%"></span></div>
-              <div class="exp-progress-label" data-progress-label>Preparing&hellip;</div>
+              <div class="exp-progress-label" data-progress-label>${esc(t('Preparing…'))}</div>
             </div>
-            <div class="exp-note" data-package-note>${esc(`${slug()}-documentation-package.zip`)}</div>
-            <div class="exp-stats">
-              <span><b>${p.chapters.length}</b> chapters</span><span><b>${doc.figures.length}</b> figures</span><span><b>${doc.tables.length}</b> tables</span><span><b>${doc.acronyms.length}</b> acronyms</span>
-            </div>
+            <div class="exp-note" data-package-note>${ltr(esc(`${slug()}-documentation-package.zip`))}</div>
+            <div class="exp-stats">${statChips}</div>
           </div>
         </section>
 
         <div class="exp-grid-2">
           <section class="card" data-section="word">
-            ${cardHead('word', 'Word document (.docx)', 'A real .docx with styles, headings and native tables.')}
+            ${cardHead('word', `${esc(t('Word document'))} ${ltr('(.docx)')}`, t('A real {docx} with styles, headings and native tables.', { docx: ltr('.docx') }))}
             <div class="card-body exp-stack">
               <ul class="exp-ticks">
-                <li>${icon('check', 'icon-sm')}Title page, front matter, chapters and numbered captions</li>
-                <li>${icon('check', 'icon-sm')}Table of contents, lists of figures and tables as Word fields</li>
-                <li>${icon('check', 'icon-sm')}Cross-references stay linked (press F9 after edits)</li>
+                <li>${icon('check', 'icon-sm')}${esc(t('Title page, front matter, chapters and numbered captions'))}</li>
+                <li>${icon('check', 'icon-sm')}${esc(t('Table of contents, lists of figures and tables as Word fields'))}</li>
+                <li>${icon('check', 'icon-sm')}${esc(t('Cross-references stay linked (press F9 after edits)'))}</li>
               </ul>
-              <div class="callout callout-info">${icon('info')}<div>Word asks <b>&ldquo;Update fields?&rdquo;</b> when it opens the file. Choose <b>Yes</b> to fill in the page numbers.</div></div>
-              <div><button class="btn btn-primary" data-action="docx">${icon('export')}Download .docx</button></div>
+              <div class="callout callout-info">${icon('info')}<div>${t('Word asks {question} when it opens the file. Choose {yes} to fill in the page numbers.', { question: `<b>${esc(t('“Update fields?”'))}</b>`, yes: `<b>${esc(t('Yes'))}</b>` })}</div></div>
+              <div><button class="btn btn-primary" data-action="docx">${icon('export')}${downloadLabel('.docx')}</button></div>
             </div>
           </section>
 
           <section class="card" data-section="backup">
-            ${cardHead('database', 'Project backup', 'Move your project between browsers or keep a safe copy.')}
+            ${cardHead('database', esc(t('Project backup')), esc(t('Move your project between browsers or keep a safe copy.')))}
             <div class="card-body exp-stack">
               <div class="exp-backup-actions">
-                <button class="btn" data-action="json">${icon('export')}Export Project (.json)</button>
-                <button class="btn" data-action="import">${icon('upload')}Import Project</button>
-                <button class="btn" data-action="backup-download" data-backup-button ${backupInfo ? '' : 'disabled'}>${icon('history')}Download latest automatic backup</button>
+                <button class="btn" data-action="json">${icon('export')}${esc(t('Export Project'))} ${ltr('(.json)')}</button>
+                <button class="btn" data-action="import">${icon('upload')}${esc(t('Import Project'))}</button>
+                <button class="btn" data-action="backup-download" data-backup-button ${backupInfo ? '' : 'disabled'}>${icon('history')}${esc(t('Download latest automatic backup'))}</button>
               </div>
               <div class="exp-note" data-backup-line>${backupLine()}</div>
-              <div class="exp-note">${icon('settings', 'icon-sm')}<span>Backup and storage options live in <a href="${esc(ctx.href('settings', null, { tab: 'storage' }))}">Settings &rarr; Storage</a>.</span></div>
+              <div class="exp-note">${icon('settings', 'icon-sm')}<span>${t('Backup and storage options live in {link}.', { link: `<a href="${esc(ctx.href('settings', null, { tab: 'storage' }))}">${esc(t('Settings'))} ${isRTL ? '&larr;' : '&rarr;'} ${esc(t('Storage'))}</a>` })}</span></div>
             </div>
           </section>
         </div>
 
         <section class="card exp-section" data-section="figures">
-          ${cardHead('figure', 'Figures', `${plural(doc.figures.length, 'figure')} in document order. PNG files are ${exportScale(p)}&times; resolution and carry their DPI.`,
-            `<button class="btn btn-sm" data-action="figures-zip" ${doc.figures.length ? '' : 'disabled'}>${icon('archive', 'icon-sm')}Download all figures (.zip)</button>`)}
+          ${cardHead('figure', esc(t('Figures')), t('{count} in document order. PNG files are {scale} resolution and carry their DPI.', { count: esc(count(doc.figures.length, '1 figure', '{n} figures')), scale }),
+            `<button class="btn btn-sm" data-action="figures-zip" ${doc.figures.length ? '' : 'disabled'}>${icon('archive', 'icon-sm')}${esc(t('Download all figures'))} ${ltr('(.zip)')}</button>`)}
           <div class="exp-rows">${figureRows(doc, numbering)}</div>
         </section>
 
         <section class="card exp-section" data-section="tables">
-          ${cardHead('table', 'Tables', `${plural(doc.tables.length, 'table')} in document order. <b>Copy for Word</b> keeps the table formatting when you paste.`)}
+          ${cardHead('table', esc(t('Tables')), t('{count} in document order. {copy} keeps the table formatting when you paste.', { count: esc(count(doc.tables.length, '1 table', '{n} tables')), copy: `<b>${esc(t('Copy for Word'))}</b>` }))}
           <div class="exp-rows">${tableRows(doc, numbering)}</div>
         </section>
 
         <section class="card exp-section" data-section="lists">
-          ${cardHead('printer', 'Lists & structure → PDF', 'Open a clean print view and choose <b>Save as PDF</b> as the printer, or download the page as HTML.')}
+          ${cardHead('printer', esc(t('Lists & structure → PDF')), t('Open a clean print view and choose {saveAsPdf} as the printer, or download the page as HTML.', { saveAsPdf: `<b>${esc(t('Save as PDF'))}</b>` }))}
           <div class="exp-rows">${listRows(doc, p)}</div>
         </section>
       </div>`;
     }
 
     // ------------------------------------------------------------- busy state
-    async function run(btn, task, { success, failure = 'Export failed' } = {}) {
+    async function run(btn, task, { success, failure = t('Export failed') } = {}) {
       if (btn?.disabled) return;
       busy += 1;
       if (btn) { btn.disabled = true; btn.classList.add('is-busy'); }
@@ -321,9 +337,9 @@ export default {
           const blob = await buildPackage(p, { onProgress });
           const name = `${slugify(p.name)}-documentation-package.zip`;
           downloadBlob(blob, name);
-          if (note) note.innerHTML = `Last package: <b>${esc(name)}</b> &middot; ${esc(formatBytes(blob.size))}`;
+          if (note) note.innerHTML = `${t('Last package: {name}', { name: `<b>${ltr(esc(name))}</b>` })} &middot; ${ltr(esc(formatBytes(blob.size)))}`;
           return { name, size: blob.size };
-        }, { success: (r) => `Package ready: ${r.name} (${formatBytes(r.size)})`, failure: 'Could not build the package' });
+        }, { success: (r) => t('Package ready: {name} ({size})', { name: ltrText(r.name), size: ltrText(formatBytes(r.size)) }), failure: t('Could not build the package') });
         if (bar) setTimeout(() => { if (!busy) bar.hidden = true; }, 1600);
       },
 
@@ -336,7 +352,7 @@ export default {
           const name = `${slugify(p.name)}-documentation.docx`;
           downloadBlob(blob, name);
           return { name, size: blob.size };
-        }, { success: (r) => `Saved ${r.name} (${formatBytes(r.size)}). Choose "Yes" when Word asks to update fields.`, failure: 'Could not build the Word document' });
+        }, { success: (r) => t('Saved {name} ({size}). Choose "Yes" when Word asks to update fields.', { name: ltrText(r.name), size: ltrText(formatBytes(r.size)) }), failure: t('Could not build the Word document') });
       },
 
       async 'figures-zip'(btn) {
@@ -346,7 +362,7 @@ export default {
           const name = `${slugify(p.name)}-figures.zip`;
           downloadBlob(blob, name);
           return { name, size: blob.size };
-        }, { success: (r) => `Saved ${r.name} (${formatBytes(r.size)})`, failure: 'Could not build the figures archive' });
+        }, { success: (r) => t('Saved {name} ({size})', { name: ltrText(r.name), size: ltrText(formatBytes(r.size)) }), failure: t('Could not build the figures archive') });
       },
 
       // ----- one figure -----
@@ -383,7 +399,7 @@ export default {
         await run(btn, async () => {
           const { svg, width, height } = figureSVG(project(), fig);
           await copyPngToClipboard(await svgToPngBlob(svg, width, height, { scale: exportScale(project()) }));
-        }, { success: 'Image copied. Paste it into Word with Ctrl+V.', failure: 'Could not copy the image' });
+        }, { success: t('Image copied. Paste it into Word with {keys}.', { keys: ltrText('Ctrl+V') }), failure: t('Could not copy the image') });
       },
 
       // ----- one table -----
@@ -433,7 +449,7 @@ export default {
       },
       async 'tab-copy'(btn) {
         const table = findTable(btn.dataset.id); if (!table) return;
-        await run(btn, () => copyTableForWord(project(), table), { success: 'Table copied. Paste it into Word with Ctrl+V.', failure: 'Could not copy the table' });
+        await run(btn, () => copyTableForWord(project(), table), { success: t('Table copied. Paste it into Word with {keys}.', { keys: ltrText('Ctrl+V') }), failure: t('Could not copy the table') });
       },
 
       // ----- lists -----
@@ -441,7 +457,7 @@ export default {
         const list = LISTS.find((l) => l.id === btn.dataset.list); if (!list) return;
         try {
           printHTML(list.title, list.build(project()), { settings: project().settings });
-        } catch (err) { toastError(err, 'Could not open the print view'); }
+        } catch (err) { toastError(err, t('Could not open the print view')); }
       },
       async 'list-html'(btn) {
         const list = LISTS.find((l) => l.id === btn.dataset.list); if (!list) return;
@@ -459,17 +475,17 @@ export default {
           const name = `${slug()}-project.json`;
           downloadText(JSON.stringify(data, null, 2), name, 'application/json;charset=utf-8');
           return name;
-        }, { success: (n) => `Saved ${n}`, failure: 'Could not export the project' });
+        }, { success: (n) => t('Saved {name}', { name: ltrText(n) }), failure: t('Could not export the project') });
       },
       async 'backup-download'(btn) {
         await run(btn, async () => {
           const list = await store.repo.listBackups(project().id);
           const latest = list[0];
-          if (!latest) throw new Error('There is no automatic backup yet. One is saved every 15 minutes while you work.');
+          if (!latest) throw new Error(t('No automatic backup yet. One is saved every 15 minutes while you work.'));
           const name = `${slug()}-backup-${isoDate(latest.at)}.json`;
           downloadText(JSON.stringify(latest.data, null, 2), name, 'application/json;charset=utf-8');
           return name;
-        }, { success: (n) => `Saved ${n}`, failure: 'Could not download the backup' });
+        }, { success: (n) => t('Saved {name}', { name: ltrText(n) }), failure: t('Could not download the backup') });
       },
       async import(btn) {
         const file = await pickFile('.json,application/json');
@@ -485,10 +501,10 @@ export default {
             if (!asCopy && store.project?.id === existing.id) await store.createBackup('Before importing a project');
           }
           const saved = await store.saveImportedProject(data, { asCopy });
-          toast(`Imported "${saved.name}".`, { type: 'success' });
+          toast(t('Imported "{name}".', { name: saved.name }), { type: 'success' });
           ctx.navigate(href(saved.id, 'dashboard'));
           return saved;
-        }, { failure: 'Could not import the project' });
+        }, { failure: t('Could not import the project') });
       },
     };
 

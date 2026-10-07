@@ -3,6 +3,7 @@
 import { getNumbering } from '../core/numbering.js';
 import { buildDocument } from '../core/document.js';
 import { slugify, pad, clamp } from '../core/utils.js';
+import { t } from '../i18n/index.js';
 import { renderFigureSVG } from '../figures/render.js';
 import { renderTableHTML, renderTableSVG, tableToCSV, pageTextWidthPx } from '../tables/table-render.js';
 import { svgToPngBlob } from './png.js';
@@ -78,7 +79,7 @@ export async function figureImagesForDocx(project, { onProgress } = {}) {
       console.warn('[export] could not rasterise', entry.figure.title, err); // the .docx shows a placeholder
     }
     done += 1;
-    onProgress?.({ label: `Rendering figures (${done}/${figures.length})`, value: done / Math.max(1, figures.length) });
+    onProgress?.({ label: t('Rendering figures ({done}/{total})', { done, total: figures.length }), value: done / Math.max(1, figures.length) });
   }
   return map;
 }
@@ -93,9 +94,9 @@ export async function buildFiguresZip(project, { onProgress } = {}) {
     const { svg, png } = await renderFigureAssets(project, entry.figure);
     files.push({ path: `${base}.svg`, data: svg }, { path: `${base}.png`, data: png });
     done += 1;
-    onProgress?.({ label: `Rendering figures (${done}/${figures.length})`, value: done / Math.max(1, figures.length) });
+    onProgress?.({ label: t('Rendering figures ({done}/{total})', { done, total: figures.length }), value: done / Math.max(1, figures.length) });
   }
-  if (!files.length) throw new Error('This project has no figures yet.');
+  if (!files.length) throw new Error(t('This project has no figures yet.'));
   return createZip(files);
 }
 
@@ -103,14 +104,14 @@ export async function buildFiguresZip(project, { onProgress } = {}) {
 // Whole package
 
 function readme(project, doc, stamp) {
-  const f = doc.figures.length; const t = doc.tables.length;
+  const f = doc.figures.length; const tbl = doc.tables.length;
   return `GradDocs documentation package
 ==============================
 
 Project:   ${project.name}
 Type:      ${project.type || '-'}
 Exported:  ${stamp}
-Contents:  ${project.chapters.length} chapters, ${f} figures, ${t} tables, ${doc.acronyms.length} acronyms
+Contents:  ${project.chapters.length} chapters, ${f} figures, ${tbl} tables, ${doc.acronyms.length} acronyms
 
 WHAT IS IN THIS ZIP
 -------------------
@@ -152,13 +153,13 @@ export async function buildPackage(project, { onProgress } = {}) {
   const files = [];
   const images = new Map();
 
-  onProgress?.({ label: 'Preparing…', value: 0.01 });
+  onProgress?.({ label: t('Preparing…'), value: 0.01 });
   for (const entry of doc.figures) {
     const base = figureFileBase(project, entry.figure);
     const { svg, width, height, png } = await renderFigureAssets(project, entry.figure);
     files.push({ path: `figures/${base}.svg`, data: svg }, { path: `figures/${base}.png`, data: png });
     images.set(entry.id, { png: await bytesOf(png), width, height });
-    tick(`Rendering ${entry.label}`);
+    tick(t('Rendering {label}', { label: entry.label }));
   }
 
   for (const entry of doc.tables) {
@@ -171,7 +172,7 @@ export async function buildPackage(project, { onProgress } = {}) {
       { path: `tables/${base}.html`, data: tableHTMLDocument(project, entry.table) },
       { path: `tables/${base}.csv`, data: `﻿${tableToCSV(entry.table)}` },
     );
-    tick(`Rendering ${entry.label}`);
+    tick(t('Rendering {label}', { label: entry.label }));
   }
 
   const settings = project.settings;
@@ -182,18 +183,18 @@ export async function buildPackage(project, { onProgress } = {}) {
     { path: 'lists/list-of-acronyms.html', data: wrapHTMLDocument('List of Acronyms and Abbreviations', acronymsHTML(project), settings) },
     { path: 'lists/document-structure.html', data: wrapHTMLDocument(`Document Structure - ${project.name}`, structureHTML(project), settings) },
   );
-  tick('Building lists');
+  tick(t('Building lists'));
 
-  onProgress?.({ label: 'Building the Word document…', value: Math.min(0.97, step / total) });
+  onProgress?.({ label: t('Building the Word document…'), value: Math.min(0.97, step / total) });
   files.push({ path: 'documentation.docx', data: await buildDocx(project, { figureImages: images }) });
-  tick('Building the Word document');
+  tick(t('Building the Word document'));
 
   files.push(
     { path: 'project.json', data: JSON.stringify(project, null, 2) },
     { path: 'README.txt', data: readme(project, doc, stamp) },
   );
-  onProgress?.({ label: 'Compressing…', value: 0.98 });
+  onProgress?.({ label: t('Compressing…'), value: 0.98 });
   const zip = await createZip(files);
-  onProgress?.({ label: 'Done', value: 1 });
+  onProgress?.({ label: t('Done'), value: 1 });
   return zip;
 }

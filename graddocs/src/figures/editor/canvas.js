@@ -11,6 +11,7 @@ import { getShape } from '../shapes.js';
 import { edgeGeometry, pathMidpoint, PORTS, anchorPoint, dist } from '../geometry.js';
 import { fontStack } from '../text-layout.js';
 import { History } from './history.js';
+import { t } from '../../i18n/index.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -61,7 +62,7 @@ export class DiagramEditor extends Emitter {
         <rect class="ed-gridlayer major" width="100%" height="100%" fill="url(#ed-grid-major)"/>
         <g class="ed-viewport"><g class="ed-defs"></g><g class="ed-content"></g><g class="ed-overlay"></g></g>
       </svg>
-      <textarea class="ed-text-editor" spellcheck="true" hidden aria-label="Edit text"></textarea>`;
+      <textarea class="ed-text-editor" spellcheck="true" hidden aria-label="${t('Edit text')}"></textarea>`;
     this.svg = this.host.querySelector('svg');
     this.viewport = this.host.querySelector('.ed-viewport');
     this.defsLayer = this.host.querySelector('.ed-defs');

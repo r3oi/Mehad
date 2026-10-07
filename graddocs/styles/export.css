@@ -96,6 +96,13 @@
 .exp-empty-icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); flex: none; }
 .exp-empty p { margin-top: 2px; color: var(--muted); font-size: 13px; }
 
+/* Arabic UI */
+:root[lang="ar"] .exp-feat-head h2 { letter-spacing: 0; }
+/* Counter chips read "label number" (الفصول 6): the grammar-safe order for Arabic. */
+:root[dir="rtl"] .exp-stats span { flex-direction: row-reverse; }
+/* Figure / table titles are report text (dir="auto"); keep them flush right in the Arabic list. */
+:root[dir="rtl"] .exp-row .title { text-align: right; }
+
 /* Busy buttons */
 .btn.is-busy { position: relative; color: transparent !important; pointer-events: none; }
 .btn.is-busy:disabled { opacity: .8; }

@@ -9,7 +9,8 @@ import { FRONT_MATTER_KINDS, SECTION_STATUSES, createFrontMatterItem } from '../
 import { getNumbering } from '../core/numbering.js';
 import { buildDocument } from '../core/document.js';
 import { resolveText } from '../core/references.js';
-import { clone, plural } from '../core/utils.js';
+import { clone } from '../core/utils.js';
+import { t, isRTL } from '../i18n/index.js';
 import * as ops from './outline-ops.js';
 import { createBodyEditor } from './body-editor.js';
 
@@ -19,6 +20,7 @@ const collapsedByProject = new Map();
 const FM_ICONS = { declaration: 'fileText', acknowledgements: 'fileText', abstract: 'fileText', toc: 'structure', lot: 'table', lof: 'figure', loa: 'acronym', custom: 'file' };
 const wordsOf = (text) => (String(text).trim() ? String(text).trim().split(/\s+/).length : 0);
 const STATUS_LABEL = Object.fromEntries(SECTION_STATUSES.map((s) => [s.value, s.label]));
+const iso = ops.isolate; // keeps user titles inside translated sentences in their own direction
 
 function pulse(el) {
   if (!el) return;
@@ -48,38 +50,38 @@ export default {
       <div class="page wide structure-page">
         <div class="page-header">
           <div class="titles">
-            <h1>Project Structure</h1>
-            <p class="subtitle">Plan the skeleton of your report. Chapter and section numbers update automatically wherever they appear.</p>
+            <h1>${t('Project Structure')}</h1>
+            <p class="subtitle">${t('Plan the skeleton of your report. Chapter and section numbers update automatically wherever they appear.')}</p>
           </div>
           <div class="actions">
-            <a class="btn" data-link="chapters">${icon('chapters')}Write chapters</a>
-            <button class="btn btn-primary" data-action="add-chapter">${icon('plus')}Add Chapter</button>
+            <a class="btn" data-link="chapters">${icon('chapters')}${t('Write chapters')}</a>
+            <button class="btn btn-primary" data-action="add-chapter">${icon('plus')}${t('Add Chapter')}</button>
           </div>
         </div>
         <div class="structure-grid">
           <div class="structure-main">
             <section class="card st-card" aria-labelledby="st-front-title">
               <div class="card-header">
-                <div class="st-head-text"><h2 id="st-front-title">Front Matter</h2><p>Pages that come before Chapter 1.</p></div>
-                <button class="btn btn-sm" data-action="fm-add">${icon('plus')}Add page</button>
+                <div class="st-head-text"><h2 id="st-front-title">${t('Front Matter')}</h2><p>${t('Pages that come before Chapter 1.')}</p></div>
+                <button class="btn btn-sm" data-action="fm-add">${icon('plus')}${t('Add page')}</button>
               </div>
               <ul class="fm-list" data-part="front"></ul>
             </section>
             <section class="card st-card" aria-labelledby="st-chapters-title">
               <div class="card-header">
-                <div class="st-head-text"><h2 id="st-chapters-title">Chapters</h2><p data-part="outline-sub"></p></div>
+                <div class="st-head-text"><h2 id="st-chapters-title">${t('Chapters')}</h2><p data-part="outline-sub"></p></div>
                 <div class="btn-group">
-                  <button class="btn btn-sm" data-action="expand-all" data-tip="Expand everything">${icon('chevronDown')}<span class="hide-xs">Expand</span></button>
-                  <button class="btn btn-sm" data-action="collapse-all" data-tip="Collapse everything">${icon('chevronUp')}<span class="hide-xs">Collapse</span></button>
+                  <button class="btn btn-sm" data-action="expand-all" data-tip="${t('Expand everything')}">${icon('chevronDown')}<span class="hide-xs">${t('Expand')}</span></button>
+                  <button class="btn btn-sm" data-action="collapse-all" data-tip="${t('Collapse everything')}">${icon('chevronUp')}<span class="hide-xs">${t('Collapse')}</span></button>
                 </div>
               </div>
               <div data-part="outline"></div>
-              <div class="st-card-foot"><button class="btn btn-sm btn-soft" data-action="add-chapter">${icon('plus')}Add chapter</button>
-                <span class="st-tip">Drag rows to reorder, or press <kbd>Alt</kbd> + arrow keys on a focused row.</span></div>
+              <div class="st-card-foot"><button class="btn btn-sm btn-soft" data-action="add-chapter">${icon('plus')}${t('Add chapter')}</button>
+                <span class="st-tip">${t('Drag rows to reorder, or press {keys} + arrow keys on a focused row.', { keys: '<kbd>Alt</kbd>' })}</span></div>
             </section>
           </div>
           <aside class="structure-side">
-            <section class="card toc-card" aria-label="Table of contents preview" data-part="toc"></section>
+            <section class="card toc-card" aria-label="${t('Table of contents preview')}" data-part="toc"></section>
           </aside>
         </div>
       </div>`;
@@ -93,7 +95,6 @@ export default {
     // ------------------------------------------------------------------ helpers
     const titleOf = (id) => ops.locate(store.project, id)?.node.title ?? '';
     const rowOf = (id) => outlineEl.querySelector(`.ol-row[data-id="${CSS.escape(id)}"]`);
-    const kindName = (kind) => (kind === 'chapter' ? 'chapter' : 'section');
 
     function labelOf(project, id) {
       const n = getNumbering(project);
@@ -105,34 +106,34 @@ export default {
     // ------------------------------------------------------------------ rendering
     function frontHTML(project) {
       const list = project.frontMatter;
-      if (!list.length) return '<li class="fm-empty">No front matter pages. Add one to get started.</li>';
+      if (!list.length) return `<li class="fm-empty">${t('No front matter pages. Add one to get started.')}</li>`;
       return list.map((item, i) => {
         const def = FRONT_MATTER_KINDS[item.kind] || FRONT_MATTER_KINDS.custom;
         const off = item.include === false;
         let sub = '';
         if (def.generated) {
-          sub = { toc: 'Built from your chapters and sections', lot: plural(project.tables.length, 'table'), lof: plural(project.figures.length, 'figure'), loa: plural(project.acronyms.length, 'acronym') }[item.kind] || 'Generated automatically';
+          sub = { toc: t('Built from your chapters and sections'), lot: ops.countLabel(project.tables.length, 'table'), lof: ops.countLabel(project.figures.length, 'figure'), loa: ops.countLabel(project.acronyms.length, 'acronym') }[item.kind] || t('Generated automatically');
         } else {
           const words = wordsOf(resolveText(project, item.body));
-          sub = words ? plural(words, 'word') : 'No text yet';
+          sub = words ? ops.countLabel(words, 'word') : t('No text yet');
         }
         return `
         <li class="fm-row ${off ? 'off' : ''}" data-fm="${esc(item.id)}">
-          <label class="switch fm-switch" data-tip="${off ? 'Excluded from the document' : 'Included in the document'}">
+          <label class="switch fm-switch" data-tip="${off ? t('Excluded from the document') : t('Included in the document')}">
             <input type="checkbox" data-action="fm-include" data-id="${esc(item.id)}" ${off ? '' : 'checked'}>
-            <span class="track"></span><span class="sr-only">Include ${esc(item.title)}</span>
+            <span class="track"></span><span class="sr-only">${t('Include {title}', { title: iso(esc(item.title)) })}</span>
           </label>
           <span class="fm-icon">${icon(FM_ICONS[item.kind] || 'file')}</span>
           <div class="fm-main">
-            <div class="fm-title" data-title>${esc(item.title)}</div>
-            <div class="fm-sub">${def.generated ? '<span class="fm-auto-sm">Auto-generated · </span>' : ''}${esc(sub)}</div>
+            <div class="fm-title" data-title dir="auto">${esc(item.title)}</div>
+            <div class="fm-sub">${def.generated ? `<span class="fm-auto-sm">${t('Auto-generated')} · </span>` : ''}${esc(sub)}</div>
           </div>
-          ${def.generated ? `<span class="badge badge-info" data-tip="Filled in automatically from your project">${icon('sparkles')}Auto-generated</span>` : ''}
+          ${def.generated ? `<span class="badge badge-info" data-tip="${t('Filled in automatically from your project')}">${icon('sparkles')}${t('Auto-generated')}</span>` : ''}
           <div class="fm-actions">
-            ${def.hasBody ? `<button class="btn btn-sm" data-action="fm-edit" data-id="${esc(item.id)}">${icon('edit')}<span class="hide-xs">Edit text</span></button>` : ''}
-            <button class="btn btn-ghost btn-icon btn-sm fm-move" data-action="fm-up" data-id="${esc(item.id)}" aria-label="Move up" data-tip="Move up" ${i === 0 ? 'disabled' : ''}>${icon('arrowUp')}</button>
-            <button class="btn btn-ghost btn-icon btn-sm fm-move" data-action="fm-down" data-id="${esc(item.id)}" aria-label="Move down" data-tip="Move down" ${i === list.length - 1 ? 'disabled' : ''}>${icon('arrowDown')}</button>
-            <button class="btn btn-ghost btn-icon btn-sm" data-action="fm-menu" data-id="${esc(item.id)}" aria-label="More actions" aria-haspopup="menu">${icon('more')}</button>
+            ${def.hasBody ? `<button class="btn btn-sm" data-action="fm-edit" data-id="${esc(item.id)}">${icon('edit')}<span class="hide-xs">${t('Edit text')}</span></button>` : ''}
+            <button class="btn btn-ghost btn-icon btn-sm fm-move" data-action="fm-up" data-id="${esc(item.id)}" aria-label="${t('Move up')}" data-tip="${t('Move up')}" ${i === 0 ? 'disabled' : ''}>${icon('arrowUp')}</button>
+            <button class="btn btn-ghost btn-icon btn-sm fm-move" data-action="fm-down" data-id="${esc(item.id)}" aria-label="${t('Move down')}" data-tip="${t('Move down')}" ${i === list.length - 1 ? 'disabled' : ''}>${icon('arrowDown')}</button>
+            <button class="btn btn-ghost btn-icon btn-sm" data-action="fm-menu" data-id="${esc(item.id)}" aria-label="${t('More actions')}" aria-haspopup="menu">${icon('more')}</button>
           </div>
         </li>`;
       }).join('');
@@ -140,7 +141,7 @@ export default {
 
     function countsHTML(c) {
       if (!c || (!c.figures && !c.tables)) return '<span class="ol-counts"></span>';
-      return `<span class="ol-counts">${c.figures ? `<span class="ol-count" data-tip="${plural(c.figures, 'figure')}">${icon('figure')}${c.figures}</span>` : ''}${c.tables ? `<span class="ol-count" data-tip="${plural(c.tables, 'table')}">${icon('table')}${c.tables}</span>` : ''}</span>`;
+      return `<span class="ol-counts">${c.figures ? `<span class="ol-count" data-tip="${ops.countLabel(c.figures, 'figure')}">${icon('figure')}${c.figures}</span>` : ''}${c.tables ? `<span class="ol-count" data-tip="${ops.countLabel(c.tables, 'table')}">${icon('table')}${c.tables}</span>` : ''}</span>`;
     }
 
     function rowHTML(project, node, kind, depth, num, counts) {
@@ -149,29 +150,29 @@ export default {
       const info = kind === 'chapter' ? num.chapters.get(node.id) : num.sections.get(node.id);
       const label = kind === 'chapter' ? `${info.label}:` : info.number;
       const canAdd = ops.canAddChild(project, node.id);
-      const addLabel = kind === 'chapter' ? 'Add section' : 'Add subsection';
+      const addLabel = kind === 'chapter' ? t('Add section') : t('Add subsection');
       let meta = '';
       if (kind === 'chapter') {
         const pr = ops.progressOf(kids);
-        meta = pr.total ? `<span class="ol-prog" data-tip="${pr.done} of ${plural(pr.total, 'section')} done · ${pr.percent}% complete"><span class="bar"><i style="width:${pr.percent}%"></i></span><span class="pct">${pr.percent}%</span></span>` : '';
+        meta = pr.total ? `<span class="ol-prog" data-tip="${t(pr.total === 1 ? '{done} of 1 section done · {percent}% complete' : '{done} of {n} sections done · {percent}% complete', { done: pr.done, n: pr.total, percent: pr.percent })}"><span class="bar"><i style="width:${pr.percent}%"></i></span><span class="pct">${pr.percent}%</span></span>` : '';
       } else {
-        meta = `<button class="ol-status s-${esc(node.status)}" data-action="status" data-tip="Change status" aria-haspopup="menu"><i></i>${esc(STATUS_LABEL[node.status] || node.status)}</button>`;
+        meta = `<button class="ol-status s-${esc(node.status)}" data-action="status" data-tip="${t('Change status')}" aria-haspopup="menu"><i></i>${esc(STATUS_LABEL[node.status] || node.status)}</button>`;
       }
       const c = kind === 'chapter' ? counts.chapter.get(node.id) : counts.section.get(node.id);
       return `
         <div class="ol-row ${kind}" style="--lvl:${depth}" data-id="${esc(node.id)}" data-kind="${kind}" tabindex="${node.id === activeId ? 0 : -1}" draggable="true"
              aria-label="${esc(`${label} ${node.title}`)}">
           <span class="ol-grip" aria-hidden="true">${icon('grip')}</span>
-          ${kids.length ? `<button class="ol-toggle" data-action="toggle" aria-label="${open ? 'Collapse' : 'Expand'}" aria-expanded="${open}" tabindex="-1">${icon('chevronRight')}</button>` : '<span class="ol-toggle-gap"></span>'}
-          <span class="ol-num">${esc(label)}</span>
-          <span class="ol-title" data-title title="${esc(node.title)}">${esc(node.title)}</span>
+          ${kids.length ? `<button class="ol-toggle" data-action="toggle" aria-label="${open ? t('Collapse') : t('Expand')}" aria-expanded="${open}" tabindex="-1">${icon('chevronRight')}</button>` : '<span class="ol-toggle-gap"></span>'}
+          <span class="ol-num" dir="ltr">${esc(label)}</span>
+          <span class="ol-title" dir="auto" data-title title="${esc(node.title)}">${esc(node.title)}</span>
           ${countsHTML(c)}
           ${meta}
           <span class="ol-actions">
             <button class="ol-act ol-act-extra" data-action="add" aria-label="${addLabel}" data-tip="${addLabel}" tabindex="-1" ${canAdd ? '' : 'disabled'}>${icon('plus')}</button>
-            <button class="ol-act ol-act-extra" data-action="up" aria-label="Move up" data-tip="Move up" tabindex="-1" ${ops.canMoveUp(project, node.id) ? '' : 'disabled'}>${icon('arrowUp')}</button>
-            <button class="ol-act ol-act-extra" data-action="down" aria-label="Move down" data-tip="Move down" tabindex="-1" ${ops.canMoveDown(project, node.id) ? '' : 'disabled'}>${icon('arrowDown')}</button>
-            <button class="ol-act" data-action="menu" aria-label="More actions" aria-haspopup="menu" tabindex="-1">${icon('more')}</button>
+            <button class="ol-act ol-act-extra" data-action="up" aria-label="${t('Move up')}" data-tip="${t('Move up')}" tabindex="-1" ${ops.canMoveUp(project, node.id) ? '' : 'disabled'}>${icon('arrowUp')}</button>
+            <button class="ol-act ol-act-extra" data-action="down" aria-label="${t('Move down')}" data-tip="${t('Move down')}" tabindex="-1" ${ops.canMoveDown(project, node.id) ? '' : 'disabled'}>${icon('arrowDown')}</button>
+            <button class="ol-act" data-action="menu" aria-label="${t('More actions')}" aria-haspopup="menu" tabindex="-1">${icon('more')}</button>
           </span>
         </div>`;
     }
@@ -187,11 +188,11 @@ export default {
 
     function outlineHTML(project) {
       if (!project.chapters.length) {
-        return `<div class="empty-state st-empty"><div class="empty-icon">${icon('chapters')}</div><h3>No chapters yet</h3><p>Start with the chapters your university requires, for example Introduction, Background, Analysis, Design, Implementation and Conclusion.</p><button class="btn btn-primary" data-action="add-chapter">${icon('plus')}Add your first chapter</button></div>`;
+        return `<div class="empty-state st-empty"><div class="empty-icon">${icon('chapters')}</div><h3>${t('No chapters yet')}</h3><p>${t('Start with the chapters your university requires, for example Introduction, Background, Analysis, Design, Implementation and Conclusion.')}</p><button class="btn btn-primary" data-action="add-chapter">${icon('plus')}${t('Add your first chapter')}</button></div>`;
       }
       const num = getNumbering(project);
       const counts = ops.placementCounts(num);
-      return `<ul class="ol-tree" role="tree" aria-label="Chapters and sections">${project.chapters.map((ch) => {
+      return `<ul class="ol-tree" role="tree" aria-label="${t('Chapters and sections')}">${project.chapters.map((ch) => {
         const open = !collapsed.has(ch.id);
         const kids = ch.sections || [];
         return `<li class="ol-node ol-chapter-node" role="treeitem" aria-level="1" ${kids.length ? `aria-expanded="${open}"` : ''}>
@@ -209,27 +210,27 @@ export default {
       const line = (id, text, cls, lvl) => `<div class="toc-line ${cls}" data-toc="${esc(id)}" style="--toc-lvl:${lvl}" role="button" tabindex="0"><span class="toc-text">${esc(text)}</span><span class="toc-leader" aria-hidden="true"></span><span class="toc-page" aria-hidden="true">—</span></div>`;
       const lines = [];
       for (const f of doc.front.filter((x) => x.kind !== 'toc')) lines.push(line(f.id, f.title, 'toc-front', 0));
-      for (const t of doc.toc) lines.push(line(t.id, t.text, t.kind === 'chapter' ? `toc-chapter ${chapterBold}` : 'toc-sec', t.kind === 'chapter' ? 0 : t.level - 1));
+      for (const entry of doc.toc) lines.push(line(entry.id, entry.text, entry.kind === 'chapter' ? `toc-chapter ${chapterBold}` : 'toc-sec', entry.kind === 'chapter' ? 0 : entry.level - 1));
       const empty = !doc.toc.length;
       return `
         <div class="card-header">
-          <div class="st-head-text"><h2>Table of Contents</h2><p>Live preview of your document</p></div>
-          <a class="btn btn-sm btn-ghost" href="${ctx.href('preview')}" data-tip="Open Document Preview">${icon('preview')}<span class="hide-xs">Preview</span></a>
+          <div class="st-head-text"><h2>${t('Table of Contents')}</h2><p>${t('Live preview of your document')}</p></div>
+          <a class="btn btn-sm btn-ghost" href="${ctx.href('preview')}" data-tip="${t('Open Document Preview')}">${icon('preview')}<span class="hide-xs">${t('Preview')}</span></a>
         </div>
         <div class="toc-stats">
-          <div class="toc-stat"><strong>${project.chapters.length}</strong><span>${project.chapters.length === 1 ? 'Chapter' : 'Chapters'}</span></div>
-          <div class="toc-stat"><strong>${prog.total}</strong><span>${prog.total === 1 ? 'Section' : 'Sections'}</span></div>
-          <div class="toc-stat"><strong>${prog.percent}%</strong><span>Complete</span></div>
+          <div class="toc-stat"><strong>${project.chapters.length}</strong><span>${project.chapters.length === 1 ? t('Chapter') : t('Chapters')}</span></div>
+          <div class="toc-stat"><strong>${prog.total}</strong><span>${prog.total === 1 ? t('Section') : t('Sections')}</span></div>
+          <div class="toc-stat"><strong>${prog.percent}%</strong><span>${t('Complete')}</span></div>
         </div>
         <div class="toc-bar" aria-hidden="true"><span style="width:${Math.max(prog.percent, prog.total ? 2 : 0)}%"></span></div>
         <div class="toc-scroll">
-          <div class="toc-paper" style="font-family:'${esc(font)}','Times New Roman',Times,serif">
+          <div class="toc-paper" dir="ltr" style="font-family:'${esc(font)}','Times New Roman',Times,serif">
             <div class="toc-heading">Table of Contents</div>
-            ${empty && !lines.length ? '<p class="toc-empty">Add chapters to see them listed here.</p>' : lines.join('')}
-            ${empty && lines.length ? '<p class="toc-empty">Chapters will be listed here.</p>' : ''}
+            ${empty && !lines.length ? `<p class="toc-empty" dir="auto">${t('Add chapters to see them listed here.')}</p>` : lines.join('')}
+            ${empty && lines.length ? `<p class="toc-empty" dir="auto">${t('Chapters will be listed here.')}</p>` : ''}
           </div>
         </div>
-        <div class="toc-foot">${icon('info', 'icon-sm')}<span>Page numbers are calculated in <a href="${ctx.href('preview')}">Document Preview</a>.</span></div>
+        <div class="toc-foot">${icon('info', 'icon-sm')}<span>${t('Page numbers are calculated in {link}.', { link: `<a href="${ctx.href('preview')}">${t('Document Preview')}</a>` })}</span></div>
         `;
     }
 
@@ -239,7 +240,7 @@ export default {
       frontEl.innerHTML = frontHTML(project);
       outlineEl.innerHTML = outlineHTML(project);
       const prog = ops.projectProgress(project);
-      outlineSub.textContent = `${plural(project.chapters.length, 'chapter')} · ${plural(prog.total, 'section')}`;
+      outlineSub.textContent = `${ops.countLabel(project.chapters.length, 'chapter')} · ${ops.countLabel(prog.total, 'section')}`;
       tocEl.innerHTML = tocHTML(project);
       if (!activeId || !rowOf(activeId)) {
         activeId = project.chapters[0]?.id || null;
@@ -292,7 +293,8 @@ export default {
       input.className = 'input input-sm ol-edit';
       input.value = current;
       input.maxLength = 200;
-      input.setAttribute('aria-label', 'Title');
+      input.setAttribute('aria-label', t('Title'));
+      input.dir = 'auto';
       titleEl.replaceWith(input);
       if (dragEl) dragEl.draggable = false;
       input.focus(); input.select();
@@ -317,7 +319,7 @@ export default {
       if (!row || !info) return;
       startInline(row, info.node.title, (value) => {
         pending.focus = id; pending.pulse = id;
-        store.update((p) => { const n = ops.locate(p, id); if (n) n.node.title = value; }, { activity: { text: `Renamed ${kindName(info.kind)} “${value}”`, kind: 'edit', targetId: id } });
+        store.update((p) => { const n = ops.locate(p, id); if (n) n.node.title = value; }, { activity: { text: t(info.kind === 'chapter' ? 'Renamed chapter “{title}”' : 'Renamed section “{title}”', { title: iso(value) }), kind: 'edit', targetId: id } });
       }, row, id);
     }
 
@@ -327,7 +329,7 @@ export default {
       if (!row || !item || item.kind !== 'custom') return;
       startInline(row, item.title, (value) => {
         pending.pulseFm = id;
-        store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.title = value; }, { activity: `Renamed page “${value}”` });
+        store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.title = value; }, { activity: t('Renamed page “{title}”', { title: iso(value) }) });
       });
     }
 
@@ -342,27 +344,27 @@ export default {
     }
 
     async function addChapterFlow() {
-      const title = await promptDialog({ title: 'Add chapter', label: 'Chapter title', placeholder: 'e.g. Literature Review', submitText: 'Add chapter' });
+      const title = await promptDialog({ title: t('Add chapter'), label: t('Chapter title'), placeholder: t('e.g. Literature Review'), submitText: t('Add chapter') });
       if (!title) return;
       let id = null;
-      store.update((p) => { id = ops.addChapter(p, title).id; }, { activity: `Added chapter “${title}”` });
+      store.update((p) => { id = ops.addChapter(p, title).id; }, { activity: t('Added chapter “{title}”', { title: iso(title) }) });
       pending.scroll = id;
       render();
     }
 
     function addChild(id) {
-      if (!ops.canAddChild(store.project, id)) { toast('Sections can be nested up to three levels (for example 1.4.2.1).', { type: 'info' }); return; }
+      if (!ops.canAddChild(store.project, id)) { toast(t('Sections can be nested up to three levels (for example 1.4.2.1).'), { type: 'info' }); return; }
       let newId = null;
       const parentTitle = titleOf(id);
       collapsed.delete(id);
-      store.update((p) => { newId = ops.addSection(p, id)?.id; }, { activity: `Added a section under “${parentTitle}”` });
+      store.update((p) => { newId = ops.addSection(p, id)?.id; }, { activity: t('Added a section under “{title}”', { title: iso(parentTitle) }) });
       if (newId) { pending.rename = newId; render(); }
     }
 
     function move(id, delta) {
       const title = titleOf(id);
       let moved = false;
-      store.update((p) => { moved = ops.moveBy(p, id, delta); }, { activity: { text: `Moved “${title}”`, kind: 'edit', targetId: id } });
+      store.update((p) => { moved = ops.moveBy(p, id, delta); }, { activity: { text: t('Moved “{title}”', { title: iso(title) }), kind: 'edit', targetId: id } });
       pending.focus = id; pending.pulse = id;
       if (moved) render(); else pending.focus = pending.pulse = null;
     }
@@ -371,14 +373,14 @@ export default {
       const title = titleOf(id);
       const ok = dir > 0 ? ops.canIndent(store.project, id) : ops.canOutdent(store.project, id);
       if (!ok) {
-        if (dir > 0 && ops.locate(store.project, id)?.index > 0) toast('Sections can be nested up to three levels deep.', { type: 'info' });
+        if (dir > 0 && ops.locate(store.project, id)?.index > 0) toast(t('Sections can be nested up to three levels deep.'), { type: 'info' });
         return;
       }
       if (dir > 0) {
         const prev = ops.locate(store.project, id);
         collapsed.delete(prev.siblings[prev.index - 1].id);
       }
-      store.update((p) => { if (dir > 0) ops.indent(p, id); else ops.outdent(p, id); }, { activity: { text: `${dir > 0 ? 'Indented' : 'Outdented'} “${title}”`, kind: 'edit', targetId: id } });
+      store.update((p) => { if (dir > 0) ops.indent(p, id); else ops.outdent(p, id); }, { activity: { text: t(dir > 0 ? 'Indented “{title}”' : 'Outdented “{title}”', { title: iso(title) }), kind: 'edit', targetId: id } });
       pending.focus = id; pending.pulse = id;
       render();
     }
@@ -390,29 +392,39 @@ export default {
       const impact = ops.deletionImpact(project, id);
       const label = labelOf(project, id);
       const title = info.node.title;
-      const parts = [`<span style="display:block">Delete <strong>${esc(label)}</strong>${impact.subsections ? ` and its ${plural(impact.subsections, 'subsection')}` : ''}?</span>`];
-      const placed = [impact.figures && plural(impact.figures, 'figure'), impact.tables && plural(impact.tables, 'table')].filter(Boolean).join(' and ');
-      if (placed) {
-        const dest = info.kind === 'chapter'
-          ? 'They will become <strong>unassigned</strong> (they stay in the Figures and Tables lists and appear at the end of the document).'
-          : `They will be moved to <strong>${esc(labelOf(project, impact.parentId))}</strong>.`;
-        parts.push(`<span style="display:block;margin-top:10px"><strong>${esc(placed)}</strong> ${impact.figures + impact.tables === 1 ? 'is' : 'are'} placed inside. ${dest}</span>`);
+      const isChapter = info.kind === 'chapter';
+      const strong = (text) => `<strong><bdi>${esc(text)}</bdi></strong>`;
+      const parts = [`<span style="display:block">${impact.subsections
+        ? t(impact.subsections === 1 ? 'Delete {label} and its 1 subsection?' : 'Delete {label} and its {n} subsections?', { label: strong(label), n: impact.subsections })
+        : t('Delete {label}?', { label: strong(label) })}</span>`];
+      const items = [impact.figures && ops.countLabel(impact.figures, 'figure'), impact.tables && ops.countLabel(impact.tables, 'table')].filter(Boolean);
+      if (items.length) {
+        const placed = items.length === 2 ? t('{a} and {b}', { a: items[0], b: items[1] }) : items[0];
+        const dest = isChapter
+          ? t('They will become {unassigned} (they stay in the Figures and Tables lists and appear at the end of the document).', { unassigned: `<strong>${t('unassigned')}</strong>` })
+          : t('They will be moved to {target}.', { target: strong(labelOf(project, impact.parentId)) });
+        const placedText = t(impact.figures + impact.tables === 1 ? '{items} is placed inside.' : '{items} are placed inside.', { items: `<strong>${esc(placed)}</strong>` });
+        parts.push(`<span style="display:block;margin-top:10px">${placedText} ${dest}</span>`);
       } else {
-        parts.push('<span style="display:block;margin-top:10px">No figures or tables are placed inside.</span>');
+        parts.push(`<span style="display:block;margin-top:10px">${t('No figures or tables are placed inside.')}</span>`);
       }
-      parts.push(`<span style="display:block;margin-top:10px">Cross references to deleted sections will show as broken (“Section ??”)${impact.brokenRefs ? `; <strong>${plural(impact.brokenRefs, 'reference')}</strong> in your text ${impact.brokenRefs === 1 ? 'is' : 'are'} affected` : ''}.</span>`);
-      const ok = await confirmDialog({ title: `Delete ${kindName(info.kind)}`, message: parts.join(''), confirmText: `Delete ${kindName(info.kind)}`, danger: true });
+      const broken = '<bdi dir="ltr" style="white-space:nowrap">“Section ??”</bdi>';
+      const refsText = impact.brokenRefs
+        ? t(impact.brokenRefs === 1 ? 'Cross references to deleted sections will show as broken ({broken}); {refs} in your text is affected.' : 'Cross references to deleted sections will show as broken ({broken}); {refs} in your text are affected.', { broken, refs: `<strong>${ops.countLabel(impact.brokenRefs, 'reference')}</strong>` })
+        : t('Cross references to deleted sections will show as broken ({broken}).', { broken });
+      parts.push(`<span style="display:block;margin-top:10px">${refsText}</span>`);
+      const ok = await confirmDialog({ title: isChapter ? t('Delete chapter') : t('Delete section'), message: parts.join(''), confirmText: isChapter ? t('Delete chapter') : t('Delete section'), danger: true });
       if (!ok) { pending.focus = id; afterRender(); return; }
       const snapshot = clone({ chapters: store.project.chapters, figures: store.project.figures, tables: store.project.tables });
       const neighbour = info.siblings[info.index + 1] || info.siblings[info.index - 1] || info.parent || (info.kind === 'section' ? info.chapter : null);
-      store.update((p) => { ops.deleteNode(p, id); }, { activity: `Deleted ${kindName(info.kind)} “${title}”` });
+      store.update((p) => { ops.deleteNode(p, id); }, { activity: t(isChapter ? 'Deleted chapter “{title}”' : 'Deleted section “{title}”', { title: iso(title) }) });
       if (neighbour) { activeId = neighbour.id; pending.focus = neighbour.id; }
       render();
-      toast(`Deleted “${title}”`, {
+      toast(t('Deleted “{title}”', { title: iso(title) }), {
         type: 'success', duration: 6000,
         action: {
-          label: 'Undo',
-          onClick: () => store.update((p) => { p.chapters = snapshot.chapters; p.figures = snapshot.figures; p.tables = snapshot.tables; }, { activity: `Restored ${kindName(info.kind)} “${title}”` }),
+          label: t('Undo'),
+          onClick: () => store.update((p) => { p.chapters = snapshot.chapters; p.figures = snapshot.figures; p.tables = snapshot.tables; }, { activity: t(isChapter ? 'Restored chapter “{title}”' : 'Restored section “{title}”', { title: iso(title) }) }),
         },
       });
     }
@@ -421,10 +433,10 @@ export default {
       const node = ops.locate(store.project, id)?.node;
       if (!node) return;
       openMenu(btn, [
-        { heading: 'Section status' },
+        { heading: t('Section status') },
         ...SECTION_STATUSES.map((s) => ({
           label: s.label, icon: s.value === node.status ? 'check' : undefined,
-          onClick: () => store.update((p) => { const n = ops.locate(p, id); if (n) n.node.status = s.value; }, { activity: { text: `Marked “${node.title}” as ${s.label.toLowerCase()}`, kind: 'edit', targetId: id } }),
+          onClick: () => store.update((p) => { const n = ops.locate(p, id); if (n) n.node.status = s.value; }, { activity: { text: t('Marked “{title}” as {status}', { title: iso(node.title), status: s.label.toLowerCase() }), kind: 'edit', targetId: id } }),
         })),
       ]);
     }
@@ -435,26 +447,26 @@ export default {
       if (!info) return;
       const chapter = info.kind === 'chapter';
       const items = [
-        { label: 'Write content', icon: 'chapters', shortcut: '↵', onClick: () => ctx.navigate(ctx.href('chapters', null, { focus: id })) },
-        { label: 'Rename', icon: 'edit', shortcut: 'F2', onClick: () => startOutlineRename(id) },
-        { label: chapter ? 'Add section' : 'Add subsection', icon: 'plus', disabled: !ops.canAddChild(project, id), onClick: () => addChild(id) },
+        { label: t('Write content'), icon: 'chapters', shortcut: '↵', onClick: () => ctx.navigate(ctx.href('chapters', null, { focus: id })) },
+        { label: t('Rename'), icon: 'edit', shortcut: ops.ltr('F2'), onClick: () => startOutlineRename(id) },
+        { label: chapter ? t('Add section') : t('Add subsection'), icon: 'plus', disabled: !ops.canAddChild(project, id), onClick: () => addChild(id) },
         '-',
-        { label: 'Move up', icon: 'arrowUp', shortcut: 'Alt ↑', disabled: !ops.canMoveUp(project, id), onClick: () => move(id, -1) },
-        { label: 'Move down', icon: 'arrowDown', shortcut: 'Alt ↓', disabled: !ops.canMoveDown(project, id), onClick: () => move(id, 1) },
-        !chapter && { label: 'Indent', icon: 'indent', shortcut: 'Alt →', disabled: !ops.canIndent(project, id), onClick: () => doIndent(id, 1) },
-        !chapter && { label: 'Outdent', icon: 'outdent', shortcut: 'Alt ←', disabled: !ops.canOutdent(project, id), onClick: () => doIndent(id, -1) },
+        { label: t('Move up'), icon: 'arrowUp', shortcut: ops.ltr('Alt ↑'), disabled: !ops.canMoveUp(project, id), onClick: () => move(id, -1) },
+        { label: t('Move down'), icon: 'arrowDown', shortcut: ops.ltr('Alt ↓'), disabled: !ops.canMoveDown(project, id), onClick: () => move(id, 1) },
+        !chapter && { label: t('Indent'), icon: 'indent', shortcut: ops.ltr(`Alt ${ops.ARROW_FORWARD}`), disabled: !ops.canIndent(project, id), onClick: () => doIndent(id, 1) },
+        !chapter && { label: t('Outdent'), icon: 'outdent', shortcut: ops.ltr(`Alt ${ops.ARROW_BACK}`), disabled: !ops.canOutdent(project, id), onClick: () => doIndent(id, -1) },
         '-',
-        { label: `Delete ${kindName(info.kind)}…`, icon: 'trash', danger: true, shortcut: 'Del', onClick: () => deleteFlow(id) },
+        { label: chapter ? t('Delete chapter…') : t('Delete section…'), icon: 'trash', danger: true, shortcut: ops.ltr('Del'), onClick: () => deleteFlow(id) },
       ].filter(Boolean);
-      openMenu(anchor, items, { align: anchor instanceof Element ? 'end' : 'start' });
+      openMenu(anchor, items, { align: anchor instanceof Element && !isRTL ? 'end' : 'start' });
     }
 
     // ------------------------------------------------------------------ actions: front matter
     async function addPageFlow() {
-      const title = await promptDialog({ title: 'Add page', label: 'Page title', placeholder: 'e.g. Dedication', submitText: 'Add page' });
+      const title = await promptDialog({ title: t('Add page'), label: t('Page title'), placeholder: t('e.g. Dedication'), submitText: t('Add page') });
       if (!title) return;
       let id = null;
-      store.update((p) => { const item = createFrontMatterItem('custom', { title }); id = item.id; p.frontMatter.push(item); }, { activity: `Added front matter page “${title}”` });
+      store.update((p) => { const item = createFrontMatterItem('custom', { title }); id = item.id; p.frontMatter.push(item); }, { activity: t('Added front matter page “{title}”', { title: iso(title) }) });
       pending.scroll = id;
       render();
     }
@@ -465,7 +477,7 @@ export default {
         const j = i + delta;
         if (i < 0 || j < 0 || j >= p.frontMatter.length) return;
         [p.frontMatter[i], p.frontMatter[j]] = [p.frontMatter[j], p.frontMatter[i]];
-      }, { activity: 'Reordered front matter' });
+      }, { activity: t('Reordered front matter') });
       pending.pulseFm = id;
       render();
     }
@@ -473,9 +485,9 @@ export default {
     async function deleteFront(id) {
       const item = store.project.frontMatter.find((f) => f.id === id);
       if (!item) return;
-      const ok = await confirmDialog({ title: 'Delete page', message: `Delete the page <strong>${esc(item.title)}</strong>${item.body ? ' and its text' : ''}?`, confirmText: 'Delete page', danger: true });
+      const ok = await confirmDialog({ title: t('Delete page'), message: t(item.body ? 'Delete the page {title} and its text?' : 'Delete the page {title}?', { title: `<strong><bdi>${esc(item.title)}</bdi></strong>` }), confirmText: t('Delete page'), danger: true });
       if (!ok) return;
-      store.update((p) => { p.frontMatter = p.frontMatter.filter((f) => f.id !== id); }, { activity: `Deleted front matter page “${item.title}”` });
+      store.update((p) => { p.frontMatter = p.frontMatter.filter((f) => f.id !== id); }, { activity: t('Deleted front matter page “{title}”', { title: iso(item.title) }) });
     }
 
     function editFrontBody(id) {
@@ -489,18 +501,18 @@ export default {
         value: item.body || '',
         label: item.title,
         minHeight: 240,
-        placeholder: item.kind === 'abstract' ? 'Summarise the problem, your solution and the main results…' : item.kind === 'declaration' ? 'We hereby declare that this report is our own work…' : 'Write the text of this page…',
-        onChange: (body) => store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.body = body; }, { activity: { text: `Edited “${item.title}”`, kind: 'edit', targetId: id } }),
+        placeholder: item.kind === 'abstract' ? t('Summarise the problem, your solution and the main results…') : item.kind === 'declaration' ? t('We hereby declare that this report is our own work…') : t('Write the text of this page…'),
+        onChange: (body) => store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.body = body; }, { activity: { text: t('Edited “{title}”', { title: iso(item.title) }), kind: 'edit', targetId: id } }),
       });
       const wrap = document.createElement('div');
       wrap.className = 'fm-modal-body';
       wrap.append(editor.el);
       const modal = openModal({
         title: item.title,
-        subtitle: 'Appears on its own page before Chapter 1. Changes are saved automatically.',
+        subtitle: t('Appears on its own page before Chapter 1. Changes are saved automatically.'),
         size: 'lg',
         body: wrap,
-        footer: '<button class="btn btn-primary" data-close>Done</button>',
+        footer: `<button class="btn btn-primary" data-close>${t('Done')}</button>`,
         onClose: () => editor.destroy(),
       });
       setTimeout(() => { if (modal.root.isConnected) editor.focus(); }, 80);
@@ -513,16 +525,16 @@ export default {
       if (!item) return;
       const def = FRONT_MATTER_KINDS[item.kind] || FRONT_MATTER_KINDS.custom;
       const items = [
-        def.hasBody && { label: 'Edit text', icon: 'edit', onClick: () => editFrontBody(id) },
-        item.kind === 'custom' && { label: 'Rename', icon: 'edit', onClick: () => startFrontRename(id) },
-        { label: item.include === false ? 'Include in document' : 'Exclude from document', icon: item.include === false ? 'eye' : 'eyeOff', onClick: () => store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.include = f.include === false; }, { activity: `${item.include === false ? 'Included' : 'Excluded'} “${item.title}”` }) },
+        def.hasBody && { label: t('Edit text'), icon: 'edit', onClick: () => editFrontBody(id) },
+        item.kind === 'custom' && { label: t('Rename'), icon: 'edit', onClick: () => startFrontRename(id) },
+        { label: item.include === false ? t('Include in document') : t('Exclude from document'), icon: item.include === false ? 'eye' : 'eyeOff', onClick: () => store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.include = f.include === false; }, { activity: t(item.include === false ? 'Included “{title}”' : 'Excluded “{title}”', { title: iso(item.title) }) }) },
         '-',
-        { label: 'Move up', icon: 'arrowUp', disabled: i === 0, onClick: () => moveFront(id, -1) },
-        { label: 'Move down', icon: 'arrowDown', disabled: i === project.frontMatter.length - 1, onClick: () => moveFront(id, 1) },
+        { label: t('Move up'), icon: 'arrowUp', disabled: i === 0, onClick: () => moveFront(id, -1) },
+        { label: t('Move down'), icon: 'arrowDown', disabled: i === project.frontMatter.length - 1, onClick: () => moveFront(id, 1) },
         item.kind === 'custom' && '-',
-        item.kind === 'custom' && { label: 'Delete page…', icon: 'trash', danger: true, onClick: () => deleteFront(id) },
+        item.kind === 'custom' && { label: t('Delete page…'), icon: 'trash', danger: true, onClick: () => deleteFront(id) },
       ].filter(Boolean);
-      openMenu(anchor, items, { align: 'end' });
+      openMenu(anchor, items, { align: isRTL ? 'start' : 'end' });
     }
 
     // ------------------------------------------------------------------ events
@@ -557,7 +569,7 @@ export default {
     disposer.add(on(root, 'change', '[data-action="fm-include"]', (e, el) => {
       const id = el.dataset.id; const checked = el.checked;
       const item = store.project.frontMatter.find((f) => f.id === id);
-      store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.include = checked; }, { activity: `${checked ? 'Included' : 'Excluded'} “${item?.title}”` });
+      store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.include = checked; }, { activity: t(checked ? 'Included “{title}”' : 'Excluded “{title}”', { title: iso(item?.title ?? '') }) });
     }));
 
     disposer.add(on(root, 'dblclick', '.ol-title', (e, el) => { const id = el.closest('.ol-row')?.dataset.id; if (id) startOutlineRename(id); }));
@@ -591,14 +603,14 @@ export default {
       const hasKids = (info.node.sections || []).length > 0;
       const key = e.key;
       if (e.altKey && !e.ctrlKey && !e.metaKey) {
-        if (key === 'ArrowUp') { e.preventDefault(); move(id, -1); } else if (key === 'ArrowDown') { e.preventDefault(); move(id, 1); } else if (key === 'ArrowRight') { e.preventDefault(); doIndent(id, 1); } else if (key === 'ArrowLeft') { e.preventDefault(); doIndent(id, -1); }
+        if (key === 'ArrowUp') { e.preventDefault(); move(id, -1); } else if (key === 'ArrowDown') { e.preventDefault(); move(id, 1); } else if (key === ops.KEY_FORWARD) { e.preventDefault(); doIndent(id, 1); } else if (key === ops.KEY_BACK) { e.preventDefault(); doIndent(id, -1); }
         return;
       }
       if (e.ctrlKey || e.metaKey) return;
-      if (key === 'ArrowDown') { e.preventDefault(); rows[idx + 1]?.focus(); } else if (key === 'ArrowUp') { e.preventDefault(); rows[idx - 1]?.focus(); } else if (key === 'ArrowRight') {
+      if (key === 'ArrowDown') { e.preventDefault(); rows[idx + 1]?.focus(); } else if (key === 'ArrowUp') { e.preventDefault(); rows[idx - 1]?.focus(); } else if (key === ops.KEY_FORWARD) {
         e.preventDefault();
         if (hasKids && collapsed.has(id)) { collapsed.delete(id); pending.focus = id; render(); } else if (hasKids) rows[idx + 1]?.focus();
-      } else if (key === 'ArrowLeft') {
+      } else if (key === ops.KEY_BACK) {
         e.preventDefault();
         if (hasKids && !collapsed.has(id)) { collapsed.add(id); pending.focus = id; render(); } else {
           const parentId = info.kind === 'section' ? (info.parent ? info.parent.id : info.chapter.id) : null;
@@ -695,7 +707,7 @@ export default {
       if (!res) return;
       const title = titleOf(srcId);
       if (res.position === 'inside' || res.position === 'first') collapsed.delete(res.targetId);
-      store.update((p) => { ops.moveNode(p, srcId, res.targetId, res.position); }, { activity: { text: `Moved “${title}”`, kind: 'edit', targetId: srcId } });
+      store.update((p) => { ops.moveNode(p, srcId, res.targetId, res.position); }, { activity: { text: t('Moved “{title}”', { title: iso(title) }), kind: 'edit', targetId: srcId } });
       pending.focus = srcId; pending.pulse = srcId;
       render();
     });

@@ -2,7 +2,9 @@
    Page geometry / typography come from CSS variables set by preview-view.js on .pv-root:
    --pw --ph (page px)  --ml --mr --mt --mb (margins px)  --cw --ch (content box px)
    --pv-font --pv-size --pv-lh --pv-para --pv-h1..3 --pv-align --pv-align-last
-   Pages are always white paper with black text, even in dark mode. */
+   Pages are always white paper with black text, even in dark mode, and always left-to-right paper:
+   the app may be RTL (Arabic) but the report is the user's document, so .pv-canvas / .preview-page /
+   the measuring host force direction: ltr. Paragraphs carry dir="auto" so Arabic text still reads RTL. */
 
 .pv-root {
   position: absolute; inset: 0;
@@ -36,7 +38,7 @@
 .pv-nav.collapsed { display: none; }
 .pv-nav-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 6px 6px 14px; min-height: 40px;
+  padding: 6px; padding-inline-start: 14px; min-height: 40px;
   font-size: 11.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
   border-bottom: 1px solid var(--border);
 }
@@ -58,7 +60,7 @@
 .pv-nav-item.lvl-2 { padding-inline-start: 32px; font-size: 12.5px; }
 
 .pv-stage { position: relative; flex: 1; min-width: 0; }
-.pv-canvas { position: absolute; inset: 0; overflow: auto; background: var(--bg-subtle); outline: none; overscroll-behavior: contain; }
+.pv-canvas { position: absolute; inset: 0; overflow: auto; background: var(--bg-subtle); outline: none; overscroll-behavior: contain; direction: ltr; }
 .pv-pages {
   --zoom: 1;
   display: flex; flex-direction: column;
@@ -71,7 +73,7 @@
   margin: 0 auto 28px;
 }
 .preview-page {
-  position: absolute; inset-inline-start: 0; top: 0;
+  position: absolute; left: 0; top: 0; direction: ltr;
   width: var(--pw); height: var(--ph);
   transform: scale(var(--zoom)); transform-origin: 0 0;
   background: #fff; color: #000; color-scheme: light;
@@ -80,7 +82,7 @@
 }
 
 .pv-indicator {
-  position: absolute; inset-inline-start: 50%; bottom: 14px; transform: translate(-50%, 6px);
+  position: absolute; left: 50%; bottom: 14px; transform: translate(-50%, 6px); /* physical: the translate is physical too */
   padding: 5px 12px; border-radius: 20px;
   background: color-mix(in srgb, var(--text) 82%, transparent); color: var(--bg);
   font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums;
@@ -90,10 +92,12 @@
 .pv-indicator.show { opacity: 1; transform: translate(-50%, 0); }
 
 .pv-empty, .pv-error { margin: 60px auto; max-width: 420px; text-align: center; color: var(--muted); }
+/* These two sit inside the (always LTR) canvas but are UI messages: follow the app direction. */
+:root[dir="rtl"] .pv-empty, :root[dir="rtl"] .pv-error { direction: rtl; }
 .pv-error { color: var(--danger); }
 
 /* ---------- Off-screen measuring host (same width + CSS as a page's content box) ---------- */
-.pv-measure-host { position: absolute; inset-inline-start: 0; top: 0; width: 0; height: 0; overflow: hidden; visibility: hidden; pointer-events: none; }
+.pv-measure-host { position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: hidden; visibility: hidden; pointer-events: none; direction: ltr; }
 
 /* ---------- Page content ---------- */
 .pv-content, .pv-measure {
@@ -102,7 +106,7 @@
   font-weight: 400; font-style: normal; letter-spacing: normal; text-align: start; text-transform: none;
   color: #000;
 }
-.pv-content { position: absolute; inset-inline-start: var(--ml); top: var(--mt); width: var(--cw); height: var(--ch); }
+.pv-content { position: absolute; left: var(--ml); top: var(--mt); width: var(--cw); height: var(--ch); }
 .pv-content > *, .pv-measure > * { flex: none; min-width: 0; }
 .pv-content > .pv-top { margin-top: 0 !important; }
 
@@ -172,7 +176,7 @@
 
 /* Page number, centred in the bottom margin */
 .pv-footer {
-  position: absolute; inset-inline-start: 0; inset-inline-end: 0; bottom: 0; height: var(--mb);
+  position: absolute; left: 0; right: 0; bottom: 0; height: var(--mb);
   display: flex; align-items: center; justify-content: center;
   font-family: var(--pv-font); font-size: var(--pv-size); line-height: 1; color: #000;
 }
@@ -196,6 +200,12 @@
 .pv-credit .pv-name { font-weight: 700; }
 .pv-credit > .pv-label + .pv-name { margin-top: .15em; }
 .pv-year { margin-top: .5em; font-size: 1.15em; }
+
+/* ---------- Arabic UI: no letter-spacing / capitals on Arabic labels (it would break the joined letters) ---------- */
+:root[lang="ar"] .pv-nav-head, :root[lang="ar"] .pv-nav-group { letter-spacing: 0; text-transform: none; }
+/* Navigator labels are the report's own headings (dir="auto": English ones are LTR and truncate at their end);
+   keep them flush with the right edge of the Arabic navigator. */
+:root[dir="rtl"] .pv-nav-item .pv-lbl { text-align: right; }
 
 /* ---------- Small screens: navigator hidden, compact toolbar ---------- */
 @media (max-width: 800px) {

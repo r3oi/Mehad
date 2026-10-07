@@ -5,11 +5,12 @@ import { icon } from '../ui/icons.js';
 import { openMenu } from '../ui/menu.js';
 import { SECTION_STATUSES } from '../core/model.js';
 import { getNumbering, captionText, chapterHeading } from '../core/numbering.js';
-import { plural } from '../core/utils.js';
+import { t, isRTL } from '../i18n/index.js';
 import * as ops from './outline-ops.js';
 import { createBodyEditor } from './body-editor.js';
 
 const selectedByProject = new Map(); // remembered chapter per project while the app is open
+const iso = ops.isolate; // keeps user titles inside translated sentences in their own direction
 
 function pulse(el) {
   if (!el) return;
@@ -44,29 +45,29 @@ export default {
     function navSectionsHTML(sections, num) {
       return (sections || []).map((s) => {
         const info = num.sections.get(s.id);
-        return `<li style="--d:${info.depth}"><button type="button" class="chn-link chn-sec" data-nav-sec="${esc(s.id)}"><i class="dot s-${esc(s.status)}" aria-hidden="true"></i><span class="chn-num">${info.number}</span><span class="chn-title" data-nav-title="${esc(s.id)}">${esc(s.title)}</span></button></li>${navSectionsHTML(s.sections, num)}`;
+        return `<li style="--d:${info.depth}"><button type="button" class="chn-link chn-sec" data-nav-sec="${esc(s.id)}"><i class="dot s-${esc(s.status)}" aria-hidden="true"></i><span class="chn-num" dir="ltr">${info.number}</span><span class="chn-title" dir="auto" data-nav-title="${esc(s.id)}">${esc(s.title)}</span></button></li>${navSectionsHTML(s.sections, num)}`;
       }).join('');
     }
 
     function navHTML(project, chapter, num) {
       const info = num.chapters.get(chapter.id);
       return `
-        <aside class="ch-nav card" aria-label="Chapter outline">
+        <aside class="ch-nav card" aria-label="${t('Chapter outline')}">
           <button type="button" class="ch-nav-head" data-action="nav-toggle" aria-expanded="false">
-            <span class="ch-nav-label">Outline</span>
-            <span class="ch-nav-current truncate">${esc(info.label)}: ${esc(chapter.title)}</span>
+            <span class="ch-nav-label">${t('Outline')}</span>
+            <span class="ch-nav-current truncate" dir="auto">${esc(info.label)}: ${esc(chapter.title)}</span>
             ${icon('chevronDown', 'ch-nav-chev')}
           </button>
-          <nav class="ch-nav-list" aria-label="Chapters">
+          <nav class="ch-nav-list" aria-label="${t('Chapters')}">
             <ul class="chn-chapters">
               ${project.chapters.map((ch) => {
                 const ci = num.chapters.get(ch.id);
                 const current = ch.id === chapter.id;
                 return `<li class="chn-ch ${current ? 'current' : ''}">
                   <button type="button" class="chn-link chn-chapter" data-nav-ch="${esc(ch.id)}" ${current ? 'aria-current="true"' : ''}>
-                    <span class="chn-num">${ci.number}</span><span class="chn-title" data-nav-title="${esc(ch.id)}">${esc(ch.title)}</span>
+                    <span class="chn-num" dir="ltr">${ci.number}</span><span class="chn-title" dir="auto" data-nav-title="${esc(ch.id)}">${esc(ch.title)}</span>
                   </button>
-                  ${current ? `<ul class="chn-secs">${navSectionsHTML(ch.sections, num) || '<li class="chn-none">No sections yet</li>'}</ul>` : ''}
+                  ${current ? `<ul class="chn-secs">${navSectionsHTML(ch.sections, num) || `<li class="chn-none">${t('No sections yet')}</li>`}</ul>` : ''}
                 </li>`;
               }).join('')}
             </ul>
@@ -78,24 +79,24 @@ export default {
       const num = getNumbering(project);
       const here = (info) => (isChapter ? info.chapterId === ownerId && !info.sectionId : info.sectionId === ownerId);
       const figs = num.figureOrder.filter((f) => here(num.figures.get(f.id)));
-      const tabs = num.tableOrder.filter((t) => here(num.tables.get(t.id)));
+      const tabs = num.tableOrder.filter((tb) => here(num.tables.get(tb.id)));
       const query = isChapter ? { new: '1', chapter: ownerId } : { new: '1', section: ownerId };
       const row = (kind, item) => {
         const info = num[kind === 'figure' ? 'figures' : 'tables'].get(item.id);
         const full = captionText(project, kind, item);
         const rest = full.startsWith(info.label) ? full.slice(info.label.length) : full;
-        return `<li><a class="si-item" href="${ctx.href(kind === 'figure' ? 'figures' : 'tables', item.id)}">${icon(kind === 'figure' ? 'figure' : 'table')}<span class="si-label"><strong>${esc(info.label)}</strong>${esc(rest)}</span>${icon('chevronRight', 'si-go')}</a></li>`;
+        return `<li><a class="si-item" href="${ctx.href(kind === 'figure' ? 'figures' : 'tables', item.id)}">${icon(kind === 'figure' ? 'figure' : 'table')}<span class="si-label" dir="auto"><strong>${esc(info.label)}</strong>${esc(rest)}</span>${icon('chevronRight', 'si-go')}</a></li>`;
       };
-      const rows = [...figs.map((f) => row('figure', f)), ...tabs.map((t) => row('table', t))];
+      const rows = [...figs.map((f) => row('figure', f)), ...tabs.map((tb) => row('table', tb))];
       return `
         <div class="si-head">
-          <span class="si-title">In this ${isChapter ? 'chapter' : 'section'}${rows.length ? `<span class="si-count">${rows.length}</span>` : ''}</span>
+          <span class="si-title">${isChapter ? t('In this chapter') : t('In this section')}${rows.length ? `<span class="si-count">${rows.length}</span>` : ''}</span>
           <span class="si-actions">
-            <a class="btn btn-sm" href="${ctx.href('figures', null, query)}">${icon('plus')}Add figure here</a>
-            <a class="btn btn-sm" href="${ctx.href('tables', null, query)}">${icon('plus')}Add table here</a>
+            <a class="btn btn-sm" href="${ctx.href('figures', null, query)}">${icon('plus')}${t('Add figure here')}</a>
+            <a class="btn btn-sm" href="${ctx.href('tables', null, query)}">${icon('plus')}${t('Add table here')}</a>
           </span>
         </div>
-        ${rows.length ? `<ul class="si-list">${rows.join('')}</ul>` : `<p class="si-empty">No figures or tables placed here yet.</p>`}`;
+        ${rows.length ? `<ul class="si-list">${rows.join('')}</ul>` : `<p class="si-empty">${t('No figures or tables placed here yet.')}</p>`}`;
     }
 
     function cardHTML(project, sec, num) {
@@ -103,12 +104,12 @@ export default {
       return `
         <section class="sec-card d${s.depth}" id="sec-${esc(sec.id)}" data-id="${esc(sec.id)}" data-depth="${s.depth}" style="--depth:${s.depth}">
           <header class="sec-head">
-            <span class="sec-num" data-sec-num>${s.number}</span>
-            <input class="sec-title" data-title="${esc(sec.id)}" data-orig="${esc(sec.title)}" value="${esc(sec.title)}" maxlength="200" aria-label="Title of section ${s.number}" placeholder="Section title">
-            <select class="select select-sm sec-status s-${esc(sec.status)}" data-status="${esc(sec.id)}" aria-label="Status of section ${s.number}">
+            <span class="sec-num" data-sec-num dir="ltr">${s.number}</span>
+            <input class="sec-title" data-title="${esc(sec.id)}" data-orig="${esc(sec.title)}" value="${esc(sec.title)}" maxlength="200" dir="auto" aria-label="${t('Title of section {number}', { number: s.number })}" placeholder="${t('Section title')}">
+            <select class="select select-sm sec-status s-${esc(sec.status)}" data-status="${esc(sec.id)}" aria-label="${t('Status of section {number}', { number: s.number })}">
               ${SECTION_STATUSES.map((st) => `<option value="${st.value}" ${st.value === sec.status ? 'selected' : ''}>${esc(st.label)}</option>`).join('')}
             </select>
-            <button class="btn btn-ghost btn-icon btn-sm" data-action="sec-menu" data-id="${esc(sec.id)}" aria-label="More actions for section ${s.number}" aria-haspopup="menu">${icon('more')}</button>
+            <button class="btn btn-ghost btn-icon btn-sm" data-action="sec-menu" data-id="${esc(sec.id)}" aria-label="${t('More actions for section {number}', { number: s.number })}" aria-haspopup="menu">${icon('more')}</button>
           </header>
           <div class="sec-body" data-editor="${esc(sec.id)}"></div>
           <div class="sec-items" data-items="${esc(sec.id)}"></div>
@@ -127,7 +128,7 @@ export default {
         const ci = num.chapters.get(c.id);
         return `<button type="button" class="ch-page ${dir}" data-chapter="${esc(c.id)}">
           ${dir === 'prev' ? icon('arrowLeft') : ''}
-          <span class="ch-page-text"><small>${dir === 'prev' ? 'Previous chapter' : 'Next chapter'}</small><strong>${esc(ci.label)}: ${esc(c.title)}</strong></span>
+          <span class="ch-page-text"><small>${dir === 'prev' ? t('Previous chapter') : t('Next chapter')}</small><strong dir="auto">${esc(ci.label)}: ${esc(c.title)}</strong></span>
           ${dir === 'next' ? icon('arrowRight') : ''}
         </button>`;
       };
@@ -135,26 +136,26 @@ export default {
         <div class="ch-main">
           <div class="ch-toolbar">
             <div class="ch-select-wrap">
-              <label class="sr-only" for="ch-select">Chapter</label>
+              <label class="sr-only" for="ch-select">${t('Chapter')}</label>
               <select id="ch-select" class="select" data-chapter-select>
                 ${project.chapters.map((c) => `<option value="${esc(c.id)}" ${c.id === chapter.id ? 'selected' : ''}>${esc(num.chapters.get(c.id).label)}: ${esc(c.title)}</option>`).join('')}
               </select>
             </div>
             <div class="ch-progress" data-ch-progress>
               <span class="bar"><i style="width:${prog.percent}%"></i></span>
-              <span class="ch-progress-text">${prog.total ? `${prog.done} of ${plural(prog.total, 'section')} done` : 'No sections yet'}</span>
+              <span class="ch-progress-text">${ops.progressText(prog)}</span>
             </div>
-            <a class="btn btn-sm" href="${ctx.href('structure', null, { focus: chapter.id })}">${icon('structure')}<span class="hide-xs">Edit structure</span></a>
+            <a class="btn btn-sm" href="${ctx.href('structure', null, { focus: chapter.id })}">${icon('structure')}<span class="hide-xs">${t('Edit structure')}</span></a>
           </div>
 
           <article class="ch-article">
             <header class="ch-head card" id="ch-head" data-id="${esc(chapter.id)}">
               <h1 class="ch-heading ${upper ? 'upper' : ''}" aria-label="${esc(chapterHeading(project, chapter))}">
-                <span class="ch-heading-prefix" data-ch-prefix>${esc(chapterPrefix(project, chapter))}</span>
-                <input class="ch-title" data-title="${esc(chapter.id)}" data-orig="${esc(chapter.title)}" value="${esc(chapter.title)}" maxlength="200" aria-label="Chapter title" placeholder="Chapter title">
+                <span class="ch-heading-prefix" data-ch-prefix dir="ltr">${esc(chapterPrefix(project, chapter))}</span>
+                <input class="ch-title" data-title="${esc(chapter.id)}" data-orig="${esc(chapter.title)}" value="${esc(chapter.title)}" maxlength="200" dir="auto" aria-label="${t('Chapter title')}" placeholder="${t('Chapter title')}">
               </h1>
               <div class="ch-lead">
-                <div class="ch-label">Chapter introduction <span>(optional text before the first section)</span></div>
+                <div class="ch-label">${t('Chapter introduction')} <span>${t('(optional text before the first section)')}</span></div>
                 <div data-editor="${esc(chapter.id)}"></div>
               </div>
               <div class="sec-items ch-items" data-items="${esc(chapter.id)}"></div>
@@ -163,8 +164,8 @@ export default {
             <div class="ch-sections">
               ${(chapter.sections || []).map((s) => cardHTML(project, s, num)).join('')}
             </div>
-            ${(chapter.sections || []).length ? '' : `<div class="empty-state ch-empty card"><div class="empty-icon">${icon('fileText')}</div><h3>This chapter has no sections yet</h3><p>Sections give your chapter its structure (for example 1.1 Introduction, 1.2 Problem Statement) and appear in the table of contents.</p></div>`}
-            <div class="ch-add"><button class="btn btn-soft" data-action="add-section" data-id="${esc(chapter.id)}">${icon('plus')}Add section</button></div>
+            ${(chapter.sections || []).length ? '' : `<div class="empty-state ch-empty card"><div class="empty-icon">${icon('fileText')}</div><h3>${t('This chapter has no sections yet')}</h3><p>${t('Sections give your chapter its structure (for example 1.1 Introduction, 1.2 Problem Statement) and appear in the table of contents.')}</p></div>`}
+            <div class="ch-add"><button class="btn btn-soft" data-action="add-section" data-id="${esc(chapter.id)}">${icon('plus')}${t('Add section')}</button></div>
           </article>
 
           <footer class="ch-pager">${pager(prev, 'prev')}${pager(next, 'next')}</footer>
@@ -179,8 +180,8 @@ export default {
     }
 
     function commitBody(id, body) {
-      const title = ops.locate(store.project, id)?.node.title || 'text';
-      store.update((p) => { const n = ops.locate(p, id); if (n) n.node.body = body; }, { activity: { text: `Edited “${title}”`, kind: 'edit', targetId: id } });
+      const title = ops.locate(store.project, id)?.node.title || t('text');
+      store.update((p) => { const n = ops.locate(p, id); if (n) n.node.body = body; }, { activity: { text: t('Edited “{title}”', { title: iso(title) }), kind: 'edit', targetId: id } });
     }
 
     function mountEditors(project) {
@@ -193,8 +194,8 @@ export default {
           store,
           getProject: () => store.project,
           value: info.node.body || '',
-          label: isChapter ? 'Chapter introduction' : `Text of ${info.node.title}`,
-          placeholder: isChapter ? 'Write a short introduction for this chapter…' : 'Write the content of this section…',
+          label: isChapter ? t('Chapter introduction') : t('Text of {title}', { title: info.node.title }),
+          placeholder: isChapter ? t('Write a short introduction for this chapter…') : t('Write the content of this section…'),
           minHeight: isChapter ? 72 : 96,
           onChange: (body) => commitBody(id, body),
         });
@@ -220,9 +221,9 @@ export default {
         if (!project.chapters.length) {
           container.innerHTML = `
             <div class="page wide chapters-page">
-              <div class="page-header"><div class="titles"><h1>Chapters</h1><p class="subtitle">Write the text of your report, chapter by chapter.</p></div></div>
-              <div class="card"><div class="empty-state"><div class="empty-icon">${icon('chapters')}</div><h3>No chapters yet</h3><p>Create the chapters of your report first, then come back here to write them.</p>
-                <a class="btn btn-primary" href="${ctx.href('structure', null, { new: 'chapter' })}">${icon('plus')}Add a chapter</a></div></div>
+              <div class="page-header"><div class="titles"><h1>${t('Chapters')}</h1><p class="subtitle">${t('Write the text of your report, chapter by chapter.')}</p></div></div>
+              <div class="card"><div class="empty-state"><div class="empty-icon">${icon('chapters')}</div><h3>${t('No chapters yet')}</h3><p>${t('Create the chapters of your report first, then come back here to write them.')}</p>
+                <a class="btn btn-primary" href="${ctx.href('structure', null, { new: 'chapter' })}">${icon('plus')}${t('Add a chapter')}</a></div></div>
             </div>`;
           lastShape = '';
           return;
@@ -291,7 +292,7 @@ export default {
       const select = container.querySelector('[data-chapter-select]');
       if (select) [...select.options].forEach((opt) => {
         const c = project.chapters.find((x) => x.id === opt.value);
-        if (c) { const t = `${num.chapters.get(c.id).label}: ${c.title}`; if (opt.textContent !== t) opt.textContent = t; }
+        if (c) { const text = `${num.chapters.get(c.id).label}: ${c.title}`; if (opt.textContent !== text) opt.textContent = text; }
       });
       const current = container.querySelector('.ch-nav-current');
       if (current) current.textContent = `${num.chapters.get(chapter.id).label}: ${chapter.title}`;
@@ -302,7 +303,7 @@ export default {
       const progEl = container.querySelector('[data-ch-progress]');
       if (progEl) {
         progEl.querySelector('.bar i').style.width = `${prog.percent}%`;
-        progEl.querySelector('.ch-progress-text').textContent = prog.total ? `${prog.done} of ${plural(prog.total, 'section')} done` : 'No sections yet';
+        progEl.querySelector('.ch-progress-text').textContent = ops.progressText(prog);
       }
       container.querySelectorAll('.ch-page strong').forEach((strong) => {
         const c = project.chapters.find((x) => x.id === strong.closest('.ch-page').dataset.chapter);
@@ -356,9 +357,9 @@ export default {
 
     // ------------------------------------------------------------------ actions
     function addSectionTo(parentId) {
-      const parentTitle = ops.locate(store.project, parentId)?.node.title || 'chapter';
+      const parentTitle = ops.locate(store.project, parentId)?.node.title || t('chapter');
       let newId = null;
-      store.update((p) => { newId = ops.addSection(p, parentId)?.id; }, { activity: `Added a section under “${parentTitle}”` });
+      store.update((p) => { newId = ops.addSection(p, parentId)?.id; }, { activity: t('Added a section under “{title}”', { title: iso(parentTitle) }) });
       if (newId) { pending.focusTitle = newId; render(); }
     }
 
@@ -389,9 +390,9 @@ export default {
         const project = store.project;
         const canAdd = ops.canAddChild(project, id);
         openMenu(el, [
-          { label: 'Add subsection', icon: 'plus', disabled: !canAdd, onClick: () => addSectionTo(id) },
-          { label: 'Show in Project Structure', icon: 'structure', onClick: () => ctx.navigate(ctx.href('structure', null, { focus: id })) },
-        ], { align: 'end' });
+          { label: t('Add subsection'), icon: 'plus', disabled: !canAdd, onClick: () => addSectionTo(id) },
+          { label: t('Show in Project Structure'), icon: 'structure', onClick: () => ctx.navigate(ctx.href('structure', null, { focus: id })) },
+        ], { align: isRTL ? 'start' : 'end' });
       }
     }));
 
@@ -401,7 +402,7 @@ export default {
       const info = ops.locate(store.project, id);
       if (!info) return;
       const label = SECTION_STATUSES.find((s) => s.value === status)?.label.toLowerCase();
-      store.update((p) => { const n = ops.locate(p, id); if (n) n.node.status = status; }, { activity: { text: `Marked “${info.node.title}” as ${label}`, kind: 'edit', targetId: id } });
+      store.update((p) => { const n = ops.locate(p, id); if (n) n.node.status = status; }, { activity: { text: t('Marked “{title}” as {status}', { title: iso(info.node.title), status: label }), kind: 'edit', targetId: id } });
     }));
     disposer.add(on(container, 'change', 'input[data-title]', (e, el) => {
       const id = el.dataset.title;
@@ -410,7 +411,7 @@ export default {
       const value = el.value.trim();
       if (!value) { el.value = info.node.title; return; }
       if (value === info.node.title) return;
-      store.update((p) => { const n = ops.locate(p, id); if (n) n.node.title = value; }, { activity: { text: `Renamed ${info.kind} “${value}”`, kind: 'edit', targetId: id } });
+      store.update((p) => { const n = ops.locate(p, id); if (n) n.node.title = value; }, { activity: { text: t(info.kind === 'chapter' ? 'Renamed chapter “{title}”' : 'Renamed section “{title}”', { title: iso(value) }), kind: 'edit', targetId: id } });
     }));
     disposer.add(on(container, 'keydown', 'input[data-title]', (e, el) => {
       if (e.key === 'Enter') { e.preventDefault(); el.blur(); } else if (e.key === 'Escape') { e.preventDefault(); el.value = el.dataset.orig || el.value; el.blur(); }

@@ -1,5 +1,7 @@
 // Starting points offered by the "New Table" dialog. build() returns fresh
 // content every time (new column ids) so templates can be used repeatedly.
+// `name` and `description` are interface text: English here, translated with t() when the gallery renders.
+// The header / body text that build() inserts is report content and stays English.
 import { uid } from '../core/utils.js';
 import { createCell } from '../core/model.js';
 

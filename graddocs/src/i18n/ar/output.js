@@ -1,3 +1,146 @@
-// Arabic translations for the output module (English text → Arabic).
+// Arabic translations for the output module: Document Preview (src/preview/**) and Export (src/export/**).
+// Only the app's own interface is translated. The report itself (title page, TABLE OF CONTENTS, lists,
+// headings, captions, page numbers, the .docx, README.txt, file names, CSV/HTML exports and the printable
+// list pages) is the user's document and stays in the report language.
+// Shared words (Figures, Tables, Export, Preview, Download, Refresh …) live in common.js.
+// {zip}, {docx}, {keys}, {name}, {size} … are filled with left-to-right isolated text (file types, file names,
+// shortcuts) so punctuation around them stays in place inside Arabic sentences.
 export default {
+  // ---- Document Preview: toolbar ----
+  'Preview controls': 'عناصر التحكم في المعاينة',
+  'Toggle navigator': 'إظهار/إخفاء جزء التنقل',
+  'Navigator': 'التنقل',
+  'Collapse navigator': 'طيّ جزء التنقل',
+  'Zoom': 'التكبير',
+  'Reset to 100%': 'إعادة التعيين إلى 100%',
+  'Fit page width': 'ملاءمة عرض الصفحة',
+  'Fit width': 'ملاءمة العرض',
+  'Sections to show': 'الأقسام المعروضة',
+  'Title page': 'صفحة العنوان',
+  'Re-paginate': 'إعادة تقسيم الصفحات',
+  'Opens the print dialog; choose “Save as PDF”': 'يفتح نافذة الطباعة؛ اختر «حفظ بصيغة PDF»',
+  'Print / Save as PDF': 'طباعة / حفظ بصيغة PDF',
+  'Save as PDF': 'حفظ بصيغة PDF',
+  '1 page': 'صفحة واحدة',
+  '{n} pages': 'عدد الصفحات: {n}',
+  // ---- Document Preview: navigator, pages, hints ----
+  'Report': 'التقرير',
+  'Document pages': 'صفحات المستند',
+  'Page {label}': 'صفحة {label}',
+  'Page {n} of {total}': 'صفحة {n} من {total}',
+  'Double-click to edit': 'انقر مرتين للتعديل',
+  'Nothing to show. Turn on a section above.': 'لا يوجد ما يمكن عرضه. فعّل أحد الأقسام أعلاه.',
+  'The preview could not be generated.': 'تعذّر إنشاء المعاينة.',
+
+  // ---- Export page: header and package card ----
+  'Take your documentation out of GradDocs — a Word document, figures and tables as images, printable lists and a full backup.':
+    'أخرِج توثيقك من GradDocs — مستند Word، والأشكال والجداول كصور، وقوائم قابلة للطباعة، ونسخة احتياطية كاملة.',
+  'Recommended': 'موصى بها',
+  'Complete Documentation Package': 'حزمة التوثيق الكاملة',
+  'Everything in a single {zip} — ready to hand in, share with your supervisor, or build your Word document from.':
+    'كل شيء في ملف {zip} واحد — جاهز للتسليم أو للمشاركة مع مشرفك أو لبناء مستند Word منه.',
+  'Editable Word report: title page, front matter, chapters, numbered figures and tables':
+    'تقرير Word قابل للتحرير: صفحة العنوان والصفحات التمهيدية والفصول والأشكال والجداول المرقمة',
+  'Every figure as SVG and {scale} PNG': 'كل شكل بصيغة SVG وبصيغة PNG بدقة {scale}',
+  'Every table as SVG, PNG, HTML (paste into Word) and CSV': 'كل جدول بصيغ SVG وPNG وHTML (جاهز للصق في Word) وCSV',
+  'Contents, figures, tables, acronyms and structure as printable HTML': 'المحتويات والأشكال والجداول والاختصارات والهيكل بصيغة HTML قابلة للطباعة',
+  'A full backup you can import again': 'نسخة احتياطية كاملة يمكنك استيرادها لاحقًا',
+  'How to insert everything into Word': 'كيفية إدراج كل شيء في Word',
+  'Download package': 'تحميل الحزمة',
+  'Preparing…': 'جارٍ التحضير…',
+  'Rendering figures ({done}/{total})': 'جارٍ تجهيز الأشكال ({done}/{total})',
+  'Rendering {label}': 'جارٍ تجهيز {label}',
+  'Building lists': 'جارٍ إنشاء القوائم',
+  'Building the Word document…': 'جارٍ إنشاء مستند Word…',
+  'Building the Word document': 'جارٍ إنشاء مستند Word',
+  'Compressing…': 'جارٍ الضغط…',
+  'Last package: {name}': 'آخر حزمة: {name}',
+  'Package ready: {name} ({size})': 'الحزمة جاهزة: {name} ({size})',
+  'chapters': 'الفصول',
+  'figures': 'الأشكال',
+  'tables': 'الجداول',
+  'acronyms': 'الاختصارات',
+
+  // ---- Export page: Word card ----
+  'Word document': 'مستند Word',
+  'A real {docx} with styles, headings and native tables.': 'ملف {docx} حقيقي بأنماط وعناوين وجداول أصلية.',
+  'Title page, front matter, chapters and numbered captions': 'صفحة العنوان والصفحات التمهيدية والفصول والتسميات التوضيحية المرقمة',
+  'Table of contents, lists of figures and tables as Word fields': 'جدول المحتويات وقائمتا الأشكال والجداول كحقول Word',
+  'Cross-references stay linked (press F9 after edits)': 'تبقى الإحالات المرجعية مرتبطة (اضغط F9 بعد التعديل)',
+  'Word asks {question} when it opens the file. Choose {yes} to fill in the page numbers.': 'يسأل Word {question} عند فتح الملف. اختر {yes} لملء أرقام الصفحات.',
+  '“Update fields?”': '«تحديث الحقول؟»',
+  'Saved {name} ({size}). Choose "Yes" when Word asks to update fields.': 'تم حفظ {name} ({size}). اختر «نعم» عندما يطلب Word تحديث الحقول.',
+  'Could not build the Word document': 'تعذّر إنشاء مستند Word',
+
+  // ---- Export page: backup card ----
+  'Project backup': 'النسخ الاحتياطي للمشروع',
+  'Move your project between browsers or keep a safe copy.': 'انقل مشروعك بين المتصفحات أو احتفظ بنسخة آمنة منه.',
+  'Export Project': 'تصدير المشروع',
+  'Import Project': 'استيراد مشروع',
+  'Download latest automatic backup': 'تحميل آخر نسخة احتياطية تلقائية',
+  'Checking for automatic backups…': 'جارٍ التحقق من النسخ الاحتياطية التلقائية…',
+  'No automatic backup yet. One is saved every 15 minutes while you work.': 'لا توجد نسخة احتياطية تلقائية بعد. تُحفظ نسخة كل 15 دقيقة أثناء عملك.',
+  'Latest automatic backup: {time}': 'آخر نسخة احتياطية تلقائية: {time}',
+  'Automatic backup': 'نسخة تلقائية',
+  'Manual backup': 'نسخة يدوية',
+  'Opened project': 'فتح المشروع',
+  'Before restoring a backup': 'قبل استرجاع نسخة احتياطية',
+  'Before importing a project': 'قبل استيراد مشروع',
+  'Backup and storage options live in {link}.': 'خيارات النسخ الاحتياطي والتخزين موجودة في {link}.',
+  'Storage': 'التخزين',
+  'Could not export the project': 'تعذّر تصدير المشروع',
+  'Could not download the backup': 'تعذّر تحميل النسخة الاحتياطية',
+
+  // ---- Export page: import ----
+  'This project already exists': 'هذا المشروع موجود مسبقًا',
+  'A project with the same ID ({name}) is already stored in this browser. Replace it with the imported version, or keep both by importing a copy?':
+    'يوجد في هذا المتصفح مشروع بالمعرّف نفسه ({name}). هل تريد استبداله بالنسخة المستوردة، أم الاحتفاظ بالاثنين باستيراد نسخة؟',
+  'Import as copy': 'استيراد كنسخة',
+  'Replace existing': 'استبدال الموجود',
+  'Imported "{name}".': 'تم استيراد «{name}».',
+  'This file is not valid JSON.': 'هذا الملف ليس بصيغة JSON صالحة.',
+  'This file does not look like a GradDocs project export.': 'لا يبدو أن هذا الملف نسخة مصدّرة من مشروع GradDocs.',
+  'Could not import the project': 'تعذّر استيراد المشروع',
+
+  // ---- Export page: figures and tables ----
+  '1 figure': 'شكل واحد',
+  '1 table': 'جدول واحد',
+  '{count} in document order. PNG files are {scale} resolution and carry their DPI.': '{count}، بترتيب ظهورها في المستند. ملفات PNG بدقة {scale} وتحمل قيمة DPI.',
+  '{count} in document order. {copy} keeps the table formatting when you paste.': '{count}، بترتيب ظهورها في المستند. يحافظ خيار {copy} على تنسيق الجدول عند اللصق.',
+  'Download all figures': 'تحميل كل الأشكال',
+  'Create a figure and it will appear here, ready to export as SVG, PNG or PDF.': 'أنشئ شكلًا وسيظهر هنا جاهزًا للتصدير بصيغة SVG أو PNG أو PDF.',
+  'Create a table and it will appear here, ready to export as an image, HTML or CSV.': 'أنشئ جدولًا وسيظهر هنا جاهزًا للتصدير كصورة أو بصيغة HTML أو CSV.',
+  'Vector image, scales without quality loss': 'صورة متجهة، تتغير أبعادها دون فقدان الجودة',
+  'High-resolution image for Word': 'صورة عالية الدقة لاستخدامها في Word',
+  'Copy the image, then paste it into Word': 'انسخ الصورة ثم الصقها في Word',
+  'Copies the table with its formatting, then paste it into Word': 'ينسخ الجدول بتنسيقه، ثم الصقه في Word',
+  'Image copied. Paste it into Word with {keys}.': 'تم نسخ الصورة. الصقها في Word بالضغط على {keys}.',
+  'Table copied. Paste it into Word with {keys}.': 'تم نسخ الجدول. الصقه في Word بالضغط على {keys}.',
+  'Could not copy the image': 'تعذّر نسخ الصورة',
+  'Could not copy the table': 'تعذّر نسخ الجدول',
+  'This browser blocked copying. Download the HTML file instead.': 'منع المتصفح عملية النسخ. حمّل ملف HTML بدلًا من ذلك.',
+  'Saved {name}': 'تم حفظ {name}',
+  'Saved {name} ({size})': 'تم حفظ {name} ({size})',
+  'Could not build the figures archive': 'تعذّر إنشاء أرشيف الأشكال',
+  'This project has no figures yet.': 'لا توجد أشكال في هذا المشروع بعد.',
+  'Could not build the package': 'تعذّر إنشاء الحزمة',
+
+  // ---- Export page: printable lists ----
+  'Document Structure': 'هيكل المستند',
+  'Lists & structure → PDF': 'القوائم والهيكل إلى PDF',
+  'Open a clean print view and choose {saveAsPdf} as the printer, or download the page as HTML.': 'افتح عرض طباعة نظيفًا واختر {saveAsPdf} كطابعة، أو حمّل الصفحة بصيغة HTML.',
+  '1 entry': 'عنصر واحد',
+  '{n} entries': 'عدد العناصر: {n}',
+  '1 acronym': 'اختصار واحد',
+  '1 chapter with status': 'فصل واحد مع حالته',
+  '{n} chapters with status': 'الفصول مع حالتها: {n}',
+  'page numbers are filled in by Word': 'يملأ Word أرقام الصفحات',
+  'Open printable PDF': 'فتح PDF للطباعة',
+  'Could not open the print view': 'تعذّر فتح عرض الطباعة',
+  'The print window was blocked by your browser. Allow pop-ups for this site and try again.': 'حجب المتصفح نافذة الطباعة. اسمح بالنوافذ المنبثقة لهذا الموقع وحاول مرة أخرى.',
+  'Use {saveAsPdf} as the destination in the print dialog.': 'اختر {saveAsPdf} كوجهة في نافذة الطباعة.',
+
+  // ---- ZIP writer ----
+  'Too many files for a ZIP archive.': 'عدد الملفات أكبر من الحد المسموح به في أرشيف ZIP.',
+  '"{path}" is too large for a ZIP archive.': 'الملف «{path}» كبير جدًا لأرشيف ZIP.',
 };

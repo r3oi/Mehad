@@ -2,41 +2,48 @@
 // status bar, autosave, versions/revision mode, comments and exports.
 import { DiagramEditor } from './canvas.js';
 import { renderLibrary } from './library.js';
-import { designPanelHTML, bindDesignPanel, figurePanelHTML, historyPanelHTML, commentsPanelHTML } from './panels.js';
+import { designPanelHTML, bindDesignPanel, figurePanelHTML, historyPanelHTML, commentsPanelHTML, displayLabel, shapesConnectorsText } from './panels.js';
 import { esc, on } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { toast, toastError } from '../../ui/toast.js';
 import { openMenu } from '../../ui/menu.js';
 import { openModal, confirmDialog } from '../../ui/modal.js';
-import { debounce, clone, isTypingTarget, modKey, slugify, downloadBlob, downloadText, uid } from '../../core/utils.js';
+import { debounce, clone, isTypingTarget, modKey, slugify, downloadBlob, downloadText, uid, formatDateTime } from '../../core/utils.js';
 import { findFigure, createComment } from '../../core/model.js';
 import { getNumbering } from '../../core/numbering.js';
 import { renderFigureSVG, renderThumbnail, isNode, isEdge } from '../render.js';
 import { getFigureType, buildTemplate } from '../types.js';
-import { diffDiagrams, summarizeDiff, autoLabel, hasChanges, elementLabel } from '../diff.js';
+import { diffDiagrams, summarizeDiff, autoLabel, hasChanges } from '../diff.js';
 import { addVersion, isDirty, latestVersion, revisionCount } from '../versions.js';
 import { svgToPngBlob, copyPngToClipboard } from '../../export/png.js';
 import { svgToPdfBlob } from '../../export/pdf.js';
+import { t, isRTL } from '../../i18n/index.js';
+
+// Menus anchor to a physical edge: the end of the header is on the left in Arabic.
+const MENU_END = isRTL ? 'start' : 'end';
+// User-typed text (titles, notes, change summaries) picks its own direction in Arabic mode.
+const AUTO = isRTL ? ' dir="auto"' : '';
 
 const TOOLS = [
-  { id: 'select', icon: 'pointer', label: 'Select', key: 'V' },
-  { id: 'hand', icon: 'hand', label: 'Hand (pan)', key: 'H' },
+  { id: 'select', icon: 'pointer', label: t('Select'), key: 'V' },
+  { id: 'hand', icon: 'hand', label: t('Hand (pan)'), key: 'H' },
   '|',
-  { id: 'text', icon: 'type', label: 'Text', key: 'T' },
-  { id: 'rect', icon: 'square', label: 'Rectangle', key: 'R' },
-  { id: 'roundRect', icon: 'roundSquare', label: 'Rounded rectangle', key: 'U' },
-  { id: 'circle', icon: 'circle', label: 'Circle' },
-  { id: 'ellipse', icon: 'ellipse', label: 'Ellipse', key: 'O' },
-  { id: 'diamond', icon: 'diamond', label: 'Diamond', key: 'D' },
+  { id: 'text', icon: 'type', label: t('Text'), key: 'T' },
+  { id: 'rect', icon: 'square', label: t('Rectangle'), key: 'R' },
+  { id: 'roundRect', icon: 'roundSquare', label: t('Rounded rectangle'), key: 'U' },
+  { id: 'circle', icon: 'circle', label: t('Circle') },
+  { id: 'ellipse', icon: 'ellipse', label: t('Ellipse'), key: 'O' },
+  { id: 'diamond', icon: 'diamond', label: t('Diamond'), key: 'D' },
   '|',
-  { id: 'line', icon: 'line', label: 'Line', key: 'L' },
-  { id: 'arrow', icon: 'arrow', label: 'Arrow', key: 'A' },
-  { id: 'connector', icon: 'connector', label: 'Connector (smart, orthogonal)', key: 'C' },
+  { id: 'line', icon: 'line', label: t('Line'), key: 'L' },
+  { id: 'arrow', icon: 'arrow', label: t('Arrow'), key: 'A' },
+  { id: 'connector', icon: 'connector', label: t('Connector (smart, orthogonal)'), key: 'C' },
 ];
+const ROUTING_MENU = { straight: t('Straight line'), orthogonal: t('Orthogonal line'), curved: t('Curved line') };
 const TOOL_KEYS = Object.fromEntries(TOOLS.filter((t) => t.key).map((t) => [t.key.toLowerCase(), t.id]));
 
 export default {
-  title: 'Figure Editor',
+  title: 'Figure Editor', // translated by the shell
   layout: 'flush',
   mount(container, ctx) {
     const { store, params, shell } = ctx;
@@ -44,7 +51,7 @@ export default {
     const getFigure = () => findFigure(store.project, figureId);
     const figure = getFigure();
     if (!figure) {
-      container.innerHTML = `<div class="page"><div class="empty-state"><div class="empty-icon">${icon('figure')}</div><h3>Figure not found</h3><p>It may have been deleted.</p><a class="btn btn-primary" href="${ctx.href('figures')}">Back to Figures</a></div></div>`;
+      container.innerHTML = `<div class="page"><div class="empty-state"><div class="empty-icon">${icon('figure')}</div><h3>${t('Figure not found')}</h3><p>${t('It may have been deleted.')}</p><a class="btn btn-primary" href="${ctx.href('figures')}">${t('Back to Figures')}</a></div></div>`;
       return {};
     }
     const project = () => store.project;
@@ -56,51 +63,53 @@ export default {
     container.innerHTML = `
       <div class="editor" data-panels="">
         <header class="ed-header">
-          <a class="btn btn-ghost btn-icon btn-sm" href="${ctx.href('figures')}" data-tip="Back to Figures" aria-label="Back to Figures">${icon('arrowLeft')}</a>
+          <a class="btn btn-ghost btn-icon btn-sm" href="${ctx.href('figures')}" data-tip="${t('Back to Figures')}" aria-label="${t('Back to Figures')}">${icon('arrowLeft')}</a>
           <span class="badge badge-primary ed-fig-label" data-fig-label></span>
-          <input class="ed-title-input" data-title value="${esc(figure.title)}" aria-label="Figure title" spellcheck="true">
+          <input class="ed-title-input" data-title${AUTO} value="${esc(figure.title)}" aria-label="${t('Figure title')}" spellcheck="true">
           <span class="badge ed-version-badge" data-version></span>
           <span class="spacer"></span>
-          <button class="btn btn-sm btn-ghost ed-mobile-toggle" data-action="toggle-left" aria-label="Elements">${icon('layers')}</button>
-          <button class="btn btn-sm btn-ghost ed-mobile-toggle" data-action="toggle-right" aria-label="Properties">${icon('settings')}</button>
-          <button class="btn btn-sm ${revisionMode ? 'active' : ''}" data-action="toggle-revision" data-tip="Highlight changes since the last version and save them as a supervisor revision">${icon('flag', 'icon-sm')}<span class="hide-sm">Revision mode</span></button>
-          <button class="btn btn-sm" data-action="save-version" data-tip="Save a named version" data-kbd="Ctrl S">${icon('save', 'icon-sm')}<span class="hide-sm">Save version</span></button>
-          <button class="btn btn-sm btn-primary" data-action="export">${icon('export', 'icon-sm')}<span class="hide-sm">Export</span></button>
-          <button class="btn btn-sm btn-ghost btn-icon" data-action="more" aria-label="More actions">${icon('moreV')}</button>
+          <button class="btn btn-sm btn-ghost ed-mobile-toggle" data-action="toggle-left" aria-label="${t('Elements')}">${icon('layers')}</button>
+          <button class="btn btn-sm btn-ghost ed-mobile-toggle" data-action="toggle-right" aria-label="${t('Properties')}">${icon('settings')}</button>
+          <button class="btn btn-sm ${revisionMode ? 'active' : ''}" data-action="toggle-revision" data-tip="${t('Highlight changes since the last version and save them as a supervisor revision')}">${icon('flag', 'icon-sm')}<span class="hide-sm">${t('Revision mode')}</span></button>
+          <button class="btn btn-sm" data-action="save-version" data-tip="${t('Save a named version')}" data-kbd="Ctrl S">${icon('save', 'icon-sm')}<span class="hide-sm">${t('Save version')}</span></button>
+          <button class="btn btn-sm btn-primary" data-action="export">${icon('export', 'icon-sm')}<span class="hide-sm">${t('Export')}</span></button>
+          <button class="btn btn-sm btn-ghost btn-icon" data-action="more" aria-label="${t('More actions')}">${icon('moreV')}</button>
         </header>
         <div class="ed-revision-banner" data-revision-banner hidden></div>
         <div class="ed-body">
           <aside class="ed-left" data-library></aside>
           <section class="ed-center">
-            <div class="ed-toolbar" role="toolbar" aria-label="Drawing tools">
-              ${TOOLS.map((t) => (t === '|' ? '<span class="ed-tb-sep"></span>' : `<button class="ed-tool" data-tool="${t.id}" data-tip="${esc(t.label)}" ${t.key ? `data-kbd="${t.key}"` : ''} aria-label="${esc(t.label)}">${icon(t.icon)}</button>`)).join('')}
+            <div class="ed-toolbar" role="toolbar" aria-label="${t('Drawing tools')}">
+              ${TOOLS.map((tool) => (tool === '|' ? '<span class="ed-tb-sep"></span>' : `<button class="ed-tool" data-tool="${tool.id}" data-tip="${esc(tool.label)}" ${tool.key ? `data-kbd="${tool.key}"` : ''} aria-label="${esc(tool.label)}">${icon(tool.icon)}</button>`)).join('')}
               <span class="ed-tb-sep"></span>
-              <button class="ed-tool" data-action="duplicate" data-tip="Duplicate" data-kbd="Ctrl D" aria-label="Duplicate">${icon('duplicate')}</button>
-              <button class="ed-tool" data-action="delete" data-tip="Delete" data-kbd="Del" aria-label="Delete">${icon('trash')}</button>
+              <button class="ed-tool" data-action="duplicate" data-tip="${t('Duplicate')}" data-kbd="Ctrl D" aria-label="${t('Duplicate')}">${icon('duplicate')}</button>
+              <button class="ed-tool" data-action="delete" data-tip="${t('Delete')}" data-kbd="Del" aria-label="${t('Delete')}">${icon('trash')}</button>
               <span class="ed-tb-sep"></span>
-              <button class="ed-tool" data-action="undo" data-tip="Undo" data-kbd="Ctrl Z" aria-label="Undo">${icon('undo')}</button>
-              <button class="ed-tool" data-action="redo" data-tip="Redo" data-kbd="Ctrl Y" aria-label="Redo">${icon('redo')}</button>
+              <button class="ed-tool" data-action="undo" data-tip="${t('Undo')}" data-kbd="Ctrl Z" aria-label="${t('Undo')}">${icon('undo')}</button>
+              <button class="ed-tool" data-action="redo" data-tip="${t('Redo')}" data-kbd="Ctrl Y" aria-label="${t('Redo')}">${icon('redo')}</button>
             </div>
             <div class="ed-canvas-host" data-canvas></div>
             <div class="ed-statusbar">
               <span data-status-info class="truncate"></span>
               <span class="spacer"></span>
               <span class="ed-save" data-save></span>
-              <button class="btn btn-ghost btn-icon btn-sm" data-action="grid" data-tip="Toggle grid" aria-label="Toggle grid">${icon('grid')}</button>
-              <button class="btn btn-ghost btn-icon btn-sm" data-action="snap" data-tip="Toggle snapping" aria-label="Toggle snapping">${icon('magnet')}</button>
+              <button class="btn btn-ghost btn-icon btn-sm" data-action="grid" data-tip="${t('Toggle grid')}" aria-label="${t('Toggle grid')}">${icon('grid')}</button>
+              <button class="btn btn-ghost btn-icon btn-sm" data-action="snap" data-tip="${t('Toggle snapping')}" aria-label="${t('Toggle snapping')}">${icon('magnet')}</button>
               <span class="ed-tb-sep"></span>
-              <button class="btn btn-ghost btn-icon btn-sm" data-action="zoom-out" data-tip="Zoom out" data-kbd="Ctrl −" aria-label="Zoom out">${icon('zoomOut')}</button>
-              <button class="btn btn-ghost btn-sm ed-zoom" data-action="zoom-menu" aria-label="Zoom level"></button>
-              <button class="btn btn-ghost btn-icon btn-sm" data-action="zoom-in" data-tip="Zoom in" data-kbd="Ctrl +" aria-label="Zoom in">${icon('zoomIn')}</button>
-              <button class="btn btn-ghost btn-icon btn-sm" data-action="fit" data-tip="Fit to screen" data-kbd="⇧ 1" aria-label="Fit to screen">${icon('maximize')}</button>
+              <span class="ed-zoom-group">
+                <button class="btn btn-ghost btn-icon btn-sm" data-action="zoom-out" data-tip="${t('Zoom out')}" data-kbd="Ctrl −" aria-label="${t('Zoom out')}">${icon('zoomOut')}</button>
+                <button class="btn btn-ghost btn-sm ed-zoom" data-action="zoom-menu" aria-label="${t('Zoom level')}"></button>
+                <button class="btn btn-ghost btn-icon btn-sm" data-action="zoom-in" data-tip="${t('Zoom in')}" data-kbd="Ctrl +" aria-label="${t('Zoom in')}">${icon('zoomIn')}</button>
+              </span>
+              <button class="btn btn-ghost btn-icon btn-sm" data-action="fit" data-tip="${t('Fit to screen')}" data-kbd="⇧ 1" aria-label="${t('Fit to screen')}">${icon('maximize')}</button>
             </div>
           </section>
           <aside class="ed-right">
             <div class="tabs ed-tabs" role="tablist">
-              <button class="tab" data-tab="design" role="tab">Design</button>
-              <button class="tab" data-tab="figure" role="tab">Figure</button>
-              <button class="tab" data-tab="history" role="tab">History</button>
-              <button class="tab" data-tab="comments" role="tab">Comments <span class="badge" data-comment-count></span></button>
+              <button class="tab" data-tab="design" role="tab">${t('Design')}</button>
+              <button class="tab" data-tab="figure" role="tab">${t('Figure')}</button>
+              <button class="tab" data-tab="history" role="tab">${t('History')}</button>
+              <button class="tab" data-tab="comments" role="tab">${t('Comments')} <span class="badge" data-comment-count></span></button>
             </div>
             <div class="ed-panel" data-panel></div>
           </aside>
@@ -136,8 +145,8 @@ export default {
         version = addVersion(f, { label, note, kind, requestedBy });
       }, { activity: { text: kind === 'revision' ? `Saved revision of “${getFigure().title}”` : `Saved version of “${getFigure().title}”`, kind: kind === 'revision' ? 'revision' : 'version', targetId: figureId }, source: 'editor-meta' });
       if (!silent) {
-        if (version) toast(`${version.kind === 'revision' ? `Revision #${version.revision}` : `Version v${version.number}`} saved — ${version.label}`, { type: 'success' });
-        else toast('No changes since the last version.', { type: 'info' });
+        if (version) toast(version.kind === 'revision' ? t('Revision #{n} saved — {label}', { n: version.revision, label: version.label }) : t('Version v{n} saved — {label}', { n: version.number, label: version.label }), { type: 'success' });
+        else toast(t('No changes since the last version.'), { type: 'info' });
       }
       if (revisionMode) refreshHighlights();
       return version;
@@ -148,28 +157,28 @@ export default {
       const f = getFigure();
       if (!f) return;
       const info = getNumbering(project()).figures.get(figureId);
-      q('[data-fig-label]').textContent = info ? `${info.label} · ${info.code}` : 'Figure';
+      q('[data-fig-label]').textContent = info ? `${info.label} · ${info.code}` : t('Figure');
       const titleInput = q('[data-title]');
       if (document.activeElement !== titleInput) titleInput.value = f.title;
       const last = latestVersion(f);
       const dirty = isDirty({ ...f, diagram: editor.doc });
       const vb = q('[data-version]');
-      vb.textContent = `${last ? `v${last.number}` : 'v0'}${dirty ? ' · edited' : ''}`;
+      vb.textContent = `${last ? `v${last.number}` : 'v0'}${dirty ? ` · ${t('edited')}` : ''}`;
       vb.className = `badge ed-version-badge ${dirty ? 'badge-warning' : ''}`;
-      vb.dataset.tip = dirty ? 'You have changes that are autosaved but not yet saved as a version' : 'All changes are saved in this version';
+      vb.dataset.tip = dirty ? t('You have changes that are autosaved but not yet saved as a version') : t('All changes are saved in this version');
       const open = f.comments.filter((c) => !c.resolved).length;
       q('[data-comment-count]').textContent = open || '';
       q('[data-comment-count]').hidden = !open;
-      shell.setBreadcrumbs([{ label: 'Figures', href: ctx.href('figures') }, { label: info ? `${info.label}: ${f.title}` : f.title }]);
-      document.title = `${info?.label || 'Figure'} · ${f.title} · GradDocs`;
+      shell.setBreadcrumbs([{ label: t('Figures'), href: ctx.href('figures') }, { label: info ? `${info.label}: ${f.title}` : f.title }]);
+      document.title = `${info?.label || t('Figure')} · ${f.title} · GradDocs`;
     }
 
     function refreshStatus() {
       const els = editor.doc.elements;
       const sel = editor.selectedElements();
-      let info = `${els.filter(isNode).length} shapes · ${els.filter(isEdge).length} connectors`;
-      if (sel.length === 1 && isNode(sel[0])) { const n = sel[0]; info = `${elementLabel(n)} · X ${Math.round(n.x)} Y ${Math.round(n.y)} · ${Math.round(n.w)}×${Math.round(n.h)}`; }
-      else if (sel.length > 1) info = `${sel.length} selected · ${info}`;
+      let info = shapesConnectorsText(els.filter(isNode).length, els.filter(isEdge).length);
+      if (sel.length === 1 && isNode(sel[0])) { const n = sel[0]; info = `${displayLabel(n)} · X ${Math.round(n.x)} Y ${Math.round(n.y)} · ${Math.round(n.w)}×${Math.round(n.h)}`; }
+      else if (sel.length > 1) info = `${t('{n} selected', { n: sel.length })} · ${info}`;
       q('[data-status-info]').textContent = info;
       q('.ed-zoom').textContent = `${Math.round(editor.zoom * 100)}%`;
       q('[data-action="grid"]').classList.toggle('active', editor.grid);
@@ -185,7 +194,7 @@ export default {
       const el = q('[data-save]');
       const s = store.status;
       el.className = `ed-save ${s}`;
-      el.innerHTML = s === 'saving' || persist.pending() ? '<span class="dot"></span>Saving…' : s === 'error' ? `${icon('alert', 'icon-sm')} Not saved` : `${icon('check', 'icon-sm')} Saved`;
+      el.innerHTML = s === 'saving' || persist.pending() ? `<span class="dot"></span>${t('Saving…')}` : s === 'error' ? `${icon('alert', 'icon-sm')} ${t('Not saved')}` : `${icon('check', 'icon-sm')} ${t('Saved')}`;
     }
 
     function refreshTools() {
@@ -236,7 +245,7 @@ export default {
       else if (action === 'resolve-comment') {
         store.update((p) => { const c = findFigure(p, figureId).comments.find((x) => x.id === value); if (c) c.resolved = !c.resolved; }, { source: 'editor-meta' });
       } else if (action === 'delete-comment') {
-        if (await confirmDialog({ title: 'Delete comment?', message: 'This comment will be removed permanently.', confirmText: 'Delete', danger: true })) {
+        if (await confirmDialog({ title: t('Delete comment?'), message: t('This comment will be removed permanently.'), confirmText: t('Delete'), danger: true })) {
           store.update((p) => { const f = findFigure(p, figureId); f.comments = f.comments.filter((x) => x.id !== value); }, { source: 'editor-meta' });
         }
       } else if (action === 'focus-element') { editor.select(value); editor.centerOn(value); }
@@ -252,7 +261,7 @@ export default {
       }, { activity: { text: `Commented on “${getFigure().title}”`, kind: 'comment', targetId: figureId }, source: 'editor-meta' });
       commentFilter = 'open';
       renderPanel(true);
-      toast('Comment added', { type: 'success', duration: 1500 });
+      toast(t('Comment added'), { type: 'success', duration: 1500 });
     }
 
     function refreshCommentBadges() {
@@ -267,19 +276,19 @@ export default {
       const last = latestVersion(f);
       const diff = diffDiagrams(last?.snapshot || { elements: [] }, editor.doc);
       const changes = summarizeDiff(diff);
-      if (last && !hasChanges(diff)) { toast('No changes since the last version.', { type: 'info' }); return; }
+      if (last && !hasChanges(diff)) { toast(t('No changes since the last version.'), { type: 'info' }); return; }
       const isRev = kind === 'revision';
       const modal = openModal({
-        title: isRev ? `Save Revision #${revisionCount(f) + 1}` : `Save version v${(last?.number || 0) + 1}`,
-        subtitle: isRev ? 'Record what changed for your supervisor.' : 'Name this state of the figure so you can return to it later.',
+        title: isRev ? t('Save Revision #{n}', { n: revisionCount(f) + 1 }) : t('Save version v{n}', { n: (last?.number || 0) + 1 }),
+        subtitle: isRev ? t('Record what changed for your supervisor.') : t('Name this state of the figure so you can return to it later.'),
         body: `<div class="form-grid">
-          <div class="field"><label>Detected changes</label>
-            <ul class="ed-change-list">${changes.map((c) => `<li>${esc(c)}</li>`).join('') || '<li>Initial version</li>'}</ul></div>
-          <div class="field"><label for="sv-label">${isRev ? 'Revision title' : 'Version name'}</label><input id="sv-label" class="input" value="${esc(last ? autoLabel(diff) : 'Initial diagram')}" autofocus></div>
-          ${isRev ? `<div class="field"><label for="sv-by">Requested by</label><input id="sv-by" class="input" value="${esc(project().supervisor || '')}" placeholder="e.g. Dr. Ahmed"></div>` : ''}
-          <div class="field"><label for="sv-note">Note</label><textarea id="sv-note" class="textarea" rows="2" placeholder="${isRev ? 'e.g. Doctor requested renaming the analysis feature.' : 'Optional'}"></textarea></div>
+          <div class="field"><label>${t('Detected changes')}</label>
+            <ul class="ed-change-list"${AUTO}>${changes.map((c) => `<li>${esc(c)}</li>`).join('') || `<li>${t('Initial version')}</li>`}</ul></div>
+          <div class="field"><label for="sv-label">${isRev ? t('Revision title') : t('Version name')}</label><input id="sv-label" class="input"${AUTO} value="${esc(last ? autoLabel(diff) : 'Initial diagram')}" autofocus></div>
+          ${isRev ? `<div class="field"><label for="sv-by">${t('Requested by')}</label><input id="sv-by" class="input"${AUTO} value="${esc(project().supervisor || '')}" placeholder="${t('e.g. Dr. Ahmed')}"></div>` : ''}
+          <div class="field"><label for="sv-note">${t('Note')}</label><textarea id="sv-note" class="textarea" rows="2"${AUTO} placeholder="${isRev ? t('e.g. Doctor requested renaming the analysis feature.') : t('Optional')}"></textarea></div>
         </div>`,
-        footer: `<button class="btn" data-close>Cancel</button><button class="btn btn-primary" data-ok>${icon('save', 'icon-sm')} ${isRev ? 'Save revision' : 'Save version'}</button>`,
+        footer: `<button class="btn" data-close>${t('Cancel')}</button><button class="btn btn-primary" data-ok>${icon('save', 'icon-sm')} ${isRev ? t('Save revision') : t('Save version')}</button>`,
       });
       const submit = () => {
         const v = saveVersion({ kind, label: modal.$('#sv-label').value.trim(), note: modal.$('#sv-note').value.trim(), requestedBy: modal.$('#sv-by')?.value.trim() || '' });
@@ -296,11 +305,11 @@ export default {
       if (!v) return;
       const modal = openModal({
         title: `v${v.number} — ${v.label}`,
-        subtitle: `${new Date(v.createdAt).toLocaleString('en-GB')}${v.requestedBy ? ` · Requested by ${v.requestedBy}` : ''}`,
+        subtitle: `${isRTL ? formatDateTime(v.createdAt) : new Date(v.createdAt).toLocaleString('en-GB')}${v.requestedBy ? ` · ${t('Requested by {name}', { name: v.requestedBy })}` : ''}`,
         size: 'xl',
         body: `<div class="ed-version-view"><div class="thumb ed-version-thumb">${renderThumbnail(v.snapshot)}</div>
-          <div class="ed-version-meta">${v.note ? `<p>${esc(v.note)}</p>` : ''}<div class="section-title">Changes in this version</div><ul class="ed-change-list">${(v.changes || []).map((c) => `<li>${esc(c)}</li>`).join('')}</ul></div></div>`,
-        footer: `<div class="left"><button class="btn" data-dl>${icon('export', 'icon-sm')} Download SVG</button></div><button class="btn" data-close>Close</button><button class="btn btn-primary" data-restore>${icon('history', 'icon-sm')} Restore this version</button>`,
+          <div class="ed-version-meta">${v.note ? `<p${AUTO}>${esc(v.note)}</p>` : ''}<div class="section-title">${t('Changes in this version')}</div><ul class="ed-change-list"${AUTO}>${(v.changes || []).map((c) => `<li>${esc(c)}</li>`).join('')}</ul></div></div>`,
+        footer: `<div class="left"><button class="btn" data-dl>${icon('export', 'icon-sm')} ${t('Download SVG')}</button></div><button class="btn" data-close>${t('Close')}</button><button class="btn btn-primary" data-restore>${icon('history', 'icon-sm')} ${t('Restore this version')}</button>`,
       });
       modal.$('[data-dl]').addEventListener('click', () => {
         const { svg } = renderFigureSVG(v.snapshot);
@@ -312,7 +321,7 @@ export default {
     async function restoreVersion(versionId, confirmed = false) {
       const v = getFigure().versions.find((x) => x.id === versionId);
       if (!v) return;
-      if (!confirmed && !(await confirmDialog({ title: `Restore v${v.number}?`, message: `The canvas will be replaced with <strong>v${v.number} — ${esc(v.label)}</strong>. Your current state is kept in the history, and you can undo.`, confirmText: 'Restore' }))) return;
+      if (!confirmed && !(await confirmDialog({ title: t('Restore v{n}?', { n: v.number }), message: t('The canvas will be replaced with {version}. Your current state is kept in the history, and you can undo.', { version: `<strong>v${v.number} — ${esc(v.label)}</strong>` }), confirmText: t('Restore') }))) return;
       editor.replaceDiagram(v.snapshot);
       persist.cancel();
       store.update((p) => {
@@ -321,16 +330,16 @@ export default {
         f.updatedAt = Date.now();
         addVersion(f, { label: `Restored v${v.number}`, kind: 'restore', force: true });
       }, { activity: { text: `Restored v${v.number} of “${getFigure().title}”`, kind: 'version', targetId: figureId }, source: 'editor-meta' });
-      toast(`Restored v${v.number}`, { type: 'success', action: { label: 'Undo', onClick: () => editor.undo() } });
+      toast(t('Restored v{n}', { n: v.number }), { type: 'success', action: { label: t('Undo'), onClick: () => editor.undo() } });
     }
 
     async function applyTemplate() {
       const f = getFigure();
-      const t = getFigureType(f.type);
-      if (!(await confirmDialog({ title: `Reset to the ${t.name} template?`, message: 'The current diagram will be replaced by the starter template. You can undo this or restore any saved version.', confirmText: 'Reset diagram' }))) return;
+      const ft = getFigureType(f.type);
+      if (!(await confirmDialog({ title: t('Reset to the {type} template?', { type: ft.name }), message: t('The current diagram will be replaced by the starter template. You can undo this or restore any saved version.'), confirmText: t('Reset diagram') }))) return;
       editor.replaceDiagram(buildTemplate(f.type, project()));
       editor.fit({ maxZoom: 1 });
-      toast('Template applied', { type: 'success', action: { label: 'Undo', onClick: () => editor.undo() } });
+      toast(t('Template applied'), { type: 'success', action: { label: t('Undo'), onClick: () => editor.undo() } });
     }
 
     // ---------------------------------------------------------- revision mode
@@ -343,11 +352,11 @@ export default {
       editor.setHighlights(diff.changedIds);
       const lines = summarizeDiff(diff);
       banner.hidden = false;
-      banner.innerHTML = `${icon('flag')}<div class="grow"><strong>Revision mode</strong> — changes since v${last?.number ?? 0} are highlighted
-        <span class="ed-legend"><i class="added"></i>added <i class="changed"></i>changed</span>
-        <div class="ed-banner-changes truncate">${lines.length ? lines.map(esc).join(' · ') : 'No changes yet. Edit the figure as requested by your supervisor.'}</div></div>
-        <button class="btn btn-sm btn-primary" data-action="save-revision" ${lines.length ? '' : 'disabled'}>${icon('save', 'icon-sm')} Save Revision</button>
-        <button class="btn btn-sm btn-ghost" data-action="toggle-revision">Exit</button>`;
+      banner.innerHTML = `${icon('flag')}<div class="grow"><strong>${t('Revision mode')}</strong> ${t('— changes since v{n} are highlighted', { n: last?.number ?? 0 })}
+        <span class="ed-legend"><i class="added"></i>${t('added')} <i class="changed"></i>${t('changed')}</span>
+        <div class="ed-banner-changes truncate"${AUTO}>${lines.length ? lines.map(esc).join(' · ') : t('No changes yet. Edit the figure as requested by your supervisor.')}</div></div>
+        <button class="btn btn-sm btn-primary" data-action="save-revision" ${lines.length ? '' : 'disabled'}>${icon('save', 'icon-sm')} ${t('Save Revision')}</button>
+        <button class="btn btn-sm btn-ghost" data-action="toggle-revision">${t('Exit')}</button>`;
     }
     function setRevisionMode(on) {
       revisionMode = on;
@@ -380,11 +389,11 @@ export default {
         else if (kind === 'copy') {
           const { svg, width, height } = renderFigureSVG(editor.doc);
           await copyPngToClipboard(await svgToPngBlob(svg, width, height, { scale: scale() }));
-          toast('Image copied — paste it into Word with Ctrl+V', { type: 'success' });
+          toast(t('Image copied — paste it into Word with Ctrl+V'), { type: 'success' });
           return;
         }
-        toast(`Exported ${kind.toUpperCase()}`, { type: 'success', duration: 1800 });
-      } catch (err) { toastError(err, 'Export failed'); }
+        toast(t('Exported {kind}', { kind: kind.toUpperCase() }), { type: 'success', duration: 1800 });
+      } catch (err) { toastError(err, t('Export failed')); }
     }
 
     // ---------------------------------------------------------- figure ops
@@ -396,17 +405,17 @@ export default {
       copy.createdAt = copy.updatedAt = Date.now();
       addVersion(copy, { force: true });
       store.update((p) => { const i = p.figures.findIndex((f) => f.id === figureId); p.figures.splice(i + 1, 0, copy); }, { activity: { text: `Duplicated figure “${src.title}”`, kind: 'create', targetId: copy.id } });
-      toast('Figure duplicated', { type: 'success' });
+      toast(t('Figure duplicated'), { type: 'success' });
       ctx.navigate(ctx.href('figures', copy.id));
     }
     async function deleteFigure() {
       const f = getFigure();
       const info = getNumbering(project()).figures.get(figureId);
-      if (!(await confirmDialog({ title: `Delete ${info?.label || 'figure'}?`, message: `“${esc(f.title)}” and its version history will be deleted. Later figures are renumbered automatically and references to it will show as broken.`, confirmText: 'Delete figure', danger: true }))) return;
+      if (!(await confirmDialog({ title: t('Delete {label}?', { label: info?.label || t('figure') }), message: t('“{title}” and its version history will be deleted. Later figures are renumbered automatically and references to it will show as broken.', { title: esc(f.title) }), confirmText: t('Delete figure'), danger: true }))) return;
       persist.cancel();
       deleted = true;
       store.update((p) => { p.figures = p.figures.filter((x) => x.id !== figureId); }, { activity: { text: `Deleted figure “${f.title}”`, kind: 'delete' } });
-      toast('Figure deleted', { type: 'success' });
+      toast(t('Figure deleted'), { type: 'success' });
       ctx.navigate(ctx.href('figures'));
     }
     let deleted = false;
@@ -435,28 +444,28 @@ export default {
       else if (a === 'fit') editor.fit();
       else if (a === 'grid') editor.setGrid(!editor.grid);
       else if (a === 'snap') editor.setSnap(!editor.snap);
-      else if (a === 'zoom-menu') openMenu(el, [50, 75, 100, 150, 200].map((z) => ({ label: `${z}%`, onClick: () => editor.setZoom(z / 100) })).concat(['-', { label: 'Fit to screen', icon: 'maximize', shortcut: '⇧1', onClick: () => editor.fit() }]));
+      else if (a === 'zoom-menu') openMenu(el, [50, 75, 100, 150, 200].map((z) => ({ label: `${z}%`, onClick: () => editor.setZoom(z / 100) })).concat(['-', { label: t('Fit to screen'), icon: 'maximize', shortcut: '⇧1', onClick: () => editor.fit() }]));
       else if (a === 'toggle-revision') setRevisionMode(!revisionMode);
       else if (a === 'save-version') openSaveVersionDialog(revisionMode ? 'revision' : 'version');
       else if (a === 'toggle-left') root.dataset.panels = root.dataset.panels === 'left' ? '' : 'left';
       else if (a === 'toggle-right') root.dataset.panels = root.dataset.panels === 'right' ? '' : 'right';
       else if (a === 'export') {
         openMenu(el, [
-          { heading: 'Download' },
-          { label: 'SVG (vector, best for Word)', icon: 'image', onClick: () => doExport('svg') },
-          { label: `PNG (${scale()}× · ${96 * scale()} DPI)`, icon: 'image', onClick: () => doExport('png') },
-          { label: 'PDF', icon: 'fileText', onClick: () => doExport('pdf') },
+          { heading: t('Download') },
+          { label: t('SVG (vector, best for Word)'), icon: 'image', onClick: () => doExport('svg') },
+          { label: t('PNG ({scale}× · {dpi} DPI)', { scale: scale(), dpi: 96 * scale() }), icon: 'image', onClick: () => doExport('png') },
+          { label: t('PDF'), icon: 'fileText', onClick: () => doExport('pdf') },
           '-',
-          { label: 'Copy image to clipboard', icon: 'clipboard', onClick: () => doExport('copy') },
-        ], { align: 'end' });
+          { label: t('Copy image to clipboard'), icon: 'clipboard', onClick: () => doExport('copy') },
+        ], { align: MENU_END });
       } else if (a === 'more') {
         openMenu(el, [
-          { label: 'Duplicate figure', icon: 'duplicate', onClick: duplicateFigure },
-          { label: 'Reset to template…', icon: 'wand', onClick: applyTemplate },
-          { label: 'Keyboard shortcuts', icon: 'keyboard', shortcut: '?', onClick: async () => (await import('../../app/shortcuts.js')).showShortcutsHelp() },
+          { label: t('Duplicate figure'), icon: 'duplicate', onClick: duplicateFigure },
+          { label: t('Reset to template…'), icon: 'wand', onClick: applyTemplate },
+          { label: t('Keyboard shortcuts'), icon: 'keyboard', shortcut: '?', onClick: async () => (await import('../../app/shortcuts.js')).showShortcutsHelp() },
           '-',
-          { label: 'Delete figure', icon: 'trash', danger: true, onClick: deleteFigure },
-        ], { align: 'end' });
+          { label: t('Delete figure'), icon: 'trash', danger: true, onClick: deleteFigure },
+        ], { align: MENU_END });
       }
     }));
 
@@ -480,23 +489,23 @@ export default {
     editor.on('comment-click', (id) => { activeTab = 'comments'; editor.select(id); renderPanel(true); });
     editor.on('context', ({ x, y, element, point }) => {
       const items = element ? [
-        { label: 'Edit text', icon: 'edit', shortcut: 'Enter', onClick: () => editor.startTextEdit(element.id) },
-        { label: 'Duplicate', icon: 'duplicate', shortcut: 'Ctrl+D', onClick: () => editor.duplicateSelection() },
-        { label: 'Copy', icon: 'copy', shortcut: 'Ctrl+C', onClick: () => editor.copy() },
+        { label: t('Edit text'), icon: 'edit', shortcut: 'Enter', onClick: () => editor.startTextEdit(element.id) },
+        { label: t('Duplicate'), icon: 'duplicate', shortcut: 'Ctrl+D', onClick: () => editor.duplicateSelection() },
+        { label: t('Copy'), icon: 'copy', shortcut: 'Ctrl+C', onClick: () => editor.copy() },
         '-',
-        { label: 'Bring to front', icon: 'bringFront', onClick: () => editor.bringToFront() },
-        { label: 'Send to back', icon: 'sendBack', onClick: () => editor.sendToBack() },
-        ...(isEdge(element) ? ['-', { label: 'Reverse direction', icon: 'swap', onClick: () => editor.reverseSelectedEdges() },
-          ...['straight', 'orthogonal', 'curved'].map((r) => ({ label: `${r[0].toUpperCase() + r.slice(1)} line`, icon: element.routing === r ? 'check' : 'line', onClick: () => editor.updateSelected((el) => { el.routing = r; }, { kind: 'edge' }) }))] : []),
+        { label: t('Bring to front'), icon: 'bringFront', onClick: () => editor.bringToFront() },
+        { label: t('Send to back'), icon: 'sendBack', onClick: () => editor.sendToBack() },
+        ...(isEdge(element) ? ['-', { label: t('Reverse direction'), icon: 'swap', onClick: () => editor.reverseSelectedEdges() },
+          ...Object.entries(ROUTING_MENU).map(([r, label]) => ({ label, icon: element.routing === r ? 'check' : 'line', onClick: () => editor.updateSelected((el) => { el.routing = r; }, { kind: 'edge' }) }))] : []),
         '-',
-        { label: 'Add comment', icon: 'message', onClick: () => { activeTab = 'comments'; renderPanel(true); panel.querySelector('[data-comment-input]')?.focus(); } },
-        { label: 'Delete', icon: 'trash', danger: true, shortcut: 'Del', onClick: () => editor.deleteSelection() },
+        { label: t('Add comment'), icon: 'message', onClick: () => { activeTab = 'comments'; renderPanel(true); panel.querySelector('[data-comment-input]')?.focus(); } },
+        { label: t('Delete'), icon: 'trash', danger: true, shortcut: 'Del', onClick: () => editor.deleteSelection() },
       ] : [
-        { label: 'Paste', icon: 'clipboard', shortcut: 'Ctrl+V', onClick: () => editor.paste() },
-        { label: 'Add text here', icon: 'type', onClick: () => { const el = editor.addPreset({ shape: 'text', text: '' }, point); if (el) editor.startTextEdit(el.id); } },
-        { label: 'Select all', icon: 'pointer', shortcut: 'Ctrl+A', onClick: () => editor.selectAll() },
+        { label: t('Paste'), icon: 'clipboard', shortcut: 'Ctrl+V', onClick: () => editor.paste() },
+        { label: t('Add text here'), icon: 'type', onClick: () => { const el = editor.addPreset({ shape: 'text', text: '' }, point); if (el) editor.startTextEdit(el.id); } },
+        { label: t('Select all'), icon: 'pointer', shortcut: 'Ctrl+A', onClick: () => editor.selectAll() },
         '-',
-        { label: 'Fit to screen', icon: 'maximize', shortcut: '⇧1', onClick: () => editor.fit() },
+        { label: t('Fit to screen'), icon: 'maximize', shortcut: '⇧1', onClick: () => editor.fit() },
       ];
       openMenu({ x, y }, items);
     });
@@ -544,7 +553,7 @@ export default {
     // ---------------------------------------------------------- store sync
     const offChange = store.on('change', ({ source }) => {
       if (deleted) return;
-      if (!getFigure()) { toast('This figure was deleted.', { type: 'warning' }); ctx.navigate(ctx.href('figures')); return; }
+      if (!getFigure()) { toast(t('This figure was deleted.'), { type: 'warning' }); ctx.navigate(ctx.href('figures')); return; }
       refreshHeader();
       refreshCommentBadges();
       if (source !== 'editor') renderPanel();

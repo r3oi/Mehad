@@ -76,12 +76,12 @@
   .acr-table td { display: block; padding: 0; border: 0; width: auto; max-width: none; text-align: start; }
   .acr-table tbody tr:hover td { background: transparent; }
   .acr-table tbody tr:hover { background: var(--surface-2); }
-  .acr-table td[data-label="Acronym"] { grid-area: a; }
+  .acr-table td.acr-key { grid-area: a; }
   .acr-table td.acr-meaning { grid-area: m; }
   .acr-table td.acr-desc { grid-area: d; font-size: 13px; }
   .acr-table td.acr-desc:has(> .faint) { display: none; }
   .acr-table td.acr-used { grid-area: u; font-size: 12.5px; text-align: start; width: auto; }
-  .acr-table td.acr-used::before { content: "Used: "; color: var(--muted); font-weight: 400; }
+  .acr-table td.acr-used::before { content: attr(data-label) ": "; color: var(--muted); font-weight: 400; }
   .acr-table td.acr-actions { grid-area: x; align-self: start; }
   .acr-actions .btn { opacity: 1; }
   .acr-sug-row { flex-direction: column; align-items: stretch; gap: 8px; }

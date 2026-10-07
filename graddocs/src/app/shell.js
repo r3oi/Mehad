@@ -76,7 +76,7 @@ export class Shell {
     this.breadcrumbsEl.innerHTML = all.map((c, i) => {
       const last = i === all.length - 1;
       const cls = c.hideSm ? 'crumb-hide-sm' : '';
-      const content = last ? `<span class="current truncate ${cls}">${esc(c.label)}</span>` : (c.href ? `<a class="${cls} truncate" href="${esc(c.href)}">${esc(c.label)}</a>` : `<span class="${cls}">${esc(c.label)}</span>`);
+      const content = last ? `<span class="current truncate ${cls}" dir="auto">${esc(c.label)}</span>` : (c.href ? `<a class="${cls} truncate" href="${esc(c.href)}" dir="auto">${esc(c.label)}</a>` : `<span class="${cls}" dir="auto">${esc(c.label)}</span>`);
       return `${content}${last ? '' : `<span class="sep ${cls}">/</span>`}`;
     }).join('');
   }

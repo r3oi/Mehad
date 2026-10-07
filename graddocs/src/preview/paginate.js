@@ -150,6 +150,10 @@ export function createMeasureHost(root, { contentWidth }) {
   const host = document.createElement('div');
   host.className = 'pv-measure-host';
   host.setAttribute('aria-hidden', 'true');
+  // Measure exactly like the page it will end up on: left-to-right, report-language (English) paper,
+  // whatever the app language is.
+  host.lang = 'en';
+  host.dir = 'ltr';
   const el = document.createElement('div');
   el.className = 'pv-measure';
   el.style.width = `${contentWidth}px`;

@@ -4,6 +4,7 @@
 // figure/table placements consistent.
 import { createSection, createChapter, findNode, walkSections, SECTION_STATUSES } from '../core/model.js';
 import { REF_RE, bodyOwners } from '../core/references.js';
+import { t, isRTL } from '../i18n/index.js';
 
 /** Deepest allowed section level: chapter → 1.4 (1) → 1.4.2 (2) → 1.4.2.1 (3). */
 export const MAX_SECTION_DEPTH = 3;
@@ -265,3 +266,45 @@ export function projectProgress(project) {
   walkSections(project, (s) => { total += 1; weighted += WEIGHT[s.status] ?? 0; if (s.status === 'done') done += 1; });
   return { total, done, percent: total ? Math.round((weighted / total) * 100) : 0 };
 }
+
+// ---------------------------------------------------------------------------
+// i18n helpers shared by the structure views and the body editor.
+
+/** "3 figures" / "1 figure" — grammar-safe in Arabic ("الأشكال: 3", "شكل واحد"). Report text is never passed through here. */
+export function countLabel(n, kind) {
+  const one = n === 1;
+  switch (kind) {
+    case 'chapter': return one ? t('1 chapter') : t('{n} chapters', { n });
+    case 'section': return one ? t('1 section') : t('{n} sections', { n });
+    case 'subsection': return one ? t('1 subsection') : t('{n} subsections', { n });
+    case 'figure': return one ? t('1 figure') : t('{n} figures', { n });
+    case 'table': return one ? t('1 table') : t('{n} tables', { n });
+    case 'acronym': return one ? t('1 acronym') : t('{n} acronyms', { n });
+    case 'word': return one ? t('1 word') : t('{n} words', { n });
+    case 'reference': return one ? t('1 reference') : t('{n} references', { n });
+    default: return String(n);
+  }
+}
+
+/** "3 of 12 sections done" for the chapter progress line. */
+export function progressText(pr) {
+  if (!pr.total) return t('No sections yet');
+  return pr.total === 1
+    ? t('{done} of 1 section done', { done: pr.done })
+    : t('{done} of {n} sections done', { done: pr.done, n: pr.total });
+}
+
+/** Wrap user text embedded in a translated plain-text sentence so it keeps its own direction (Arabic mode only). */
+export const isolate = (text) => (isRTL ? `\u2068${text}\u2069` : String(text));
+
+/** List separator: "," in English, "،" in Arabic. */
+export const LIST_SEP = isRTL ? '، ' : ', ';
+
+/** Arrow keys that mean "go deeper" (expand / indent) and "go back" (collapse / outdent) for the current direction. */
+export const KEY_FORWARD = isRTL ? 'ArrowLeft' : 'ArrowRight';
+export const KEY_BACK = isRTL ? 'ArrowRight' : 'ArrowLeft';
+export const ARROW_FORWARD = isRTL ? '←' : '→';
+export const ARROW_BACK = isRTL ? '→' : '←';
+
+/** Keep a short LTR snippet (shortcut hints such as "Alt ↑") intact inside right-to-left text. */
+export const ltr = (text) => (isRTL ? `⁦${text}⁩` : String(text));

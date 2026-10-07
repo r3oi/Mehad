@@ -15,10 +15,12 @@ import { toast } from '../ui/toast.js';
 import { getNumbering } from '../core/numbering.js';
 import { uid, clone, clamp, formatDateTime, modKey, modLabel, isTypingTarget } from '../core/utils.js';
 import { prefs } from '../app/prefs.js';
+// `t` is a local variable (the table) all over this file, so the translator is imported as `tr`.
+import { t as tr } from '../i18n/index.js';
 import { fontStack } from '../figures/text-layout.js';
 import * as ops from './table-ops.js';
 import { captionParts, pageTextWidthPx, renderTableMiniHTML } from './table-render.js';
-import { openExportMenu, duplicateTable, deleteTableWithUndo, openEditDetailsDialog } from './tables-view.js';
+import { openExportMenu, duplicateTable, deleteTableWithUndo, openEditDetailsDialog, bdi, isolate, ltr } from './tables-view.js';
 
 const SRC = 'table-editor';
 const GUTTER = 32; // px, row-number column
@@ -40,6 +42,14 @@ const GLYPH = {
   unmerge: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M12 5v14"/><path d="M5.5 12H9"/><path d="M15 12h3.5"/>'),
 };
 
+/** "3 rows × 4 columns" (English keeps its singular forms; Arabic uses label-first patterns that need no plural rules). */
+const dimsText = (rows, cols) => {
+  if (rows === 1 && cols === 1) return tr('1 row × 1 column');
+  if (rows === 1) return tr('1 row × {cols} columns', { cols });
+  if (cols === 1) return tr('{rows} rows × 1 column', { rows });
+  return tr('{rows} rows × {cols} columns', { rows, cols });
+};
+
 const colLetter = (i) => { let s = ''; let n = i; do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0); return s; };
 
 const luminance = (hex) => {
@@ -59,7 +69,7 @@ export default {
     const T = () => findT();
 
     if (!findT()) {
-      container.innerHTML = `<div class="page"><div class="empty-state"><div class="empty-icon">${icon('table')}</div><h3>Table not found</h3><p>It may have been deleted.</p><a class="btn btn-primary" href="${esc(ctx.href('tables'))}">Back to tables</a></div></div>`;
+      container.innerHTML = `<div class="page"><div class="empty-state"><div class="empty-icon">${icon('table')}</div><h3>${tr('Table not found')}</h3><p>${tr('It may have been deleted.')}</p><a class="btn btn-primary" href="${esc(ctx.href('tables'))}">${tr('Back to tables')}</a></div></div>`;
       return {};
     }
 
@@ -79,57 +89,57 @@ export default {
       <div class="te">
         <header class="te-head">
           <div class="te-head-row">
-            <a class="btn btn-ghost btn-sm te-back" href="${esc(ctx.href('tables'))}" data-tip="Back to all tables">${icon('arrowLeft')}<span>Tables</span></a>
-            <span class="badge badge-primary te-label" data-label></span>
-            <input class="te-title" data-title aria-label="Table title" placeholder="Untitled table" maxlength="160" autocomplete="off">
+            <a class="btn btn-ghost btn-sm te-back" href="${esc(ctx.href('tables'))}" data-tip="${esc(tr('Back to all tables'))}">${icon('arrowLeft')}<span>${tr('Tables')}</span></a>
+            <span class="badge badge-primary te-label" data-label dir="auto"></span>
+            <input class="te-title" data-title aria-label="${esc(tr('Table title'))}" placeholder="${esc(tr('Untitled table'))}" maxlength="160" autocomplete="off">
             <div class="te-head-actions">
-              <button class="btn btn-sm" data-action="history" data-tip="Version history">${icon('history')}<span class="te-btn-label">History</span><span class="te-count" data-version-count></span></button>
-              <button class="btn btn-sm" data-action="save-version" data-tip="Save a named version" data-kbd="${modLabel} S">${icon('save')}<span class="te-btn-label">Save version</span></button>
-              <button class="btn btn-sm btn-primary" data-action="export" aria-label="Export">${icon('export')}<span class="te-btn-label">Export</span>${icon('chevronDown', 'icon-sm')}</button>
-              <button class="btn btn-sm btn-ghost btn-icon" data-action="more" data-tip="More actions" aria-label="More actions">${icon('more')}</button>
+              <button class="btn btn-sm" data-action="history" data-tip="${esc(tr('Version history'))}">${icon('history')}<span class="te-btn-label">${tr('History')}</span><span class="te-count" data-version-count></span></button>
+              <button class="btn btn-sm" data-action="save-version" data-tip="${esc(tr('Save a named version'))}" data-kbd="${modLabel} S">${icon('save')}<span class="te-btn-label">${tr('Save version')}</span></button>
+              <button class="btn btn-sm btn-primary" data-action="export" aria-label="${esc(tr('Export'))}">${icon('export')}<span class="te-btn-label">${tr('Export')}</span>${icon('chevronDown', 'icon-sm')}</button>
+              <button class="btn btn-sm btn-ghost btn-icon" data-action="more" data-tip="${esc(tr('More actions'))}" aria-label="${esc(tr('More actions'))}">${icon('more')}</button>
             </div>
           </div>
           <div class="te-head-row te-meta">
-            <label class="te-field"><span>Chapter</span><select class="select select-sm" data-chapter></select></label>
-            <label class="te-field"><span>Section</span><select class="select select-sm" data-section></select></label>
-            <button class="btn btn-ghost btn-sm" data-action="toggle-desc" aria-expanded="false">${icon('chevronRight', 'icon-sm te-chev')}<span data-desc-label>Description</span></button>
+            <label class="te-field"><span>${tr('Chapter')}</span><select class="select select-sm" data-chapter></select></label>
+            <label class="te-field"><span>${tr('Section')}</span><select class="select select-sm" data-section></select></label>
+            <button class="btn btn-ghost btn-sm" data-action="toggle-desc" aria-expanded="false">${icon('chevronRight', 'icon-sm te-chev')}<span data-desc-label>${tr('Description')}</span></button>
             <span class="te-code" data-code></span>
           </div>
-          <div class="te-desc" data-desc hidden><textarea class="textarea" rows="2" data-description placeholder="What does this table show? (optional)"></textarea></div>
+          <div class="te-desc" data-desc hidden><textarea class="textarea" rows="2" data-description placeholder="${esc(tr('What does this table show? (optional)'))}"></textarea></div>
         </header>
-        <div class="te-toolbar" role="toolbar" aria-label="Table formatting">
-          ${btn('undo', icon('undo'), 'Undo', `${modLabel} Z`)}${btn('redo', icon('redo'), 'Redo', `${modLabel} Y`)}
+        <div class="te-toolbar" role="toolbar" aria-label="${esc(tr('Table formatting'))}">
+          ${btn('undo', icon('undo'), tr('Undo'), `${modLabel} Z`)}${btn('redo', icon('redo'), tr('Redo'), `${modLabel} Y`)}
           <span class="tb-sep"></span>
-          ${btn('rowAbove', GLYPH.rowAbove, 'Add row above')}${btn('rowBelow', GLYPH.rowBelow, 'Add row below')}${btn('rowDelete', GLYPH.rowDelete, 'Delete row')}
+          ${btn('rowAbove', GLYPH.rowAbove, tr('Add row above'))}${btn('rowBelow', GLYPH.rowBelow, tr('Add row below'))}${btn('rowDelete', GLYPH.rowDelete, tr('Delete row'))}
           <span class="tb-sep"></span>
-          ${btn('colLeft', GLYPH.colLeft, 'Add column left')}${btn('colRight', GLYPH.colRight, 'Add column right')}${btn('colDelete', GLYPH.colDelete, 'Delete column')}
+          ${btn('colLeft', GLYPH.colLeft, tr('Add column left'))}${btn('colRight', GLYPH.colRight, tr('Add column right'))}${btn('colDelete', GLYPH.colDelete, tr('Delete column'))}
           <span class="tb-sep"></span>
-          ${btn('merge', GLYPH.merge, 'Merge cells')}${btn('unmerge', GLYPH.unmerge, 'Unmerge cells')}
+          ${btn('merge', GLYPH.merge, tr('Merge cells'))}${btn('unmerge', GLYPH.unmerge, tr('Unmerge cells'))}
           <span class="tb-sep"></span>
-          ${btn('bold', icon('bold'), 'Bold', `${modLabel} B`)}${btn('italic', icon('italic'), 'Italic', `${modLabel} I`)}
-          ${btn('alignLeft', icon('alignLeft'), 'Align left')}${btn('alignCenter', icon('alignCenter'), 'Align centre')}${btn('alignRight', icon('alignRight'), 'Align right')}
+          ${btn('bold', icon('bold'), tr('Bold'), `${modLabel} B`)}${btn('italic', icon('italic'), tr('Italic'), `${modLabel} I`)}
+          ${btn('alignLeft', icon('alignLeft'), tr('Align left'))}${btn('alignCenter', icon('alignCenter'), tr('Align centre'))}${btn('alignRight', icon('alignRight'), tr('Align right'))}
           <span class="tb-sep"></span>
-          <label class="tb-ctl" data-tip="Number of header rows"><span>Header rows</span>
+          <label class="tb-ctl" data-tip="${esc(tr('Number of header rows'))}"><span>${tr('Header rows')}</span>
             <select class="select select-sm" data-ctl="headerRows"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label>
-          <label class="tb-ctl" data-tip="Header fill colour"><span>Header</span><input type="color" class="input-color" data-ctl="fill" aria-label="Header colour"></label>
-          ${btn('zebra', icon('layers'), 'Zebra stripes')}
-          <label class="tb-ctl" data-tip="Cell borders"><span>Borders</span>
-            <select class="select select-sm" data-ctl="borders"><option value="all">All</option><option value="horizontal">Horizontal</option></select></label>
-          <label class="tb-ctl" data-tip="Font size"><span>Size</span>
+          <label class="tb-ctl" data-tip="${esc(tr('Header fill colour'))}"><span>${tr('Header')}</span><input type="color" class="input-color" data-ctl="fill" aria-label="${esc(tr('Header colour'))}"></label>
+          ${btn('zebra', icon('layers'), tr('Zebra stripes'))}
+          <label class="tb-ctl" data-tip="${esc(tr('Cell borders'))}"><span>${tr('Borders')}</span>
+            <select class="select select-sm" data-ctl="borders"><option value="all">${tr('All')}</option><option value="horizontal">${tr('Horizontal')}</option></select></label>
+          <label class="tb-ctl" data-tip="${esc(tr('Font size'))}"><span>${tr('Size')}</span>
             <select class="select select-sm" data-ctl="fontSize"></select></label>
         </div>
         <div class="te-canvas" data-canvas>
           <div class="te-sheet" data-sheet>
-            <div class="te-caption" data-cap="above"></div>
-            <div class="te-grid" data-grid role="grid" aria-label="Table cells"></div>
-            <div class="te-caption" data-cap="below"></div>
+            <div class="te-caption" data-cap="above" dir="auto"></div>
+            <div class="te-grid" data-grid role="grid" aria-label="${esc(tr('Table cells'))}"></div>
+            <div class="te-caption" data-cap="below" dir="auto"></div>
           </div>
         </div>
         <footer class="te-status">
           <span data-dims></span><span class="sep">·</span><span class="te-saved" data-saved></span>
-          <span class="te-hint">Tab / Enter to move · Shift+click or drag to select · ${modLabel}+Z undo</span>
+          <span class="te-hint">${tr('Tab / Enter to move · Shift+click or drag to select · {shortcut} undo', { shortcut: `${modLabel}+Z` })}</span>
           <span class="spacer"></span><span data-selinfo class="muted"></span>
-          <span class="te-zoom"><button class="btn btn-ghost btn-icon btn-sm" data-action="zoom-out" data-tip="Zoom out" aria-label="Zoom out">${icon('zoomOut')}</button><span data-zoom-label></span><button class="btn btn-ghost btn-icon btn-sm" data-action="zoom-in" data-tip="Zoom in" aria-label="Zoom in">${icon('zoomIn')}</button></span>
+          <span class="te-zoom"><button class="btn btn-ghost btn-icon btn-sm" data-action="zoom-out" data-tip="${esc(tr('Zoom out'))}" aria-label="${esc(tr('Zoom out'))}">${icon('zoomOut')}</button><span data-zoom-label></span><button class="btn btn-ghost btn-icon btn-sm" data-action="zoom-in" data-tip="${esc(tr('Zoom in'))}" aria-label="${esc(tr('Zoom in'))}">${icon('zoomIn')}</button></span>
         </footer>
       </div>`;
 
@@ -234,7 +244,7 @@ export default {
       gridEl.querySelectorAll('.colhead').forEach((h) => h.classList.toggle('sel', allRows && +h.dataset.col >= rect.c1 && +h.dataset.col <= rect.c2));
       gridEl.querySelectorAll('.rowhead').forEach((h) => h.classList.toggle('sel', allCols && +h.dataset.row >= rect.r1 && +h.dataset.row <= rect.r2));
       const info = $('[data-selinfo]');
-      info.textContent = multi ? `${rect.r2 - rect.r1 + 1} × ${rect.c2 - rect.c1 + 1} cells selected` : '';
+      info.textContent = multi ? tr('{rows} × {cols} cells selected', { rows: rect.r2 - rect.r1 + 1, cols: rect.c2 - rect.c1 + 1 }) : '';
     }
 
     function focusCell(rc, caret = 'end', { scroll = false } = {}) {
@@ -246,6 +256,12 @@ export default {
       if (caret === 'end') ta.setSelectionRange(ta.value.length, ta.value.length);
       else if (caret === 'start') ta.setSelectionRange(0, 0);
       else if (caret === 'all') ta.select();
+      else if (caret === 'edge-left' || caret === 'edge-right') {
+        // The visual edge of the text: in right-to-left cell text the logical start is on the right.
+        const atStart = (caret === 'edge-left') === (getComputedStyle(ta).direction !== 'rtl');
+        const pos = atStart ? 0 : ta.value.length;
+        ta.setSelectionRange(pos, pos);
+      }
       if (scroll) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
 
@@ -272,9 +288,9 @@ export default {
       gridEl.classList.toggle('horizontal', st.borders === 'horizontal');
       gridEl.style.gridTemplateColumns = `${GUTTER}px ${t.columns.map((c) => `minmax(0, ${Math.max(1, c.width)}fr)`).join(' ')}`;
 
-      const parts = [`<div class="corner" data-corner data-tip="Select all" style="grid-row:1;grid-column:1"></div>`];
+      const parts = [`<div class="corner" data-corner data-tip="${esc(tr('Select all'))}" style="grid-row:1;grid-column:1"></div>`];
       t.columns.forEach((_, c) => {
-        parts.push(`<div class="colhead" data-col="${c}" style="grid-row:1;grid-column:${c + 2}">${colLetter(c)}${c < cols - 1 ? `<span class="col-resize" data-resize="${c}" data-tip="Drag to resize · double-click to equalise"></span>` : ''}</div>`);
+        parts.push(`<div class="colhead" data-col="${c}" style="grid-row:1;grid-column:${c + 2}">${colLetter(c)}${c < cols - 1 ? `<span class="col-resize" data-resize="${c}" data-tip="${esc(tr('Drag to resize · double-click to equalise'))}"></span>` : ''}</div>`);
       });
       for (let r = 0; r < rows; r += 1) {
         parts.push(`<div class="rowhead ${r < header ? 'hdr' : ''}" data-row="${r}" style="grid-row:${r + 2};grid-column:1">${r + 1}</div>`);
@@ -289,7 +305,7 @@ export default {
           if (cell.italic) cls.push('i');
           const text = String(cell.text ?? '');
           parts.push(`<div class="${cls.join(' ')}" role="gridcell" data-r="${r}" data-c="${c}" data-rs="${rs}" data-cs="${cs}" style="grid-row:${r + 2}/span ${rs};grid-column:${c + 2}/span ${cs};text-align:${cell.align || 'left'}">`
-        + `<div class="cell-wrap" data-value="${esc(text)}"><textarea rows="1" data-r="${r}" data-c="${c}" aria-label="Row ${r + 1}, column ${c + 1}">${text.startsWith('\n') ? '\n' : ''}${esc(text)}</textarea></div></div>`);
+        + `<div class="cell-wrap" data-value="${esc(text)}"><textarea rows="1" data-r="${r}" data-c="${c}" dir="auto" aria-label="${esc(tr('Row {r}, column {c}', { r: r + 1, c: c + 1 }))}">${text.startsWith('\n') ? '\n' : ''}${esc(text)}</textarea></div></div>`);
         }
       }
       gridEl.innerHTML = parts.join('');
@@ -319,17 +335,17 @@ export default {
     function refreshMeta() {
       const t = T(); const n = getNumbering(store.project); const info = n.tables.get(t.id);
       $('[data-label]').textContent = info?.label || 'Table';
-      $('[data-code]').textContent = info ? `${info.code} · ${info.location}` : '';
+      $('[data-code]').innerHTML = info ? `${bdi(esc(info.code), 'ltr')} · ${bdi(esc(info.location))}` : '';
       if (document.activeElement !== titleEl) titleEl.value = t.title;
       const chapterId = info?.chapterId || '';
-      chapterEl.innerHTML = `<option value="">Unassigned</option>${store.project.chapters.map((ch) => `<option value="${esc(ch.id)}">${esc(`${n.chapters.get(ch.id).label} · ${ch.title}`)}</option>`).join('')}`;
+      chapterEl.innerHTML = `<option value="">${tr('Unassigned')}</option>${store.project.chapters.map((ch) => `<option value="${esc(ch.id)}">${esc(`${n.chapters.get(ch.id).label} · ${ch.title}`)}</option>`).join('')}`;
       chapterEl.value = chapterId;
       fillSections(chapterId, info?.sectionId || '');
       if (document.activeElement !== descEl) descEl.value = t.description || '';
-      $('[data-desc-label]').textContent = t.description ? 'Description' : 'Add description';
+      $('[data-desc-label]').textContent = t.description ? tr('Description') : tr('Add description');
       $('[data-version-count]').textContent = t.versions.length || '';
-      shell.setBreadcrumbs([{ label: 'Tables', href: ctx.href('tables') }, { label: `${info?.label || 'Table'} · ${t.title}` }]);
-      document.title = `${t.title} · Table editor · ${store.project.name} · GradDocs`;
+      shell.setBreadcrumbs([{ label: tr('Tables'), href: ctx.href('tables') }, { label: `${info?.label || 'Table'} · ${t.title}` }]);
+      document.title = `${t.title} · ${tr('Table editor')} · ${store.project.name} · GradDocs`;
       renderCaption();
     }
     function fillSections(chapterId, sectionId) {
@@ -337,16 +353,16 @@ export default {
       const secs = n.outline.filter((o) => o.kind === 'section' && o.chapterId === chapterId);
       sectionEl.disabled = !chapterId;
       sectionEl.innerHTML = chapterId
-        ? `<option value="">Whole chapter</option>${secs.map((s) => `<option value="${esc(s.id)}">${esc(`${s.number} ${s.title}`)}</option>`).join('')}`
-        : '<option value="">Choose a chapter first</option>';
+        ? `<option value="">${tr('Whole chapter')}</option>${secs.map((s) => `<option value="${esc(s.id)}">${esc(`${s.number} ${s.title}`)}</option>`).join('')}`
+        : `<option value="">${tr('Choose a chapter first')}</option>`;
       sectionEl.value = sectionId || '';
     }
     function refreshStatus() {
       const t = T(); if (!t) return;
-      $('[data-dims]').textContent = `${t.rows.length} row${t.rows.length === 1 ? '' : 's'} × ${t.columns.length} column${t.columns.length === 1 ? '' : 's'}`;
+      $('[data-dims]').textContent = dimsText(t.rows.length, t.columns.length);
       const saving = pending.size || store.status === 'saving';
       const el = $('[data-saved]');
-      el.textContent = store.status === 'error' ? 'Not saved' : saving ? 'Saving…' : 'Saved';
+      el.textContent = store.status === 'error' ? tr('Not saved') : saving ? tr('Saving…') : tr('Saved');
       el.dataset.state = store.status === 'error' ? 'error' : saving ? 'saving' : 'saved';
       $('[data-version-count]').textContent = t.versions.length || '';
       $('[data-zoom-label]').textContent = `${Math.round(zoom * 100)}%`;
@@ -390,19 +406,19 @@ export default {
       rowAbove: () => structural((d, rect, raw) => { const i = ops.insertRow(d, raw.r1); return { select: { r1: i, c1: raw.c1, r2: i, c2: raw.c1 } }; }, { activity: 'Added a table row' }),
       rowBelow: () => structural((d, rect, raw) => { const i = ops.insertRow(d, raw.r2 + 1); return { select: { r1: i, c1: raw.c1, r2: i, c2: raw.c1 } }; }, { activity: 'Added a table row' }),
       rowDelete: () => structural((d, rect, raw) => {
-        if (!ops.deleteRows(d, raw.r1, raw.r2)) return { ok: false, reason: 'A table needs at least one row.' };
+        if (!ops.deleteRows(d, raw.r1, raw.r2)) return { ok: false, reason: tr('A table needs at least one row.') };
         const r = Math.min(raw.r1, d.rows.length - 1);
         return { select: { r1: r, c1: raw.c1, r2: r, c2: raw.c1 } };
       }, { activity: 'Deleted a table row' }),
       colLeft: () => structural((d, rect, raw) => { const i = ops.insertColumn(d, raw.c1); return { select: { r1: raw.r1, c1: i, r2: raw.r1, c2: i } }; }, { activity: 'Added a table column' }),
       colRight: () => structural((d, rect, raw) => { const i = ops.insertColumn(d, raw.c2 + 1); return { select: { r1: raw.r1, c1: i, r2: raw.r1, c2: i } }; }, { activity: 'Added a table column' }),
       colDelete: () => structural((d, rect, raw) => {
-        if (!ops.deleteColumns(d, raw.c1, raw.c2)) return { ok: false, reason: 'A table needs at least one column.' };
+        if (!ops.deleteColumns(d, raw.c1, raw.c2)) return { ok: false, reason: tr('A table needs at least one column.') };
         const c = Math.min(raw.c1, d.columns.length - 1);
         return { select: { r1: raw.r1, c1: c, r2: raw.r1, c2: c } };
       }, { activity: 'Deleted a table column' }),
       merge: () => structural((d, rect) => { const res = ops.mergeCells(d, rect); return res.ok ? { select: res.rect } : res; }, { activity: 'Merged table cells' }),
-      unmerge: () => structural((d, rect) => (ops.unmergeCells(d, rect) ? {} : { ok: false, reason: 'There are no merged cells in the selection.' }), { activity: 'Unmerged table cells' }),
+      unmerge: () => structural((d, rect) => (ops.unmergeCells(d, rect) ? {} : { ok: false, reason: tr('There are no merged cells in the selection.') }), { activity: 'Unmerged table cells' }),
       bold: () => {
         const t = T(); const anchors = ops.anchorsIn(t, selRect());
         const on = !anchors.every((a) => ops.isCellBold(t, a.r, a.cell));
@@ -430,14 +446,14 @@ export default {
     function saveVersion({ label = '' } = {}) {
       flushPending();
       const t = T(); const snap = ops.snapshotContent(t); const last = t.versions[t.versions.length - 1];
-      if (last && ops.contentKey(last.snapshot) === ops.contentKey(snap)) { toast(`No changes since version ${last.number}`, { type: 'info', duration: 2200 }); return null; }
+      if (last && ops.contentKey(last.snapshot) === ops.contentKey(snap)) { toast(tr('No changes since version {n}', { n: last.number }), { type: 'info', duration: 2200 }); return null; }
       const number = (last?.number || 0) + 1;
       const version = { id: uid('ver'), number, label: label || `Version ${number}`, kind: 'version', createdAt: Date.now(), snapshot: snap };
       patchTable((tt) => {
         tt.versions.push(version);
         if (tt.versions.length > MAX_VERSIONS) tt.versions.splice(1, tt.versions.length - MAX_VERSIONS);
       }, `Saved version ${number} of table "${t.title}"`);
-      toast(`Saved version ${number}`, { type: 'success', duration: 1800 });
+      toast(tr('Saved version {n}', { n: number }), { type: 'success', duration: 1800 });
       return version;
     }
 
@@ -456,14 +472,18 @@ export default {
         if (tt.versions.length > MAX_VERSIONS) tt.versions.splice(1, tt.versions.length - MAX_VERSIONS);
       }, `Restored version ${v.number} of table "${t.title}"`);
       afterContentChange();
-      toast(`Restored version ${v.number}. Undo with ${modLabel}+Z.`, { type: 'success' });
+      toast(tr('Restored version {n}. Undo with {shortcut}.', { n: v.number, shortcut: ltr(`${modLabel}+Z`) }), { type: 'success' });
     }
 
     function openHistory() {
       flushPending();
       const t = T();
       if (!t.versions.length) {
-        openModal({ title: 'Version history', size: 'lg', body: `<div class="empty-state"><div class="empty-icon">${icon('history')}</div><h3>No versions yet</h3><p>Press <kbd>${modLabel}</kbd> <kbd>S</kbd> or “Save version” to keep a snapshot you can restore later. For example, before changing a table a supervisor already approved.</p></div>`, footer: '<button class="btn" data-close>Close</button>' });
+        openModal({
+          title: tr('Version history'), size: 'lg',
+          body: `<div class="empty-state"><div class="empty-icon">${icon('history')}</div><h3>${tr('No versions yet')}</h3><p>${tr('Press {keys} or “Save version” to keep a snapshot you can restore later. For example, before changing a table a supervisor already approved.', { keys: bdi(`<kbd>${modLabel}</kbd> <kbd>S</kbd>`, 'ltr') })}</p></div>`,
+          footer: `<button class="btn" data-close>${tr('Close')}</button>`,
+        });
         return;
       }
       const currentKey = ops.contentKey(ops.snapshotContent(t));
@@ -472,15 +492,16 @@ export default {
         return `<div class="ver-item">
           <div class="ver-preview">${renderTableMiniHTML(v.snapshot, { rows: 3, cols: 5 })}</div>
           <div class="grow">
-            <div class="ver-title"><strong>v${v.number}</strong> · ${esc(v.label)} ${isCurrent ? '<span class="badge badge-success">Current</span>' : ''}${v.kind === 'auto' ? '<span class="badge">Automatic</span>' : ''}</div>
-            <div class="meta">${esc(formatDateTime(v.createdAt))} <span class="sep">·</span> ${v.snapshot.rows.length} × ${v.snapshot.columns.length}</div>
+            <div class="ver-title"><strong>${bdi(`v${v.number}`, 'ltr')}</strong> · ${bdi(esc(v.label))} ${isCurrent ? `<span class="badge badge-success">${tr('Current')}</span>` : ''}${v.kind === 'auto' ? `<span class="badge">${tr('Automatic')}</span>` : ''}</div>
+            <div class="meta">${bdi(esc(formatDateTime(v.createdAt)))} <span class="sep">·</span> ${bdi(`${v.snapshot.rows.length} × ${v.snapshot.columns.length}`, 'ltr')}</div>
           </div>
-          <button class="btn btn-sm" data-restore="${esc(v.id)}" ${isCurrent ? 'disabled' : ''}>${icon('undo')}Restore</button>
+          <button class="btn btn-sm" data-restore="${esc(v.id)}" ${isCurrent ? 'disabled' : ''}>${icon('undo')}${tr('Restore')}</button>
         </div>`;
       }).join('');
       const modal = openModal({
-        title: 'Version history', subtitle: `${t.title} · ${t.versions.length} saved version${t.versions.length === 1 ? '' : 's'}`, size: 'lg',
-        body: `<div class="ver-list">${list}</div>`, footer: '<button class="btn" data-close>Close</button>',
+        title: tr('Version history'), size: 'lg',
+        subtitle: t.versions.length === 1 ? tr('{title} · 1 saved version', { title: isolate(t.title) }) : tr('{title} · {n} saved versions', { title: isolate(t.title), n: t.versions.length }),
+        body: `<div class="ver-list">${list}</div>`, footer: `<button class="btn" data-close>${tr('Close')}</button>`,
         onClose: () => { historyModal = null; },
       });
       historyModal = modal;
@@ -522,7 +543,7 @@ export default {
     let descTimer = 0;
     D.listen(descEl, 'input', () => {
       clearTimeout(descTimer);
-      descTimer = setTimeout(() => { patchTable((t) => { t.description = descEl.value.trim(); }, `Edited description of table "${T().title}"`); $('[data-desc-label]').textContent = descEl.value.trim() ? 'Description' : 'Add description'; }, 400);
+      descTimer = setTimeout(() => { patchTable((t) => { t.description = descEl.value.trim(); }, `Edited description of table "${T().title}"`); $('[data-desc-label]').textContent = descEl.value.trim() ? tr('Description') : tr('Add description'); }, 400);
     });
 
     D.add(on(container, 'click', '[data-action]', async (e, el) => {
@@ -534,17 +555,17 @@ export default {
       } else if (action === 'history') openHistory();
       else if (action === 'save-version') {
         const v = await formDialog({
-          title: 'Save version', subtitle: 'A snapshot of the table you can restore later.', submitText: 'Save version',
-          fields: [{ name: 'label', label: 'Version name (optional)', placeholder: 'e.g. After supervisor review', value: '' }],
+          title: tr('Save version'), subtitle: tr('A snapshot of the table you can restore later.'), submitText: tr('Save version'),
+          fields: [{ name: 'label', label: tr('Version name (optional)'), placeholder: tr('e.g. After supervisor review'), value: '' }],
         });
         if (v) saveVersion({ label: v.label });
       } else if (action === 'export') { flushPending(); openExportMenu(el, store.project, T()); }
       else if (action === 'more') {
         openMenu(el, [
-          { label: 'Edit details…', icon: 'edit', onClick: () => { flushPending(); openEditDetailsDialog(ctx, tableId); } },
-          { label: 'Duplicate table', icon: 'duplicate', onClick: () => { flushPending(); const id = duplicateTable(store, tableId); if (id) { toast('Duplicated. Opening the copy…', { type: 'success', duration: 1600 }); ctx.navigate(ctx.href('tables', id)); } } },
+          { label: tr('Edit details…'), icon: 'edit', onClick: () => { flushPending(); openEditDetailsDialog(ctx, tableId); } },
+          { label: tr('Duplicate table'), icon: 'duplicate', onClick: () => { flushPending(); const id = duplicateTable(store, tableId); if (id) { toast(tr('Duplicated. Opening the copy…'), { type: 'success', duration: 1600 }); ctx.navigate(ctx.href('tables', id)); } } },
           '-',
-          { label: 'Delete table…', icon: 'trash', danger: true, onClick: async () => { flushPending(); if (await deleteTableWithUndo(store, tableId)) ctx.navigate(ctx.href('tables'), { replace: true }); } },
+          { label: tr('Delete table…'), icon: 'trash', danger: true, onClick: async () => { flushPending(); if (await deleteTableWithUndo(store, tableId)) ctx.navigate(ctx.href('tables'), { replace: true }); } },
         ], { align: 'end' });
       } else if (action === 'zoom-in' || action === 'zoom-out') {
         const i = ZOOMS.indexOf(zoom) + (action === 'zoom-in' ? 1 : -1);
@@ -717,6 +738,9 @@ export default {
       const ta = e.target;
       if (ta.tagName !== 'TEXTAREA' || e.isComposing || modKey(e) || e.altKey) return;
       const rc = rcOf(ta); const collapsed = ta.selectionStart === ta.selectionEnd;
+      // Cell text uses dir="auto": Arabic text runs right-to-left inside the (left-to-right) grid, so the
+      // left / right arrows leave the cell at the *visual* edge of the text.
+      const rtlText = getComputedStyle(ta).direction === 'rtl';
       switch (e.key) {
         case 'Tab': e.preventDefault(); if (e.shiftKey) goPrev(rc); else goNext(rc); break;
         case 'Enter':
@@ -726,8 +750,8 @@ export default {
         case 'Escape': if (isMulti()) { e.preventDefault(); setSel(sel.a); } break;
         case 'ArrowUp': if (!e.shiftKey && (singleLine(ta) || (collapsed && ta.selectionStart === 0)) && go(rc, -1, 0, 'end')) e.preventDefault(); break;
         case 'ArrowDown': if (!e.shiftKey && (singleLine(ta) || (collapsed && ta.selectionEnd === ta.value.length)) && go(rc, 1, 0, 'end')) e.preventDefault(); break;
-        case 'ArrowLeft': if (!e.shiftKey && collapsed && ta.selectionStart === 0 && go(rc, 0, -1, 'end')) e.preventDefault(); break;
-        case 'ArrowRight': if (!e.shiftKey && collapsed && ta.selectionEnd === ta.value.length && go(rc, 0, 1, 'start')) e.preventDefault(); break;
+        case 'ArrowLeft': if (!e.shiftKey && collapsed && ta.selectionStart === (rtlText ? ta.value.length : 0) && go(rc, 0, -1, 'edge-right')) e.preventDefault(); break;
+        case 'ArrowRight': if (!e.shiftKey && collapsed && ta.selectionEnd === (rtlText ? 0 : ta.value.length) && go(rc, 0, 1, 'edge-left')) e.preventDefault(); break;
         case 'Delete': case 'Backspace':
           if (isMulti()) { e.preventDefault(); structural((d, rect) => { ops.clearCells(d, rect); return {}; }, { activity: `Cleared cells in table "${T().title}"` }); }
           break;

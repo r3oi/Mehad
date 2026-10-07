@@ -5,6 +5,7 @@
 // flag bit 11), CRC-32 is real, and a DOS date/time is written for every entry, so the archive
 // opens in Windows Explorer, macOS Archive Utility, `unzip` and Microsoft Word (for .docx).
 import { crc32Final } from './png.js';
+import { t, isRTL } from '../i18n/index.js';
 
 const enc = new TextEncoder();
 const SIG_LOCAL = 0x04034b50;
@@ -48,7 +49,7 @@ export async function createZip(files, { onProgress } = {}) {
   let offset = 0;
   const seen = new Set();
   const list = (files || []).filter((f) => f && f.path);
-  if (list.length > 0xfffe) throw new Error('Too many files for a ZIP archive.');
+  if (list.length > 0xfffe) throw new Error(t('Too many files for a ZIP archive.'));
 
   let index = 0;
   for (const file of list) {
@@ -57,7 +58,7 @@ export async function createZip(files, { onProgress } = {}) {
     seen.add(path);
     const name = enc.encode(path);
     const raw = await toBytes(file.data ?? '');
-    if (raw.length > 0xfffffffe || offset > 0xfffffffe) throw new Error(`"${path}" is too large for a ZIP archive.`);
+    if (raw.length > 0xfffffffe || offset > 0xfffffffe) throw new Error(t('"{path}" is too large for a ZIP archive.', { path: isRTL ? `\u2066${path}\u2069` : path })); // file names stay left-to-right
     const crc = crc32Final(raw);
     let method = 0; let body = raw;
     if (canDeflate && raw.length > 64 && !INCOMPRESSIBLE.test(path)) {

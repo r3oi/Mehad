@@ -15,11 +15,19 @@ import { addVersion, latestVersion, isDirty } from './versions.js';
 import { svgToPngBlob, copyPngToClipboard } from '../export/png.js';
 import { svgToPdfBlob } from '../export/pdf.js';
 import { prefs } from '../app/prefs.js';
+import { t, isRTL } from '../i18n/index.js';
+
+// Menus anchor to a physical edge: the end of the row is on the left in Arabic.
+const MENU_END = isRTL ? 'start' : 'end';
+// User-typed text (titles, descriptions) picks its own direction in Arabic mode.
+const AUTO = isRTL ? ' dir="auto"' : '';
+/** "3 figures" in English; a grammar-safe "Figures: 3" pattern in Arabic. */
+const figuresCount = (n) => (isRTL ? t('Figures: {n}', { n }) : plural(n, 'figure'));
 
 /** <option>s for chapter/section placement. value = 'ch:<id>' | 'sec:<id>' | '' */
 export function locationOptions(project, selected = '') {
   const n = getNumbering(project);
-  const out = [`<option value="" ${!selected ? 'selected' : ''}>Unassigned (numbered last)</option>`];
+  const out = [`<option value="" ${!selected ? 'selected' : ''}>${t('Unassigned (numbered last)')}</option>`];
   for (const ch of project.chapters) {
     const ci = n.chapters.get(ch.id);
     out.push(`<option value="ch:${ch.id}" ${selected === `ch:${ch.id}` ? 'selected' : ''}>${esc(ci.label)}: ${esc(ch.title)}</option>`);
@@ -50,34 +58,36 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
   return new Promise((resolve) => {
     let created = null;
     const modal = openModal({
-      title: 'New Figure',
-      subtitle: 'Pick a diagram type — every template becomes fully editable shapes and connectors.',
+      title: t('New Figure'),
+      subtitle: t('Pick a diagram type — every template becomes fully editable shapes and connectors.'),
       size: 'xl',
       body: `<div class="new-fig-layout">
-        <div><div class="section-title">Diagram type</div><div class="type-gallery" role="listbox" aria-label="Diagram types">
-          ${types.map((t) => `<button class="type-card ${t.id === selectedType ? 'active' : ''}" data-type="${t.id}" role="option" aria-selected="${t.id === selectedType}">
-            <span class="type-icon">${icon(t.icon)}</span><strong>${esc(t.name)}</strong><span class="desc">${esc(t.description)}</span></button>`).join('')}
+        <div><div class="section-title">${t('Diagram type')}</div><div class="type-gallery" role="listbox" aria-label="${t('Diagram types')}">
+          ${types.map((ft) => `<button class="type-card ${ft.id === selectedType ? 'active' : ''}" data-type="${ft.id}" role="option" aria-selected="${ft.id === selectedType}">
+            <span class="type-icon">${icon(ft.icon)}</span><strong>${esc(ft.name)}</strong><span class="desc">${esc(ft.description)}</span></button>`).join('')}
         </div></div>
         <div class="col" style="gap:14px">
-          <div><div class="section-title">Template preview</div><div class="new-fig-preview" data-preview></div></div>
-          <div class="field"><label for="nf-title">Figure title <span style="color:var(--danger)">*</span></label><input id="nf-title" class="input" autofocus></div>
-          <div class="field"><label for="nf-loc">Chapter / section</label><select id="nf-loc" class="select">${locationOptions(project, initialLoc)}</select></div>
-          <div class="field"><label for="nf-desc">Description</label><textarea id="nf-desc" class="textarea" rows="2" placeholder="Optional"></textarea></div>
+          <div><div class="section-title">${t('Template preview')}</div><div class="new-fig-preview" data-preview></div></div>
+          <div class="field"><label for="nf-title">${t('Figure title')} <span style="color:var(--danger)">*</span></label><input id="nf-title" class="input" autofocus${AUTO}></div>
+          <div class="field"><label for="nf-loc">${t('Chapter / section')}</label><select id="nf-loc" class="select">${locationOptions(project, initialLoc)}</select></div>
+          <div class="field"><label for="nf-desc">${t('Description')}</label><textarea id="nf-desc" class="textarea" rows="2" placeholder="${t('Optional')}"${AUTO}></textarea></div>
           <div class="number-hint" data-number>${icon('info', 'icon-sm')}<span></span></div>
         </div>
       </div>`,
-      footer: '<button class="btn" data-close>Cancel</button><button class="btn btn-primary" data-create>Create figure</button>',
+      footer: `<button class="btn" data-close>${t('Cancel')}</button><button class="btn btn-primary" data-create>${t('Create figure')}</button>`,
       onClose: () => resolve(created),
     });
     const titleEl = modal.$('#nf-title'); const locEl = modal.$('#nf-loc');
     const refresh = () => {
-      const t = getFigureType(selectedType);
-      if (!titleTouched) titleEl.value = t.name;
+      const ft = getFigureType(selectedType);
+      if (!titleTouched) titleEl.value = ft.defaultTitle;
       modal.$('[data-preview]').innerHTML = renderThumbnail(buildTemplate(selectedType, project));
-      const candidate = { id: '__new', title: titleEl.value || t.name, ...parseLocation(project, locEl.value) };
+      const candidate = { id: '__new', title: titleEl.value || ft.defaultTitle, ...parseLocation(project, locEl.value) };
       const n = getNumbering({ ...project, figures: [...project.figures, candidate] }).figures.get('__new');
-      const after = project.figures.length && n.index <= project.figures.length ? ` — figures after it are renumbered automatically` : '';
-      modal.$('[data-number] span').textContent = `This will be ${n.label}${after}.`;
+      const renumbers = project.figures.length && n.index <= project.figures.length;
+      modal.$('[data-number] span').textContent = renumbers
+        ? t('This will be {label} — figures after it are renumbered automatically.', { label: n.label })
+        : t('This will be {label}.', { label: n.label });
       modal.root.querySelectorAll('.type-card').forEach((c) => { const on = c.dataset.type === selectedType; c.classList.toggle('active', on); c.setAttribute('aria-selected', on); });
     };
     modal.root.querySelector('.type-gallery').addEventListener('click', (e) => {
@@ -121,15 +131,15 @@ export async function exportFigure(project, figure, kind) {
     else if (kind === 'copy') {
       const { svg, width, height } = renderFigureSVG(figure);
       await copyPngToClipboard(await svgToPngBlob(svg, width, height, { scale }));
-      toast('Image copied — paste it into Word with Ctrl+V', { type: 'success' });
+      toast(t('Image copied — paste it into Word with Ctrl+V'), { type: 'success' });
       return;
     }
-    toast(`Downloaded ${kind.toUpperCase()}`, { type: 'success', duration: 1600 });
-  } catch (err) { toastError(err, 'Export failed'); }
+    toast(t('Downloaded {kind}', { kind: kind.toUpperCase() }), { type: 'success', duration: 1600 });
+  } catch (err) { toastError(err, t('Export failed')); }
 }
 
 export default {
-  title: 'Figures',
+  title: 'Figures', // translated by the shell
   mount(container, ctx) {
     const { store, params } = ctx;
     let query = '';
@@ -160,7 +170,7 @@ export default {
         let g = groups.find((x) => x.key === key);
         if (!g) {
           const ch = info.chapterId && project.chapters.find((c) => c.id === info.chapterId);
-          g = { key, title: ch ? `${n.chapters.get(ch.id).label}: ${ch.title}` : 'Unassigned', items: [] };
+          g = { key, title: ch ? `${n.chapters.get(ch.id).label}: ${ch.title}` : t('Unassigned'), items: [] };
           groups.push(g);
         }
         g.items.push(f);
@@ -170,16 +180,16 @@ export default {
         const info = n.figures.get(f.id);
         const last = latestVersion(f);
         const openComments = f.comments.filter((c) => !c.resolved).length;
-        const meta = `<span>${esc(info.location)}</span><span class="sep">·</span><span>Last modified: ${esc(relativeTime(f.updatedAt))}</span>`;
-        const badges = `<span class="badge">${esc(getFigureType(f.type).name)}</span><span class="badge ${isDirty(f) ? 'badge-warning' : ''}" data-tip="${isDirty(f) ? 'Edited since the last saved version' : 'Latest version'}">v${last?.number ?? 0}${isDirty(f) ? '*' : ''}</span>${openComments ? `<span class="badge badge-warning">${icon('message')} ${openComments}</span>` : ''}`;
+        const meta = `<span>${esc(info.location)}</span><span class="sep">·</span><span>${esc(t('Last modified: {time}', { time: relativeTime(f.updatedAt) }))}</span>`;
+        const badges = `<span class="badge">${esc(getFigureType(f.type).name)}</span><span class="badge ${isDirty(f) ? 'badge-warning' : ''}" data-tip="${isDirty(f) ? t('Edited since the last saved version') : t('Latest version')}">v${last?.number ?? 0}${isDirty(f) ? '*' : ''}</span>${openComments ? `<span class="badge badge-warning">${icon('message')} ${openComments}</span>` : ''}`;
         const actions = `
-          <a class="btn btn-sm btn-primary" href="${ctx.href('figures', f.id)}">${icon('edit', 'icon-sm')} Open</a>
-          <button class="btn btn-sm" data-action="duplicate" data-id="${f.id}">${icon('duplicate', 'icon-sm')} Duplicate</button>
-          <button class="btn btn-sm" data-action="export" data-id="${f.id}">${icon('export', 'icon-sm')} Export</button>
-          <button class="btn btn-sm btn-ghost btn-icon" data-action="more" data-id="${f.id}" aria-label="More actions for ${esc(f.title)}">${icon('more')}</button>`;
+          <a class="btn btn-sm btn-primary" href="${ctx.href('figures', f.id)}">${icon('edit', 'icon-sm')} ${t('Open')}</a>
+          <button class="btn btn-sm" data-action="duplicate" data-id="${f.id}">${icon('duplicate', 'icon-sm')} ${t('Duplicate')}</button>
+          <button class="btn btn-sm" data-action="export" data-id="${f.id}">${icon('export', 'icon-sm')} ${t('Export')}</button>
+          <button class="btn btn-sm btn-ghost btn-icon" data-action="more" data-id="${f.id}" aria-label="${esc(t('More actions for {title}', { title: f.title }))}">${icon('more')}</button>`;
         if (view === 'grid') {
           return `<article class="card fig-card" data-fig="${f.id}">
-            <a class="thumb" href="${ctx.href('figures', f.id)}" aria-label="Open ${esc(f.title)}">${renderThumbnail(f)}</a>
+            <a class="thumb" href="${ctx.href('figures', f.id)}" aria-label="${esc(t('Open {title}', { title: f.title }))}">${renderThumbnail(f)}</a>
             <div class="fig-card-body">
               <div class="fig-card-title"><span class="fig-num">#${info.index}</span><a class="truncate" href="${ctx.href('figures', f.id)}">${esc(f.title)}</a></div>
               <div class="fig-meta"><strong style="color:var(--text-2)">${esc(info.label)}</strong><span class="sep">·</span><span class="mono">${esc(info.code)}</span></div>
@@ -190,7 +200,7 @@ export default {
           </article>`;
         }
         return `<div class="list-item fig-row" data-fig="${f.id}">
-          <a class="thumb" href="${ctx.href('figures', f.id)}" aria-label="Open ${esc(f.title)}">${renderThumbnail(f)}</a>
+          <a class="thumb" href="${ctx.href('figures', f.id)}" aria-label="${esc(t('Open {title}', { title: f.title }))}">${renderThumbnail(f)}</a>
           <div class="grow" style="display:flex;flex-direction:column;gap:3px">
             <div class="title"><span class="fig-num">#${info.index}</span> <a href="${ctx.href('figures', f.id)}">${esc(f.title)}</a></div>
             <div class="fig-meta"><strong style="color:var(--text-2)">${esc(info.label)}</strong><span class="sep">·</span><span class="mono">${esc(info.code)}</span><span class="sep">·</span>${meta}</div>
@@ -202,33 +212,33 @@ export default {
 
       root.innerHTML = `
         <div class="page-header">
-          <div class="titles"><h1>${icon('figure', 'icon-lg')} Figures <span class="badge">${project.figures.length}</span></h1>
-            <p class="subtitle">Diagrams are numbered automatically in document order. Insert or move a figure and every number, list and reference updates.</p></div>
-          <div class="actions"><button class="btn btn-primary" data-action="new">${icon('plus')} New Figure</button></div>
+          <div class="titles"><h1>${icon('figure', 'icon-lg')} ${t('Figures')} <span class="badge">${project.figures.length}</span></h1>
+            <p class="subtitle">${t('Diagrams are numbered automatically in document order. Insert or move a figure and every number, list and reference updates.')}</p></div>
+          <div class="actions"><button class="btn btn-primary" data-action="new">${icon('plus')} ${t('New Figure')}</button></div>
         </div>
         <div class="toolbar">
-          <div class="input-group">${icon('search')}<input class="input" type="search" placeholder="Search figures…" value="${esc(query)}" data-search aria-label="Search figures"></div>
-          <select class="select" style="width:auto" data-chapter aria-label="Filter by chapter">
-            <option value="">All chapters</option>
+          <div class="input-group">${icon('search')}<input class="input" type="search" placeholder="${t('Search figures…')}" value="${esc(query)}" data-search aria-label="${t('Search figures')}"></div>
+          <select class="select" style="width:auto" data-chapter aria-label="${t('Filter by chapter')}">
+            <option value="">${t('All chapters')}</option>
             ${project.chapters.map((c) => `<option value="${c.id}" ${chapterFilter === c.id ? 'selected' : ''}>${esc(n.chapters.get(c.id).label)}: ${esc(c.title)}</option>`).join('')}
-            <option value="__none" ${chapterFilter === '__none' ? 'selected' : ''}>Unassigned</option>
+            <option value="__none" ${chapterFilter === '__none' ? 'selected' : ''}>${t('Unassigned')}</option>
           </select>
-          <select class="select" style="width:auto" data-type aria-label="Filter by type">
-            <option value="">All types</option>
-            ${figureTypes().map((t) => `<option value="${t.id}" ${typeFilter === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
+          <select class="select" style="width:auto" data-type aria-label="${t('Filter by type')}">
+            <option value="">${t('All types')}</option>
+            ${figureTypes().map((ft) => `<option value="${ft.id}" ${typeFilter === ft.id ? 'selected' : ''}>${esc(ft.name)}</option>`).join('')}
           </select>
           <span class="spacer"></span>
-          <div class="segmented" role="group" aria-label="View">
-            <button class="${view === 'grid' ? 'active' : ''}" data-view="grid" data-tip="Grid view" aria-label="Grid view">${icon('dashboard', 'icon-sm')}</button>
-            <button class="${view === 'list' ? 'active' : ''}" data-view="list" data-tip="List view" aria-label="List view">${icon('menu', 'icon-sm')}</button>
+          <div class="segmented" role="group" aria-label="${t('View')}">
+            <button class="${view === 'grid' ? 'active' : ''}" data-view="grid" data-tip="${t('Grid view')}" aria-label="${t('Grid view')}">${icon('dashboard', 'icon-sm')}</button>
+            <button class="${view === 'list' ? 'active' : ''}" data-view="list" data-tip="${t('List view')}" aria-label="${t('List view')}">${icon('menu', 'icon-sm')}</button>
           </div>
         </div>
-        ${!project.figures.length ? `<div class="card"><div class="empty-state"><div class="empty-icon">${icon('figure')}</div><h3>No figures yet</h3>
-            <p>Create your first diagram from a template — flowcharts, UML, ERD, architecture, fishbone and more.</p>
-            <button class="btn btn-primary" data-action="new">${icon('plus')} New Figure</button></div></div>`
-          : !visible.length ? `<div class="card"><div class="empty-state"><div class="empty-icon">${icon('search')}</div><h3>No matching figures</h3><p>Try a different search or filter.</p></div></div>`
+        ${!project.figures.length ? `<div class="card"><div class="empty-state"><div class="empty-icon">${icon('figure')}</div><h3>${t('No figures yet')}</h3>
+            <p>${t('Create your first diagram from a template — flowcharts, UML, ERD, architecture, fishbone and more.')}</p>
+            <button class="btn btn-primary" data-action="new">${icon('plus')} ${t('New Figure')}</button></div></div>`
+          : !visible.length ? `<div class="card"><div class="empty-state"><div class="empty-icon">${icon('search')}</div><h3>${t('No matching figures')}</h3><p>${t('Try a different search or filter.')}</p></div></div>`
             : groups.map((g) => (view === 'grid'
-              ? `<div class="section-title" style="margin:22px 0 10px">${esc(g.title)} · ${plural(g.items.length, 'figure')}</div><div class="fig-grid">${g.items.map(card).join('')}</div>`
+              ? `<div class="section-title" style="margin:22px 0 10px">${esc(g.title)} · ${figuresCount(g.items.length)}</div><div class="fig-grid">${g.items.map(card).join('')}</div>`
               : `<div class="list" style="margin-bottom:16px"><div class="list-group-title">${esc(g.title)}</div>${g.items.map(card).join('')}</div>`)).join('')}`;
       const search = root.querySelector('[data-search]');
       if (focusSearch) { search.focus(); search.setSelectionRange(search.value.length, search.value.length); focusSearch = false; }
@@ -247,7 +257,7 @@ export default {
       copy.createdAt = copy.updatedAt = Date.now();
       addVersion(copy, { force: true });
       store.update((p) => { const i = p.figures.findIndex((f) => f.id === id); p.figures.splice(i + 1, 0, copy); }, { activity: { text: `Duplicated figure “${src.title}”`, kind: 'create', targetId: copy.id } });
-      toast(`Duplicated as ${getNumbering(store.project).figures.get(copy.id).label}`, { type: 'success' });
+      toast(t('Duplicated as {label}', { label: getNumbering(store.project).figures.get(copy.id).label }), { type: 'success' });
       requestAnimationFrame(() => flash(root.querySelector(`[data-fig="${copy.id}"]`)));
     }
 
@@ -257,28 +267,28 @@ export default {
       const info = getNumbering(project).figures.get(id);
       const usages = findUsages(project, 'fig', id);
       const ok = await confirmDialog({
-        title: `Delete ${info.label}?`,
-        message: `“${esc(f.title)}” will be deleted. Figures after it are renumbered automatically.${usages.length ? ` It is referenced in ${plural(usages.length, 'place')}; those references will show as broken.` : ''}`,
-        confirmText: 'Delete', danger: true,
+        title: t('Delete {label}?', { label: info.label }),
+        message: `${t('“{title}” will be deleted. Figures after it are renumbered automatically.', { title: esc(f.title) })}${usages.length ? ` ${isRTL ? t('It is referenced in {n} places; those references will show as broken.', { n: usages.length }) : t('It is referenced in {places}; those references will show as broken.', { places: plural(usages.length, 'place') })}` : ''}`,
+        confirmText: t('Delete'), danger: true,
       });
       if (!ok) return;
       const index = project.figures.findIndex((x) => x.id === id);
       const backup = clone(f);
       store.update((p) => { p.figures = p.figures.filter((x) => x.id !== id); }, { activity: { text: `Deleted figure “${f.title}”`, kind: 'delete' } });
-      toast(`Deleted “${f.title}”`, { type: 'success', action: { label: 'Undo', onClick: () => store.update((p) => { p.figures.splice(index, 0, backup); }, { activity: `Restored figure “${f.title}”` }) } });
+      toast(t('Deleted “{title}”', { title: f.title }), { type: 'success', action: { label: t('Undo'), onClick: () => store.update((p) => { p.figures.splice(index, 0, backup); }, { activity: `Restored figure “${f.title}”` }) } });
     }
 
     function editDetails(id) {
       const project = store.project;
       const f = findFigure(project, id);
       const modal = openModal({
-        title: 'Figure details', size: '',
+        title: t('Figure details'), size: '',
         body: `<div class="form-grid">
-          <div class="field"><label for="fd-title">Title</label><input id="fd-title" class="input" value="${esc(f.title)}" autofocus></div>
-          <div class="field"><label for="fd-loc">Chapter / section</label><select id="fd-loc" class="select">${locationOptions(project, locationValue(f))}</select></div>
-          <div class="field"><label for="fd-desc">Description</label><textarea id="fd-desc" class="textarea" rows="3">${esc(f.description || '')}</textarea></div>
+          <div class="field"><label for="fd-title">${t('Title')}</label><input id="fd-title" class="input" value="${esc(f.title)}" autofocus${AUTO}></div>
+          <div class="field"><label for="fd-loc">${t('Chapter / section')}</label><select id="fd-loc" class="select">${locationOptions(project, locationValue(f))}</select></div>
+          <div class="field"><label for="fd-desc">${t('Description')}</label><textarea id="fd-desc" class="textarea" rows="3"${AUTO}>${esc(f.description || '')}</textarea></div>
         </div>`,
-        footer: '<button class="btn" data-close>Cancel</button><button class="btn btn-primary" data-save>Save</button>',
+        footer: `<button class="btn" data-close>${t('Cancel')}</button><button class="btn btn-primary" data-save>${t('Save')}</button>`,
       });
       modal.$('[data-save]').addEventListener('click', () => {
         const title = modal.$('#fd-title').value.trim();
@@ -300,23 +310,23 @@ export default {
         else if (action === 'duplicate') duplicate(id);
         else if (action === 'export') {
           openMenu(el, [
-            { label: 'SVG (vector)', icon: 'image', onClick: () => exportFigure(store.project, f, 'svg') },
-            { label: 'PNG (high resolution)', icon: 'image', onClick: () => exportFigure(store.project, f, 'png') },
-            { label: 'PDF', icon: 'fileText', onClick: () => exportFigure(store.project, f, 'pdf') },
+            { label: t('SVG (vector)'), icon: 'image', onClick: () => exportFigure(store.project, f, 'svg') },
+            { label: t('PNG (high resolution)'), icon: 'image', onClick: () => exportFigure(store.project, f, 'png') },
+            { label: t('PDF'), icon: 'fileText', onClick: () => exportFigure(store.project, f, 'pdf') },
             '-',
-            { label: 'Copy image', icon: 'clipboard', onClick: () => exportFigure(store.project, f, 'copy') },
+            { label: t('Copy image'), icon: 'clipboard', onClick: () => exportFigure(store.project, f, 'copy') },
           ]);
         } else if (action === 'more') {
           openMenu(el, [
-            { label: 'Open editor', icon: 'edit', onClick: () => ctx.navigate(ctx.href('figures', id)) },
-            { label: 'Edit details', icon: 'settings', onClick: () => editDetails(id) },
-            { label: 'Revision mode', icon: 'flag', onClick: () => ctx.navigate(ctx.href('figures', id, { revision: '1' })) },
+            { label: t('Open editor'), icon: 'edit', onClick: () => ctx.navigate(ctx.href('figures', id)) },
+            { label: t('Edit details'), icon: 'settings', onClick: () => editDetails(id) },
+            { label: t('Revision mode'), icon: 'flag', onClick: () => ctx.navigate(ctx.href('figures', id, { revision: '1' })) },
             '-',
-            { label: 'Move up', icon: 'arrowUp', onClick: () => move(id, -1) },
-            { label: 'Move down', icon: 'arrowDown', onClick: () => move(id, 1) },
+            { label: t('Move up'), icon: 'arrowUp', onClick: () => move(id, -1) },
+            { label: t('Move down'), icon: 'arrowDown', onClick: () => move(id, 1) },
             '-',
-            { label: 'Delete', icon: 'trash', danger: true, onClick: () => remove(id) },
-          ], { align: 'end' });
+            { label: t('Delete'), icon: 'trash', danger: true, onClick: () => remove(id) },
+          ], { align: MENU_END });
         }
       }),
       on(root, 'click', '[data-view]', (e, el) => { view = el.dataset.view; prefs.set('figuresView', view); render(); }),
@@ -329,7 +339,7 @@ export default {
     function move(id, dir) {
       let moved = false;
       store.update((p) => { moved = moveInDocumentOrder(p, 'figures', id, dir); }, { activity: 'Reordered figures', save: true });
-      if (!moved) toast('A figure can only move before or after figures in the same section. Change its section to move it further.', { type: 'info' });
+      if (!moved) toast(t('A figure can only move before or after figures in the same section. Change its section to move it further.'), { type: 'info' });
       else requestAnimationFrame(() => flash(root.querySelector(`[data-fig="${id}"]`)));
     }
 

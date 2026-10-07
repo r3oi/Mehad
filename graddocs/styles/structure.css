@@ -3,6 +3,19 @@
    Uses design tokens only, so light and dark themes both work.
    ===================================================================== */
 
+/* User titles carry dir="auto" so Arabic and English text each read correctly. Their box still has to sit
+   flush with the row's reading direction (next to its number), not with the direction of the text itself,
+   hence the explicit alignment per interface direction (logical `start` would follow the text instead). */
+.ol-title, .ol-edit, .fm-title, .si-label, .ch-nav-current, .ch-title, .sec-title, .ch-page strong { text-align: left; }
+.ch-page.next strong { text-align: right; }
+[dir="rtl"] .ol-title, [dir="rtl"] .ol-edit, [dir="rtl"] .fm-title, [dir="rtl"] .si-label, [dir="rtl"] .ch-nav-current,
+[dir="rtl"] .ch-title, [dir="rtl"] .sec-title, [dir="rtl"] .ch-page strong { text-align: right; }
+[dir="rtl"] .ch-page.next strong { text-align: left; }
+
+/* Arabic letters must stay joined: no tracking on the small-caps style labels or headings. */
+[dir="rtl"] .be-picker-group, [dir="rtl"] .ch-nav-label, [dir="rtl"] .si-title, [dir="rtl"] .si-count,
+[dir="rtl"] .ch-heading, [dir="rtl"] .ch-title, [dir="rtl"] .sec-title { letter-spacing: 0; text-transform: none; }
+
 /* ---------- Shared: section status colours ---------- */
 .s-todo { --st: var(--faint); }
 .s-draft { --st: var(--warning); }
@@ -45,6 +58,9 @@
   font-size: 14px; line-height: 1.65; color: var(--text);
   white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
   outline: none; cursor: text;
+  /* Each paragraph (line) takes the direction of its own first strong character, so Arabic and English
+     paragraphs can be mixed. (The dir="auto" attribute would pick one direction for the whole field.) */
+  unicode-bidi: plaintext;
 }
 .be-surface:empty::before { content: attr(data-placeholder); color: var(--faint); pointer-events: none; }
 .be-surface .ref-chip {
@@ -52,6 +68,7 @@
   font-size: 13px; line-height: 1.4; font-weight: 600;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 22%, transparent);
 }
+.be-surface .ref-chip { unicode-bidi: isolate; direction: ltr; }
 .be-surface .ref-chip.broken { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 35%, transparent); text-decoration: line-through; text-decoration-thickness: 1px; }
 
 .be-hints {
@@ -169,7 +186,7 @@
 
 .ol-row {
   position: relative; display: flex; align-items: center; gap: 6px;
-  min-height: 38px; padding: 4px 10px 4px calc(8px + var(--lvl, 0) * 22px);
+  min-height: 38px; padding-block: 4px; padding-inline: calc(8px + var(--lvl, 0) * 22px) 10px;
   color: var(--text-2); outline: none; transition: background .1s;
 }
 .ol-row:hover { background: var(--surface-hover); }
@@ -200,7 +217,7 @@
 .ol-count .icon { width: 13px; height: 13px; }
 
 .ol-status {
-  display: inline-flex; align-items: center; gap: 6px; flex: none; height: 22px; padding: 0 9px 0 8px;
+  display: inline-flex; align-items: center; gap: 6px; flex: none; height: 22px; padding-block: 0; padding-inline: 8px 9px;
   border: 1px solid transparent; border-radius: 20px;
   background: color-mix(in srgb, var(--st, var(--faint)) 12%, var(--surface));
   color: var(--text-2); font-size: 11.5px; font-weight: 600; line-height: 1; white-space: nowrap;
@@ -252,7 +269,7 @@
   .ol-row { gap: 5px; padding-inline-end: 6px; padding-inline-start: calc(6px + var(--lvl, 0) * 16px); }
   .ol-grip, .ol-counts, .ol-prog .bar { display: none; }
   .ol-row.chapter .ol-title { font-size: 13.5px; }
-  .ol-status { padding: 0 8px 0 7px; }
+  .ol-status { padding-inline: 7px 8px; }
   .ol-row.drop-before::before, .ol-row.drop-after::after { inset-inline-start: 6px; }
 }
 
@@ -265,6 +282,7 @@
 .toc-stat span { font-size: 11.5px; color: var(--muted); }
 .toc-bar { flex: none; height: 5px; margin: 2px 16px 14px; border-radius: 5px; background: var(--bg-subtle); overflow: hidden; }
 .toc-bar span { display: block; height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--primary), #8b5cf6); transition: width .4s var(--ease); }
+[dir="rtl"] .toc-bar span, [dir="rtl"] .ch-progress .bar i { background: linear-gradient(270deg, var(--primary), #8b5cf6); }
 .toc-scroll { flex: 1; min-height: 220px; overflow: auto; padding: 18px; background: var(--canvas-bg); border-top: 1px solid var(--border); }
 .toc-paper {
   background: #fff; color: #111; border-radius: 3px; box-shadow: var(--page-shadow);
@@ -272,7 +290,7 @@
 }
 .toc-heading { margin-bottom: 16px; text-align: center; font-size: 14px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .toc-line {
-  display: flex; align-items: flex-end; padding: 2px 0 2px calc(var(--toc-lvl, 0) * 1.5em);
+  display: flex; align-items: flex-end; padding-block: 2px; padding-inline: calc(var(--toc-lvl, 0) * 1.5em) 0;
   border-radius: 2px; cursor: pointer; outline: none;
 }
 .toc-line:hover { background: rgba(79, 70, 229, .08); }
@@ -318,11 +336,12 @@
 .chn-chapter { font-weight: 600; color: var(--text); }
 .chn-ch.current > .chn-chapter { background: var(--primary-soft); color: var(--primary-text); }
 .chn-ch.current > .chn-chapter .chn-num { color: var(--primary-text); }
-.chn-secs { margin: 3px 0 8px 14px; padding-inline-start: 6px; border-inline-start: 1px solid var(--border); }
+.chn-secs { margin-block: 3px 8px; margin-inline: 14px 0; padding-inline-start: 6px; border-inline-start: 1px solid var(--border); }
 .chn-secs li { padding-inline-start: calc((var(--d, 1) - 1) * 12px); }
 .chn-sec { align-items: center; padding: 5px 8px; }
 .chn-sec .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--st, var(--faint)); }
 .chn-sec.active { background: var(--surface-active); color: var(--text); font-weight: 600; box-shadow: inset 2px 0 0 var(--primary); }
+[dir="rtl"] .chn-sec.active { box-shadow: inset -2px 0 0 var(--primary); }
 .chn-none { padding: 4px 8px; font-size: 12px; color: var(--faint); }
 
 /* Main column */
@@ -340,7 +359,7 @@
 .ch-heading-prefix { flex: none; font-weight: 700; color: var(--primary-text); white-space: nowrap; }
 .ch-heading.upper .ch-heading-prefix, .ch-heading.upper .ch-title { text-transform: uppercase; }
 .ch-title {
-  flex: 1 1 220px; min-width: 0; margin: -3px 0 -3px -8px; padding: 2px 8px;
+  flex: 1 1 220px; min-width: 0; margin-block: -3px; margin-inline: -8px 0; padding: 2px 8px;
   font: inherit; font-weight: 700; letter-spacing: inherit; color: var(--text);
   background: transparent; border: 1px solid transparent; border-radius: var(--radius);
   transition: border-color .12s, background .12s;
@@ -363,7 +382,7 @@
   color: var(--primary-text); background: var(--primary-soft); font-variant-numeric: tabular-nums;
 }
 .sec-title {
-  flex: 1; min-width: 0; margin: 0 0 0 -4px; padding: 4px 8px;
+  flex: 1; min-width: 0; margin-block: 0; margin-inline: -4px 0; padding: 4px 8px;
   font: inherit; font-weight: 600; font-size: 16px; letter-spacing: -.01em; color: var(--text);
   background: transparent; border: 1px solid transparent; border-radius: var(--radius);
   transition: border-color .12s, background .12s;

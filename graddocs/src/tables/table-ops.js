@@ -5,8 +5,10 @@
 // A merged region keeps its content in the top-left ("anchor") cell, which
 // carries colspan / rowspan. Every other cell of the region has hidden: true.
 // Rectangles are { r1, c1, r2, c2 } (inclusive, zero-based).
+// Only the `reason` messages returned for the UI are translated; table content is never touched.
 import { uid, clone, clamp } from '../core/utils.js';
 import { createCell } from '../core/model.js';
+import { t } from '../i18n/index.js';
 
 export const MIN_COL_WIDTH = 5; // percent
 export const MAX_HEADER_ROWS = 3;
@@ -181,9 +183,9 @@ export function normalizeMerges(table) {
  */
 export function mergeCells(table, rect) {
   const box = expandRect(table, rect);
-  if (box.r1 === box.r2 && box.c1 === box.c2) return { ok: false, reason: 'Select two or more cells to merge.' };
+  if (box.r1 === box.r2 && box.c1 === box.c2) return { ok: false, reason: t('Select two or more cells to merge.') };
   const header = table.headerRows || 0;
-  if (box.r1 < header && box.r2 >= header) return { ok: false, reason: 'Header cells and body cells cannot be merged together.' };
+  if (box.r1 < header && box.r2 >= header) return { ok: false, reason: t('Header cells and body cells cannot be merged together.') };
   const anchor = table.rows[box.r1][box.c1];
   const parts = [];
   for (let r = box.r1; r <= box.r2; r += 1) {

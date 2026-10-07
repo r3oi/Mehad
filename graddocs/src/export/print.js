@@ -2,12 +2,17 @@
 // The HTML builders are shared by "Open printable PDF" (a print window, use "Save as PDF" in the
 // print dialog) and by the documentation package, which ships them as standalone .html files.
 // Page numbers are shown as an em dash: real page numbers come from Word's field update.
+// The lists themselves are the report (English, left-to-right paper) and are never translated; only the
+// print window's own toolbar and the pop-up error follow the app language.
 import { esc } from '../ui/dom.js';
+import { t, isRTL } from '../i18n/index.js';
 import { buildDocument } from '../core/document.js';
 import { getNumbering } from '../core/numbering.js';
 import { findNode, DEFAULT_SETTINGS, SECTION_STATUSES, FRONT_MATTER_KINDS } from '../core/model.js';
 
 const PAGE_HOLDER = '\u2014';
+/** Report-language status names (SECTION_STATUSES labels follow the app language, the printed list must not). */
+const STATUS_LABELS = { todo: 'Not started', draft: 'Draft', review: 'In review', done: 'Done' };
 
 const cfgOf = (settings) => ({
   page: { ...DEFAULT_SETTINGS.page, ...(settings?.page || {}), margins: { ...DEFAULT_SETTINGS.page.margins, ...(settings?.page?.margins || {}) } },
@@ -24,9 +29,9 @@ function listTitle(project, kind) {
 
 /** Stylesheet used by the print window and the standalone HTML files. */
 export function printCSS(settings) {
-  const { page, typography: t } = cfgOf(settings);
+  const { page, typography: typo } = cfgOf(settings);
   const m = page.margins;
-  const font = String(t.fontFamily || 'Times New Roman').replace(/["\\]/g, '');
+  const font = String(typo.fontFamily || 'Times New Roman').replace(/["\\]/g, '');
   const size = page.size === 'Letter' ? 'Letter' : 'A4';
   const [w, h] = size === 'Letter' ? [21.59, 27.94] : [21, 29.7];
   const sheetW = page.orientation === 'landscape' ? h : w;
@@ -34,10 +39,10 @@ export function printCSS(settings) {
 @page { size: ${size} ${page.orientation === 'landscape' ? 'landscape' : 'portrait'}; margin: ${m.top}cm ${m.right}cm ${m.bottom}cm ${m.left}cm; }
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-body { margin: 0; font-family: "${font}", "Times New Roman", Times, "Liberation Serif", serif; font-size: ${t.fontSize}pt; line-height: ${t.lineSpacing > 1.3 ? 1.35 : t.lineSpacing}; color: #000; background: #fff; }
+body { margin: 0; font-family: "${font}", "Times New Roman", Times, "Liberation Serif", serif; font-size: ${typo.fontSize}pt; line-height: ${typo.lineSpacing > 1.3 ? 1.35 : typo.lineSpacing}; color: #000; background: #fff; }
 h1, h2, h3 { font-weight: 700; margin: 0; line-height: 1.25; }
-.doc-title { text-align: center; font-size: ${t.headingSizes.h1}pt; margin: 0 0 1.1em; text-transform: none; }
-.doc-subtitle { text-align: center; font-size: ${Math.max(10, t.fontSize - 1)}pt; color: #555; margin: -0.7em 0 1.4em; }
+.doc-title { text-align: center; font-size: ${typo.headingSizes.h1}pt; margin: 0 0 1.1em; text-transform: none; }
+.doc-subtitle { text-align: center; font-size: ${Math.max(10, typo.fontSize - 1)}pt; color: #555; margin: -0.7em 0 1.4em; }
 .doc-note { color: #555; font-style: italic; margin: 0; }
 .toolbar { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 16px; background: #f2f4f7; border-bottom: 1px solid #d0d5dd; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: #344054; }
 .toolbar button { font: 600 13px system-ui, sans-serif; padding: 7px 14px; border-radius: 7px; border: 1px solid #4f46e5; background: #4f46e5; color: #fff; cursor: pointer; }
@@ -100,7 +105,7 @@ export function wrapHTMLDocument(title, bodyHTML, settings, { toolbar = false } 
 <style>${printCSS(settings)}</style>
 </head>
 <body>
-${toolbar ? `<div class="toolbar"><span>Use <b>Save as PDF</b> as the destination in the print dialog.</span><button type="button" onclick="window.print()">Print / Save as PDF</button></div>` : ''}
+${toolbar ? `<div class="toolbar"${isRTL ? ' dir="rtl" lang="ar"' : ''}><span>${t('Use {saveAsPdf} as the destination in the print dialog.', { saveAsPdf: `<b>${esc(t('Save as PDF'))}</b>` })}</span><button type="button" onclick="window.print()">${esc(t('Print / Save as PDF'))}</button></div>` : ''}
 <main class="sheet">
 ${bodyHTML}
 </main>
@@ -115,7 +120,7 @@ ${bodyHTML}
  */
 export function printHTML(title, bodyHTML, { settings, autoPrint = true } = {}) {
   const win = window.open('', '_blank');
-  if (!win) throw new Error('The print window was blocked by your browser. Allow pop-ups for this site and try again.');
+  if (!win) throw new Error(t('The print window was blocked by your browser. Allow pop-ups for this site and try again.'));
   win.document.open();
   win.document.write(wrapHTMLDocument(title, bodyHTML, settings, { toolbar: true }));
   win.document.close();
@@ -157,7 +162,7 @@ export function listOfFiguresHTML(project) {
 export function listOfTablesHTML(project) {
   const doc = buildDocument(project);
   const body = doc.tables.length
-    ? doc.tables.map((t) => line('toc-flat', t.caption)).join('\n')
+    ? doc.tables.map((tb) => line('toc-flat', tb.caption)).join('\n')
     : '<p class="doc-note">The document has no tables yet.</p>';
   return `<h1 class="doc-title">${esc(listTitle(project, 'lot'))}</h1>\n${body}`;
 }
@@ -180,7 +185,7 @@ export function structureHTML(project) {
   const owned = new Map();
   const add = (key, label) => { if (!owned.has(key)) owned.set(key, []); owned.get(key).push(label); };
   for (const f of doc.figures) add(f.sectionId || f.chapterId || '__none', f.caption);
-  for (const t of doc.tables) add(t.sectionId || t.chapterId || '__none', t.caption);
+  for (const tb of doc.tables) add(tb.sectionId || tb.chapterId || '__none', tb.caption);
 
   // Counters for the summary and the chapter-level "n of m sections done".
   let totalSections = 0; let doneSections = 0;
@@ -201,7 +206,7 @@ export function structureHTML(project) {
     let meta = '';
     if (entry.kind === 'section') {
       const st = statusOf(node?.status);
-      meta = `<span class="status s-${esc(st.value)}">${esc(st.label)}</span>`;
+      meta = `<span class="status s-${esc(st.value)}">${esc(STATUS_LABELS[st.value] || st.label)}</span>`;
     } else {
       const c = perChapter.get(entry.id);
       meta = c && c.total ? `<span class="meta">${c.done} of ${c.total} sections done</span>` : '';

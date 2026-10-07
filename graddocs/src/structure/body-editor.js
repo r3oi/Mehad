@@ -17,6 +17,8 @@ import {
 } from '../core/references.js';
 import { scanText } from '../acronyms/detection.js';
 import { href } from '../app/routes.js';
+import { t } from '../i18n/index.js';
+import { countLabel, isolate, LIST_SEP } from './outline-ops.js';
 
 const REF_ATTR = /^(fig|tab|sec|ch):([A-Za-z0-9_-]+)$/;
 const BLOCK_TAGS = new Set(['DIV', 'P', 'LI', 'UL', 'OL', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE', 'TR']);
@@ -54,15 +56,15 @@ export function serializeNodes(root) {
 const wordCount = (text) => (String(text).trim() ? String(text).trim().split(/\s+/).length : 0);
 
 export function createBodyEditor({
-  store, getProject = () => store.project, value = '', onChange, placeholder = '', label = 'Text', minHeight,
+  store, getProject = () => store.project, value = '', onChange, placeholder = '', label = t('Text'), minHeight,
 } = {}) {
   const el = document.createElement('div');
   el.className = 'be';
   if (minHeight) el.style.setProperty('--be-min', typeof minHeight === 'number' ? `${minHeight}px` : minHeight);
   el.innerHTML = `
-    <div class="be-toolbar" role="toolbar" aria-label="${esc(label)} tools">
-      <button type="button" class="be-btn" data-be="ref" aria-haspopup="dialog" data-tip="Insert a live cross reference">${icon('link')}<span>Insert reference</span></button>
-      <button type="button" class="be-btn" data-be="bullet" data-tip="Toggle bullet list for the current line">${BULLET_SVG}<span>Bullet</span></button>
+    <div class="be-toolbar" role="toolbar" aria-label="${esc(t('{label} tools', { label }))}">
+      <button type="button" class="be-btn" data-be="ref" aria-haspopup="dialog" data-tip="${t('Insert a live cross reference')}">${icon('link')}<span>${t('Insert reference')}</span></button>
+      <button type="button" class="be-btn" data-be="bullet" data-tip="${t('Toggle bullet list for the current line')}">${BULLET_SVG}<span>${t('Bullet')}</span></button>
       <span class="be-meta"></span>
     </div>
     <div class="be-surface" role="textbox" aria-multiline="true" aria-label="${esc(label)}" spellcheck="true" data-placeholder="${esc(placeholder)}"></div>
@@ -234,7 +236,7 @@ export function createBodyEditor({
   // ----- hints --------------------------------------------------------------
   function updateMeta() {
     const words = wordCount(resolveText(project(), serializeNodes(surface)));
-    metaEl.textContent = words ? `${words} ${words === 1 ? 'word' : 'words'}` : '';
+    metaEl.textContent = words ? countLabel(words, 'word') : '';
   }
 
   function updateHints() {
@@ -246,8 +248,9 @@ export function createBodyEditor({
     const plain = findPlainReferences(p, body);
     if (plain.length) {
       const labels = [...new Set(plain.map((x) => x.match))];
-      const shown = labels.slice(0, 4).join(', ') + (labels.length > 4 ? `, +${labels.length - 4} more` : '');
-      rows.push(`<div class="be-hint be-hint-link">${icon('link')}<span class="be-hint-text">${plain.length} plain reference${plain.length === 1 ? '' : 's'} can be linked so they update automatically: <strong>${esc(shown)}</strong></span><button type="button" class="btn btn-sm btn-soft" data-hint="link">Link all</button></div>`);
+      const shown = labels.slice(0, 4).map((l) => `<bdi>${esc(l)}</bdi>`).join(LIST_SEP) + (labels.length > 4 ? `${LIST_SEP}${t('+{n} more', { n: labels.length - 4 })}` : '');
+      const linkText = t(plain.length === 1 ? '1 plain reference can be linked so they update automatically: {labels}' : '{n} plain references can be linked so they update automatically: {labels}', { n: plain.length, labels: `<strong>${shown}</strong>` });
+      rows.push(`<div class="be-hint be-hint-link">${icon('link')}<span class="be-hint-text">${linkText}</span><button type="button" class="btn btn-sm btn-soft" data-hint="link">${t('Link all')}</button></div>`);
     }
 
     const known = new Set((p.acronyms || []).map((a) => String(a.acronym).trim().toUpperCase()));
@@ -260,15 +263,15 @@ export function createBodyEditor({
       seen.add(key); suggestions.push(s);
     }
     for (const s of suggestions.slice(0, 3)) {
-      rows.push(`<div class="be-hint be-hint-acronym">${icon('sparkles')}<span class="be-hint-text">Add <strong>${esc(s.acronym)}</strong> (${esc(s.meaning)}) to Acronyms?</span>
-        <span class="be-hint-actions"><button type="button" class="btn btn-sm btn-soft" data-hint="acr-add" data-acr="${esc(s.acronym)}" data-meaning="${esc(s.meaning)}">Add</button>
-        <button type="button" class="btn btn-sm btn-ghost" data-hint="acr-dismiss" data-acr="${esc(s.acronym)}">Dismiss</button></span></div>`);
+      rows.push(`<div class="be-hint be-hint-acronym">${icon('sparkles')}<span class="be-hint-text">${t('Add {acronym} ({meaning}) to Acronyms?', { acronym: `<strong><bdi>${esc(s.acronym)}</bdi></strong>`, meaning: `<bdi>${esc(s.meaning)}</bdi>` })}</span>
+        <span class="be-hint-actions"><button type="button" class="btn btn-sm btn-soft" data-hint="acr-add" data-acr="${esc(s.acronym)}" data-meaning="${esc(s.meaning)}">${t('Add')}</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-hint="acr-dismiss" data-acr="${esc(s.acronym)}">${t('Dismiss')}</button></span></div>`);
     }
-    if (suggestions.length > 3) rows.push(`<div class="be-hint-more">+${suggestions.length - 3} more acronym suggestion${suggestions.length - 3 === 1 ? '' : 's'}</div>`);
+    if (suggestions.length > 3) rows.push(`<div class="be-hint-more">${t(suggestions.length - 3 === 1 ? '+1 more acronym suggestion' : '+{n} more acronym suggestions', { n: suggestions.length - 3 })}</div>`);
 
     const broken = surface.querySelectorAll('.ref-chip.broken').length;
     if (broken) {
-      rows.push(`<div class="be-hint be-hint-broken">${icon('alert')}<span class="be-hint-text">${broken} broken reference${broken === 1 ? '' : 's'} — the target was deleted. Remove ${broken === 1 ? 'it' : 'them'} or insert a new reference.</span><button type="button" class="btn btn-sm btn-ghost" data-hint="remove-broken">Remove</button></div>`);
+      rows.push(`<div class="be-hint be-hint-broken">${icon('alert')}<span class="be-hint-text">${t(broken === 1 ? '1 broken reference — the target was deleted. Remove it or insert a new reference.' : '{n} broken references — the target was deleted. Remove them or insert a new reference.', { n: broken })}</span><button type="button" class="btn btn-sm btn-ghost" data-hint="remove-broken">${t('Remove')}</button></div>`);
     }
 
     const html = rows.join('');
@@ -428,16 +431,16 @@ export function createBodyEditor({
     const p = project();
     const n = getNumbering(p);
     const groups = [
-      { title: 'Figures', kind: 'fig', items: n.figureOrder.map((f) => ({ id: f.id, label: n.figures.get(f.id).label, title: f.title })) },
-      { title: 'Tables', kind: 'tab', items: n.tableOrder.map((t) => ({ id: t.id, label: n.tables.get(t.id).label, title: t.title })) },
-      { title: 'Sections', kind: 'sec', items: n.outline.filter((o) => o.kind === 'section').map((o) => ({ id: o.id, label: `Section ${o.number}`, title: o.title })) },
-      { title: 'Chapters', kind: 'ch', items: n.outline.filter((o) => o.kind === 'chapter').map((o) => ({ id: o.id, label: `Chapter ${o.number}`, title: o.title })) },
+      { title: t('Figures'), kind: 'fig', items: n.figureOrder.map((f) => ({ id: f.id, label: n.figures.get(f.id).label, title: f.title })) },
+      { title: t('Tables'), kind: 'tab', items: n.tableOrder.map((tb) => ({ id: tb.id, label: n.tables.get(tb.id).label, title: tb.title })) },
+      { title: t('Sections'), kind: 'sec', items: n.outline.filter((o) => o.kind === 'section').map((o) => ({ id: o.id, label: `Section ${o.number}`, title: o.title })) },
+      { title: t('Chapters'), kind: 'ch', items: n.outline.filter((o) => o.kind === 'chapter').map((o) => ({ id: o.id, label: `Chapter ${o.number}`, title: o.title })) },
     ];
     const pop = document.createElement('div');
     pop.className = 'be-picker';
     pop.setAttribute('role', 'dialog');
-    pop.setAttribute('aria-label', 'Insert reference');
-    pop.innerHTML = `<div class="be-picker-search">${icon('search')}<input class="input input-sm" type="search" placeholder="Filter figures, tables, sections…" aria-label="Filter references" autocomplete="off"></div><div class="be-picker-list" role="listbox"></div>`;
+    pop.setAttribute('aria-label', t('Insert reference'));
+    pop.innerHTML = `<div class="be-picker-search">${icon('search')}<input class="input input-sm" type="search" placeholder="${t('Filter figures, tables, sections…')}" aria-label="${t('Filter references')}" autocomplete="off"></div><div class="be-picker-list" role="listbox"></div>`;
     el.append(pop);
     const input = pop.querySelector('input');
     const list = pop.querySelector('.be-picker-list');
@@ -450,9 +453,9 @@ export function createBodyEditor({
         const items = g.items.filter((it) => !q || `${it.label} ${it.title}`.toLowerCase().includes(q));
         if (!items.length) continue;
         html += `<div class="be-picker-group">${g.title}</div>`;
-        html += items.map((it) => `<button type="button" class="be-pick" role="option" data-kind="${g.kind}" data-id="${esc(it.id)}"><span class="be-pick-label">${esc(it.label)}</span><span class="be-pick-title">${esc(it.title || 'Untitled')}</span></button>`).join('');
+        html += items.map((it) => `<button type="button" class="be-pick" role="option" data-kind="${g.kind}" data-id="${esc(it.id)}"><span class="be-pick-label">${esc(it.label)}</span><span class="be-pick-title" dir="auto">${esc(it.title || t('Untitled'))}</span></button>`).join('');
       }
-      list.innerHTML = html || '<div class="be-picker-empty">Nothing matches. Add figures and tables from their pages first.</div>';
+      list.innerHTML = html || `<div class="be-picker-empty">${t('Nothing matches. Add figures and tables from their pages first.')}</div>`;
       active = 0;
       setActive(0);
     };
@@ -537,14 +540,14 @@ export function createBodyEditor({
         setValue(res.body);
         lastEmitted = trimEnd(res.body);
         onChange?.(lastEmitted);
-        toast(`Linked ${res.count} reference${res.count === 1 ? '' : 's'}`, { type: 'success' });
+        toast(t(res.count === 1 ? 'Linked 1 reference' : 'Linked {n} references', { n: res.count }), { type: 'success' });
       }
     } else if (act === 'acr-add') {
       const acronym = btn.dataset.acr; const meaning = btn.dataset.meaning;
       store.update((proj) => {
         if (!proj.acronyms.some((a) => String(a.acronym).trim().toUpperCase() === acronym.toUpperCase())) proj.acronyms.push(createAcronym({ acronym, meaning }));
-      }, { activity: `Added acronym ${acronym}` });
-      toast(`Added ${acronym} to Acronyms`, { type: 'success' });
+      }, { activity: t('Added acronym {acronym}', { acronym: isolate(acronym) }) });
+      toast(t('Added {acronym} to Acronyms', { acronym: isolate(acronym) }), { type: 'success' });
     } else if (act === 'acr-dismiss') {
       const acronym = btn.dataset.acr;
       store.update((proj) => {

@@ -8,22 +8,45 @@ import { toast, toastError } from '../ui/toast.js';
 import { getNumbering, captionText } from '../core/numbering.js';
 import { renderThumbnail } from '../figures/render.js';
 import { formatBytes, formatDateTime, downloadText, slugify } from '../core/utils.js';
-import { projectDetailFields } from '../projects/projects-view.js';
+import { t, isRTL, lang, LANGUAGES, setLanguage } from '../i18n/index.js';
+import { projectDetailFields, iso, strong, tHTML } from '../projects/projects-view.js';
+
+/** Forces left-to-right order for a snippet of report text inside Arabic UI text (no-op in English). */
+const ltr = (s) => (isRTL ? `\u2066${s}\u2069` : String(s));
 
 const TABS = [
-  { id: 'document', label: 'Document', icon: 'file' },
-  { id: 'captions', label: 'Captions', icon: 'figure' },
-  { id: 'figures', label: 'Figures', icon: 'diagram' },
-  { id: 'project', label: 'Project', icon: 'folder' },
-  { id: 'storage', label: 'Storage', icon: 'database' },
+  { id: 'document', label: t('Document'), icon: 'file' },
+  { id: 'captions', label: t('Captions'), icon: 'figure' },
+  { id: 'figures', label: t('Figures'), icon: 'diagram' },
+  { id: 'project', label: t('Project'), icon: 'folder' },
+  { id: 'storage', label: t('Storage'), icon: 'database' },
 ];
 const SETTINGS_TABS = new Set(['document', 'captions', 'figures']);
 const FONTS = ['Times New Roman', 'Arial', 'Calibri', 'Cambria', 'Georgia'];
-const SEPARATORS = [[':', 'Colon', ':'], ['.', 'Period', '.'], [' —', 'Em dash', ' —'], [' -', 'Hyphen', ' -']];
-const separatorOptions = (label) => SEPARATORS.map(([value, name, sep]) => [value, `${name}  ( ${label} 1${sep} Title )`]);
+const SEPARATORS = [[':', t('Colon'), ':'], ['.', t('Period'), '.'], [' —', t('Em dash'), ' —'], [' -', t('Hyphen'), ' -']];
+// The example in brackets shows how the printed caption will look (report text, always left-to-right).
+const separatorOptions = (label) => SEPARATORS.map(([value, name, sep]) => [value, `${name}  ${ltr(`( ${label} 1${sep} Title )`)}`]);
+const numberingOptions = (label) => [['global', t('{label} 1, 2, 3 (whole report)', { label: iso(label) })], ['chapter', t('{label} 1.1, 1.2 (per chapter)', { label: iso(label) })]];
 const ENGINES = {
-  localStorage: { label: 'Browser localStorage', short: 'localStorage', desc: 'Simple and fast. The browser limits it to roughly 5–10 MB in total, which is enough for most text-heavy projects.' },
-  indexedDB: { label: 'IndexedDB', short: 'IndexedDB', desc: 'Recommended for large projects with many figures and versions. Much higher storage limit.' },
+  localStorage: { label: t('Browser localStorage'), short: 'localStorage', desc: t('Simple and fast. The browser limits it to roughly 5–10 MB in total, which is enough for most text-heavy projects.') },
+  indexedDB: { label: 'IndexedDB', short: 'IndexedDB', desc: t('Recommended for large projects with many figures and versions. Much higher storage limit.') },
+};
+const BACKUP_REASONS = {
+  'Opened project': t('Opened project'), 'Automatic backup': t('Automatic backup'),
+  'Manual backup': t('Manual backup'), 'Before restoring a backup': t('Before restoring a backup'),
+};
+// Captions tab wording per kind (full phrases, so each translates as a unit).
+const CAPTION_TEXT = {
+  figure: {
+    title: t('Figure captions'), desc: t('How figures are labelled and numbered throughout the report.'),
+    label: t('Figure label text'), separator: t('Figure separator'), position: t('Figure caption position'), positionDesc: t('Caption placed above or below the figure.'),
+    numbering: t('Figure numbering'), align: t('Figure caption alignment'),
+  },
+  table: {
+    title: t('Table captions'), desc: t('How tables are labelled and numbered throughout the report.'),
+    label: t('Table label text'), separator: t('Table separator'), position: t('Table caption position'), positionDesc: t('Caption placed above or below the table.'),
+    numbering: t('Table numbering'), align: t('Table caption alignment'),
+  },
 };
 
 const getPath = (obj, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
@@ -82,25 +105,26 @@ function pagePreview(s) {
   const pct = (v, total) => `${Math.min(45, Math.max(0, (v / total) * 100)).toFixed(2)}%`;
   return `
     <div class="pg-wrap">
-      <div class="pg" style="width:${pw}px;height:${ph}px">
+      <div class="pg" dir="ltr" style="width:${pw}px;height:${ph}px">
         <div class="pg-inner" style="top:${pct(m.top, h)};bottom:${pct(m.bottom, h)};left:${pct(m.left, w)};right:${pct(m.right, w)}"></div>
       </div>
-      <div class="pg-caption">${esc(s.page.size)} · ${esc(cap(s.page.orientation))} · ${w} × ${h} cm</div>
+      <div class="pg-caption">${esc(s.page.size)} · ${esc(t(cap(s.page.orientation)))} · <bdi>${w} × ${h} ${esc(t('cm'))}</bdi></div>
     </div>`;
 }
 
 function typographyPreview(s) {
-  const t = s.typography;
+  const ty = s.typography;
   const k = 0.78; // scale pt down to fit the narrow preview card
   const pt = (v) => `${round(v * k)}pt`;
   const heading = s.chapterTitle.style === 'upper' ? 'CHAPTER 1: INTRODUCTION' : 'Chapter 1: Introduction';
-  const p = `margin:0 0 ${pt(t.paragraphSpacing)};text-align:${t.justify ? 'justify' : 'left'}`;
+  // A sample of the printed report page: report text stays English and left-to-right.
+  const p = `margin:0 0 ${pt(ty.paragraphSpacing)};text-align:${ty.justify ? 'justify' : 'left'}`;
   return `
-    <div class="typo-page" style="font-family:'${esc(t.fontFamily)}',serif;font-size:${pt(t.fontSize)};line-height:${t.lineSpacing}">
-      <div style="font-size:${pt(t.headingSizes.h1)};font-weight:700;text-align:center;line-height:1.25;margin-bottom:${pt(10)}">${heading}</div>
-      <div style="font-size:${pt(t.headingSizes.h2)};font-weight:700;line-height:1.25;margin-bottom:${pt(6)}">1.1 Introduction</div>
+    <div class="typo-page" dir="ltr" style="font-family:'${esc(ty.fontFamily)}',serif;font-size:${pt(ty.fontSize)};line-height:${ty.lineSpacing}">
+      <div style="font-size:${pt(ty.headingSizes.h1)};font-weight:700;text-align:center;line-height:1.25;margin-bottom:${pt(10)}">${heading}</div>
+      <div style="font-size:${pt(ty.headingSizes.h2)};font-weight:700;line-height:1.25;margin-bottom:${pt(6)}">1.1 Introduction</div>
       <p style="${p}">This project presents a secure platform for storing, analysing and reporting on project data, designed for students and researchers.</p>
-      <div style="font-size:${pt(t.headingSizes.h3)};font-weight:700;line-height:1.25;margin-bottom:${pt(4)}">1.1.1 Aims</div>
+      <div style="font-size:${pt(ty.headingSizes.h3)};font-weight:700;line-height:1.25;margin-bottom:${pt(4)}">1.1.1 Aims</div>
       <p style="${p}">The aim is to provide role-based access to datasets and built-in analysis so teams can work in one place.</p>
     </div>`;
 }
@@ -124,8 +148,8 @@ function captionPreview(project, kind) {
   const object = kind === 'figure'
     ? `<div class="thumb cap-object">${first ? renderThumbnail(first) : icon('figure', 'icon-lg')}</div>`
     : `<div class="cap-object cap-table"><table><thead><tr><th>ID</th><th>Requirement</th><th>Priority</th></tr></thead><tbody><tr><td>F-1</td><td>User login</td><td>High</td></tr><tr><td>F-2</td><td>Upload dataset</td><td>Medium</td></tr></tbody></table></div>`;
-  return `<div class="cap-page">${cfg.position === 'above' ? `${caption}${object}` : `${object}${caption}`}</div>
-    <div class="cap-note">${first ? `Preview uses “${esc(first.title)}”.` : 'Preview uses sample content. Add a figure or table to see your own.'}</div>`;
+  return `<div class="cap-page" dir="ltr">${cfg.position === 'above' ? `${caption}${object}` : `${object}${caption}`}</div>
+    <div class="cap-note">${first ? esc(t('Preview uses “{title}”.', { title: iso(first.title) })) : t('Preview uses sample content. Add a figure or table to see your own.')}</div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -137,7 +161,7 @@ export default {
     const { store } = ctx;
     const d = new Disposer();
     let alive = true;
-    let tab = TABS.some((t) => t.id === ctx.params?.query?.tab) ? ctx.params.query.tab : 'document';
+    let tab = TABS.some((x) => x.id === ctx.params?.query?.tab) ? ctx.params.query.tab : 'document';
     let storageToken = 0;
     let backups = [];
 
@@ -145,51 +169,68 @@ export default {
       <div class="page set-page">
         <div class="page-header">
           <div class="titles">
-            <h1>Settings</h1>
-            <p class="subtitle set-saved">${icon('checkCircle', 'icon-sm')}Changes are saved automatically</p>
+            <h1>${t('Settings')}</h1>
+            <p class="subtitle set-saved">${icon('checkCircle', 'icon-sm')}${t('Changes are saved automatically')}</p>
           </div>
         </div>
-        <div class="tabs set-tabs" role="tablist" aria-label="Settings sections"></div>
+        <div class="tabs set-tabs" role="tablist" aria-label="${esc(t('Settings sections'))}"></div>
         <div class="set-panel" role="tabpanel"></div>
       </div>`;
     const tabsEl = container.querySelector('.set-tabs');
     const panel = container.querySelector('.set-panel');
 
     const renderTabs = () => {
-      tabsEl.innerHTML = TABS.map((t) => `
-        <button class="tab ${t.id === tab ? 'active' : ''}" role="tab" aria-selected="${t.id === tab}" data-tab="${t.id}">${icon(t.icon, 'icon-sm')}${t.label}</button>`).join('');
+      tabsEl.innerHTML = TABS.map((tb) => `
+        <button class="tab ${tb.id === tab ? 'active' : ''}" role="tab" aria-selected="${tb.id === tab}" data-tab="${tb.id}">${icon(tb.icon, 'icon-sm')}${tb.label}</button>`).join('');
       // On narrow screens the tab strip scrolls; keep the active tab visible.
       const active = tabsEl.querySelector('.tab.active');
       if (active && tabsEl.scrollWidth > tabsEl.clientWidth) tabsEl.scrollLeft = Math.max(0, active.offsetLeft - (tabsEl.clientWidth - active.offsetWidth) / 2);
     };
 
     // ----- Tab renderers ------------------------------------------------------
+    // Interface language: its own card at the top of the first tab. The title is
+    // bilingual on purpose so it can be found from either language.
+    const languageCard = () => `
+      <section class="card set-card set-lang">
+        <div class="card-header"><div class="grow"><h3>Language / اللغة</h3>
+          <div class="set-desc">${t('Choose the language of the interface. Your report content is never translated.')}</div></div></div>
+        <div class="lang-options" role="group" aria-label="Language / اللغة">
+          ${LANGUAGES.map((l) => `
+          <button type="button" class="lang-opt ${l.id === lang ? 'active' : ''}" data-action="set-language" data-lang="${esc(l.id)}" lang="${esc(l.id)}" aria-pressed="${l.id === lang}">
+            <span class="lang-code">${esc(l.short)}</span>
+            <span class="lang-name">${esc(l.label)}</span>
+            ${l.id === lang ? `<span class="badge badge-success">${icon('check')}${t('Active')}</span>` : ''}
+          </button>`).join('')}
+        </div>
+      </section>`;
+
     const documentTab = (s) => `
+      ${languageCard()}
       <div class="set-split">
         <div class="set-main">
-          ${card('Page', 'Paper size, orientation and margins.', `
-            ${row('Page size', 'Paper format for preview and Word export.', seg('page.size', s.page.size, [['A4', 'A4'], ['Letter', 'Letter']], { label: 'Page size' }))}
-            ${row('Orientation', '', seg('page.orientation', s.page.orientation, [['portrait', 'Portrait'], ['landscape', 'Landscape']], { label: 'Orientation' }))}
-            ${row('Margins', 'Distance from the page edge.', `<div class="margin-grid">${['top', 'bottom', 'left', 'right'].map((k) => `
-              <label class="mg"><span>${cap(k)}</span>${num(`page.margins.${k}`, s.page.margins[k], { min: 0, max: 10, step: 0.1, unit: 'cm', label: `${cap(k)} margin` })}</label>`).join('')}</div>`, 'stack-sm')}`)}
-          ${card('Typography', 'Body text of the report.', `
-            ${row('Font family', '', select('typography.fontFamily', s.typography.fontFamily, FONTS, { label: 'Font family' }))}
-            ${row('Font size', '', num('typography.fontSize', s.typography.fontSize, { min: 8, max: 24, step: 0.5, unit: 'pt', label: 'Font size' }))}
-            ${row('Line spacing', '', select('typography.lineSpacing', s.typography.lineSpacing, [[1, '1.0'], [1.15, '1.15'], [1.5, '1.5'], [2, '2.0 (double)']], { numeric: true, label: 'Line spacing' }))}
-            ${row('Paragraph spacing', 'Space after each paragraph.', num('typography.paragraphSpacing', s.typography.paragraphSpacing, { min: 0, max: 36, step: 1, unit: 'pt', label: 'Paragraph spacing' }))}
-            ${row('Justify text', 'Align paragraphs to both margins.', toggle('typography.justify', s.typography.justify, 'Justified'))}`)}
-          ${card('Headings', 'Font sizes for chapter and section titles.', `
-            ${row('Chapter title (H1)', '', num('typography.headingSizes.h1', s.typography.headingSizes.h1, { min: 10, max: 40, unit: 'pt', label: 'Heading 1 size' }))}
-            ${row('Section (H2)', '', num('typography.headingSizes.h2', s.typography.headingSizes.h2, { min: 10, max: 36, unit: 'pt', label: 'Heading 2 size' }))}
-            ${row('Subsection (H3)', '', num('typography.headingSizes.h3', s.typography.headingSizes.h3, { min: 10, max: 32, unit: 'pt', label: 'Heading 3 size' }))}`)}
-          ${card('Chapters & contents', '', `
-            ${row('Chapter title style', '', seg('chapterTitle.style', s.chapterTitle.style, [['upper', 'CHAPTER 1: INTRODUCTION'], ['title', 'Chapter 1: Introduction']], { label: 'Chapter title style' }), 'stack-sm')}
-            ${row('Start chapters on a new page', '', toggle('chapterTitle.newPage', s.chapterTitle.newPage, 'New page'))}
-            ${row('Table of contents depth', 'How many heading levels are listed.', select('toc.depth', s.toc.depth, [[1, '1 — Chapters only'], [2, '2 — Chapters and sections'], [3, '3 — Down to subsections'], [4, '4 — Down to sub-subsections']], { numeric: true, label: 'Table of contents depth' }))}`)}
+          ${card(t('Page'), t('Paper size, orientation and margins.'), `
+            ${row(t('Page size'), t('Paper format for preview and Word export.'), seg('page.size', s.page.size, [['A4', 'A4'], ['Letter', 'Letter']], { label: t('Page size') }))}
+            ${row(t('Orientation'), '', seg('page.orientation', s.page.orientation, [['portrait', t('Portrait')], ['landscape', t('Landscape')]], { label: t('Orientation') }))}
+            ${row(t('Margins'), t('Distance from the page edge.'), `<div class="margin-grid">${[['top', t('Top'), t('Top margin')], ['bottom', t('Bottom'), t('Bottom margin')], ['left', t('Left'), t('Left margin')], ['right', t('Right'), t('Right margin')]].map(([k, name, aria]) => `
+              <label class="mg"><span>${name}</span>${num(`page.margins.${k}`, s.page.margins[k], { min: 0, max: 10, step: 0.1, unit: t('cm'), label: aria })}</label>`).join('')}</div>`, 'stack-sm')}`)}
+          ${card(t('Typography'), t('Body text of the report.'), `
+            ${row(t('Font family'), '', select('typography.fontFamily', s.typography.fontFamily, FONTS, { label: t('Font family') }))}
+            ${row(t('Font size'), '', num('typography.fontSize', s.typography.fontSize, { min: 8, max: 24, step: 0.5, unit: t('pt'), label: t('Font size') }))}
+            ${row(t('Line spacing'), '', select('typography.lineSpacing', s.typography.lineSpacing, [[1, '1.0'], [1.15, '1.15'], [1.5, '1.5'], [2, t('2.0 (double)')]], { numeric: true, label: t('Line spacing') }))}
+            ${row(t('Paragraph spacing'), t('Space after each paragraph.'), num('typography.paragraphSpacing', s.typography.paragraphSpacing, { min: 0, max: 36, step: 1, unit: t('pt'), label: t('Paragraph spacing') }))}
+            ${row(t('Justify text'), t('Align paragraphs to both margins.'), toggle('typography.justify', s.typography.justify, t('Justified')))}`)}
+          ${card(t('Headings'), t('Font sizes for chapter and section titles.'), `
+            ${row(t('Chapter title (H1)'), '', num('typography.headingSizes.h1', s.typography.headingSizes.h1, { min: 10, max: 40, unit: t('pt'), label: t('Heading 1 size') }))}
+            ${row(t('Section (H2)'), '', num('typography.headingSizes.h2', s.typography.headingSizes.h2, { min: 10, max: 36, unit: t('pt'), label: t('Heading 2 size') }))}
+            ${row(t('Subsection (H3)'), '', num('typography.headingSizes.h3', s.typography.headingSizes.h3, { min: 10, max: 32, unit: t('pt'), label: t('Heading 3 size') }))}`)}
+          ${card(t('Chapters & contents'), '', `
+            ${row(t('Chapter title style'), '', seg('chapterTitle.style', s.chapterTitle.style, [['upper', 'CHAPTER 1: INTRODUCTION'], ['title', 'Chapter 1: Introduction']], { label: t('Chapter title style') }), 'stack-sm')}
+            ${row(t('Start chapters on a new page'), '', toggle('chapterTitle.newPage', s.chapterTitle.newPage, t('New page')))}
+            ${row(t('Table of contents depth'), t('How many heading levels are listed.'), select('toc.depth', s.toc.depth, [[1, t('1 — Chapters only')], [2, t('2 — Chapters and sections')], [3, t('3 — Down to subsections')], [4, t('4 — Down to sub-subsections')]], { numeric: true, label: t('Table of contents depth') }))}`)}
         </div>
         <aside class="set-aside">
           <div class="card set-sticky">
-            <div class="card-header"><h3>Live preview</h3></div>
+            <div class="card-header"><h3>${t('Live preview')}</h3></div>
             <div class="card-body" data-preview="document"></div>
           </div>
         </aside>
@@ -199,21 +240,22 @@ export default {
       <div class="set-captions">
         ${['figure', 'table'].map((kind) => {
           const c = s.captions[kind];
-          const K = cap(kind);
+          const K = cap(kind); // default label word (report text, stays English)
+          const L = CAPTION_TEXT[kind];
           return `
           <section class="card set-card">
-            <div class="card-header"><div class="grow"><h3>${K} captions</h3><div class="set-desc">How ${kind}s are labelled and numbered throughout the report.</div></div></div>
+            <div class="card-header"><div class="grow"><h3>${L.title}</h3><div class="set-desc">${L.desc}</div></div></div>
             <div class="cap-layout">
               <div class="set-rows">
-                ${row('Label text', 'Word used before the number.', text(`captions.${kind}.label`, c.label, { placeholder: K, label: `${K} label text` }))}
-                ${row('Separator', '', select(`captions.${kind}.separator`, c.separator, separatorOptions(c.label), { label: `${K} separator` }))}
-                ${row('Position', `Caption placed above or below the ${kind}.`, seg(`captions.${kind}.position`, c.position, [['above', 'Above'], ['below', 'Below']], { label: `${K} caption position` }))}
-                ${row('Numbering', '', select(`captions.${kind}.numbering`, c.numbering, [['global', `${c.label} 1, 2, 3 (whole report)`], ['chapter', `${c.label} 1.1, 1.2 (per chapter)`]], { label: `${K} numbering` }))}
-                ${row('Alignment', '', seg(`captions.${kind}.align`, c.align, [['left', 'Left'], ['center', 'Center']], { label: `${K} caption alignment` }))}
-                ${row('Label bold', 'Make the label and number bold.', toggle(`captions.${kind}.labelBold`, c.labelBold, 'Bold label'))}
-                ${row('Title italic', '', toggle(`captions.${kind}.titleItalic`, c.titleItalic, 'Italic title'))}
+                ${row(t('Label text'), t('Word used before the number.'), text(`captions.${kind}.label`, c.label, { placeholder: K, label: L.label }))}
+                ${row(t('Separator'), '', select(`captions.${kind}.separator`, c.separator, separatorOptions(c.label), { label: L.separator }))}
+                ${row(t('Position'), L.positionDesc, seg(`captions.${kind}.position`, c.position, [['above', t('Above')], ['below', t('Below')]], { label: L.position }))}
+                ${row(t('Numbering'), '', select(`captions.${kind}.numbering`, c.numbering, numberingOptions(c.label), { label: L.numbering }))}
+                ${row(t('Alignment'), '', seg(`captions.${kind}.align`, c.align, [['left', t('Left')], ['center', t('Center')]], { label: L.align }))}
+                ${row(t('Label bold'), t('Make the label and number bold.'), toggle(`captions.${kind}.labelBold`, c.labelBold, t('Bold label')))}
+                ${row(t('Title italic'), '', toggle(`captions.${kind}.titleItalic`, c.titleItalic, t('Italic title')))}
               </div>
-              <div class="cap-preview"><div class="set-preview-title">Preview</div><div data-preview="caption-${kind}"></div></div>
+              <div class="cap-preview"><div class="set-preview-title">${t('Preview')}</div><div data-preview="caption-${kind}"></div></div>
             </div>
           </section>`;
         }).join('')}
@@ -221,13 +263,13 @@ export default {
 
     const figuresTab = (s) => `
       <div class="set-main set-narrow">
-        ${card('New figures', 'Defaults applied to text in newly created diagrams.', `
-          ${row('Default font family', '', select('figureDefaults.fontFamily', s.figureDefaults.fontFamily, FONTS, { label: 'Default figure font family' }))}
-          ${row('Default font size', '', num('figureDefaults.fontSize', s.figureDefaults.fontSize, { min: 8, max: 48, unit: 'pt', label: 'Default figure font size' }))}`)}
-        ${card('Image export', 'Used when exporting figures as PNG or in the Word package.', `
-          ${row('Resolution', 'Higher resolution = sharper images, larger files.', seg('figureDefaults.exportScale', s.figureDefaults.exportScale, [[1, '1×'], [2, '2×'], [3, '3×'], [4, '4×']], { numeric: true, label: 'Export resolution' }), 'stack-sm')}
-          ${row('Output density', '', `<span class="dpi-hint" data-dpi>${[96, 192, 288, 384][Math.min(4, Math.max(1, Number(s.figureDefaults.exportScale) || 3)) - 1]} DPI</span>`)}
-          ${row('Transparent background', 'Export PNGs without the white page background.', toggle('figureDefaults.transparentBackground', s.figureDefaults.transparentBackground, 'Transparent'))}`)}
+        ${card(t('New figures'), t('Defaults applied to text in newly created diagrams.'), `
+          ${row(t('Default font family'), '', select('figureDefaults.fontFamily', s.figureDefaults.fontFamily, FONTS, { label: t('Default figure font family') }))}
+          ${row(t('Default font size'), '', num('figureDefaults.fontSize', s.figureDefaults.fontSize, { min: 8, max: 48, unit: t('pt'), label: t('Default figure font size') }))}`)}
+        ${card(t('Image export'), t('Used when exporting figures as PNG or in the Word package.'), `
+          ${row(t('Resolution'), t('Higher resolution = sharper images, larger files.'), seg('figureDefaults.exportScale', s.figureDefaults.exportScale, [[1, '1×'], [2, '2×'], [3, '3×'], [4, '4×']], { numeric: true, label: t('Export resolution') }), 'stack-sm')}
+          ${row(t('Output density'), '', `<span class="dpi-hint" data-dpi dir="ltr">${[96, 192, 288, 384][Math.min(4, Math.max(1, Number(s.figureDefaults.exportScale) || 3)) - 1]} DPI</span>`)}
+          ${row(t('Transparent background'), t('Export PNGs without the white page background.'), toggle('figureDefaults.transparentBackground', s.figureDefaults.transparentBackground, t('Transparent')))}`)}
       </div>`;
 
     const projectTab = (project) => {
@@ -241,15 +283,15 @@ export default {
       };
       return `
         <form class="card set-card set-narrow" id="project-form" novalidate>
-          <div class="card-header"><div class="grow"><h3>Project details</h3><div class="set-desc">Shown on the title page and in the dashboard.</div></div></div>
+          <div class="card-header"><div class="grow"><h3>${t('Project details')}</h3><div class="set-desc">${t('Shown on the title page and in the dashboard.')}</div></div></div>
           <div class="card-body pf-grid">${projectDetailFields(project).map(f).join('')}</div>
-          <div class="card-footer"><button type="button" class="btn" data-action="reset-project">Reset</button><button type="submit" class="btn btn-primary">${icon('check')}Save changes</button></div>
+          <div class="card-footer"><button type="button" class="btn" data-action="reset-project">${t('Reset')}</button><button type="submit" class="btn btn-primary">${icon('check')}${t('Save changes')}</button></div>
         </form>`;
     };
 
     const storageSkeleton = () => `
       <div class="set-main set-narrow" data-storage>
-        <section class="card set-card"><div class="card-body"><div class="muted">Loading storage information…</div></div></section>
+        <section class="card set-card"><div class="card-body"><div class="muted">${t('Loading storage information…')}</div></div></section>
       </div>`;
 
     async function renderStorage() {
@@ -268,19 +310,19 @@ export default {
       panel.innerHTML = `
         <div class="set-main set-narrow" data-storage>
           <section class="card set-card">
-            <div class="card-header"><div class="grow"><h3>Storage</h3><div class="set-desc">Where GradDocs keeps your projects. Everything stays on this device.</div></div>
-              <span class="badge badge-primary">${esc(ENGINES[engine]?.label || engine)}</span></div>
+            <div class="card-header"><div class="grow"><h3>${t('Storage')}</h3><div class="set-desc">${t('Where GradDocs keeps your projects. Everything stays on this device.')}</div></div>
+              <span class="badge badge-primary"><bdi>${esc(ENGINES[engine]?.label || engine)}</bdi></span></div>
             <div class="card-body">
               <div class="usage">
-                <div class="usage-head"><span><b>${formatBytes(usage.used)}</b> used${usage.quota ? ` of ${formatBytes(usage.quota)}` : ''}</span>${usage.quota ? `<span class="muted">${pct < 0.1 ? '<0.1' : pct.toFixed(1)}%</span>` : ''}</div>
+                <div class="usage-head"><span>${usage.quota ? tHTML('{used} used of {quota}', { used: `<b><bdi>${formatBytes(usage.used)}</bdi></b>`, quota: `<bdi>${formatBytes(usage.quota)}</bdi>` }) : tHTML('{used} used', { used: `<b><bdi>${formatBytes(usage.used)}</bdi></b>` })}</span>${usage.quota ? `<span class="muted"><bdi>${pct < 0.1 ? '&lt;0.1' : pct.toFixed(1)}%</bdi></span>` : ''}</div>
                 <div class="progress usage-bar ${pct > 80 ? 'is-danger' : ''}" role="progressbar" aria-valuenow="${pct.toFixed(1)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${Math.max(2, pct)}%"></span></div>
               </div>
               <div class="engine-grid">
                 ${Object.entries(ENGINES).map(([key, e]) => `
                   <div class="engine ${key === engine ? 'active' : ''}">
-                    <div class="engine-top"><span class="engine-name">${esc(e.label)}</span>${key === engine ? `<span class="badge badge-success">${icon('check')}Active</span>` : ''}</div>
+                    <div class="engine-top"><span class="engine-name"><bdi>${esc(e.label)}</bdi></span>${key === engine ? `<span class="badge badge-success">${icon('check')}${t('Active')}</span>` : ''}</div>
                     <p>${esc(e.desc)}</p>
-                    ${key === engine ? '' : `<button class="btn btn-sm" data-action="switch-engine" data-engine="${key}">${icon('refresh')}Switch to ${esc(e.short)}</button>`}
+                    ${key === engine ? '' : `<button class="btn btn-sm" data-action="switch-engine" data-engine="${key}">${icon('refresh')}${tHTML('Switch to {name}', { name: `<bdi>${esc(e.short)}</bdi>` })}</button>`}
                   </div>`).join('')}
               </div>
             </div>
@@ -288,28 +330,28 @@ export default {
 
           <section class="card set-card">
             <div class="card-header">
-              <div class="grow"><h3>Backups</h3><div class="set-desc">The ${5} most recent backups of this project. One is created automatically every 15 minutes while you work.</div></div>
-              <button class="btn btn-sm btn-primary" data-action="create-backup">${icon('archive')}Create backup now</button>
+              <div class="grow"><h3>${t('Backups')}</h3><div class="set-desc">${t('The {n} most recent backups of this project. One is created automatically every 15 minutes while you work.', { n: 5 })}</div></div>
+              <button class="btn btn-sm btn-primary" data-action="create-backup">${icon('archive')}${t('Create backup now')}</button>
             </div>
             <div class="bk-list">
               ${backups.length ? backups.map((b) => `
                 <div class="bk-row" data-backup="${esc(b.id)}">
                   <span class="bk-ico">${icon('history')}</span>
-                  <div class="grow min0"><div class="bk-title">${esc(formatDateTime(b.at))}</div>
-                    <div class="bk-meta"><span class="badge">${esc(b.reason || 'Backup')}</span><span>≈ ${formatBytes(sizeOf(b))}</span></div></div>
+                  <div class="grow min0"><div class="bk-title"><bdi>${esc(formatDateTime(b.at))}</bdi></div>
+                    <div class="bk-meta"><span class="badge">${esc(b.reason ? (BACKUP_REASONS[b.reason] || b.reason) : t('Backup'))}</span><span><bdi>≈ ${formatBytes(sizeOf(b))}</bdi></span></div></div>
                   <div class="bk-actions">
-                    <button class="btn btn-sm" data-action="restore-backup" data-id="${esc(b.id)}">${icon('undo')}<span class="bk-label">Restore</span></button>
-                    <button class="btn btn-sm btn-icon" data-action="download-backup" data-id="${esc(b.id)}" data-tip="Download backup" aria-label="Download backup">${icon('export')}</button>
-                    <button class="btn btn-sm btn-icon bk-delete" data-action="delete-backup" data-id="${esc(b.id)}" data-tip="Delete backup" aria-label="Delete backup">${icon('trash')}</button>
+                    <button class="btn btn-sm" data-action="restore-backup" data-id="${esc(b.id)}">${icon('undo')}<span class="bk-label">${t('Restore')}</span></button>
+                    <button class="btn btn-sm btn-icon" data-action="download-backup" data-id="${esc(b.id)}" data-tip="${esc(t('Download backup'))}" aria-label="${esc(t('Download backup'))}">${icon('export')}</button>
+                    <button class="btn btn-sm btn-icon bk-delete" data-action="delete-backup" data-id="${esc(b.id)}" data-tip="${esc(t('Delete backup'))}" aria-label="${esc(t('Delete backup'))}">${icon('trash')}</button>
                   </div>
-                </div>`).join('') : `<div class="bk-empty">${icon('archive')}<div><b>No backups yet</b><div class="muted">Create one now to keep a restorable snapshot of this project.</div></div></div>`}
+                </div>`).join('') : `<div class="bk-empty">${icon('archive')}<div><b>${t('No backups yet')}</b><div class="muted">${t('Create one now to keep a restorable snapshot of this project.')}</div></div></div>`}
             </div>
-            <div class="card-footer bk-footer"><button class="btn btn-sm" data-action="download-project">${icon('export')}Download project backup (.json)</button></div>
+            <div class="card-footer bk-footer"><button class="btn btn-sm" data-action="download-project">${icon('export')}${t('Download project backup (.json)')}</button></div>
           </section>
 
           <section class="card set-card danger-zone">
-            <div class="card-header"><div class="grow"><h3>Danger zone</h3><div class="set-desc">Irreversible actions for this project.</div></div></div>
-            <div class="set-rows">${row('Delete this project', 'Permanently removes the project and its backups from this browser. Download a backup first if you may need it.', `<button class="btn btn-danger" data-action="delete-project">${icon('trash')}Delete project</button>`)}</div>
+            <div class="card-header"><div class="grow"><h3>${t('Danger zone')}</h3><div class="set-desc">${t('Irreversible actions for this project.')}</div></div></div>
+            <div class="set-rows">${row(t('Delete this project'), t('Permanently removes the project and its backups from this browser. Download a backup first if you may need it.'), `<button class="btn btn-danger" data-action="delete-project">${icon('trash')}${t('Delete project')}</button>`)}</div>
           </section>
         </div>`;
     }
@@ -326,7 +368,7 @@ export default {
       for (const kind of ['figure', 'table']) {
         const label = project.settings.captions[kind].label;
         const opts = panel.querySelector(`select[data-path="captions.${kind}.numbering"]`)?.options;
-        if (opts) for (const o of opts) o.textContent = o.value === 'chapter' ? `${label} 1.1, 1.2 (per chapter)` : `${label} 1, 2, 3 (whole report)`;
+        if (opts) for (const o of opts) o.textContent = numberingOptions(label).find(([v]) => v === o.value)?.[1] || o.textContent;
         const sepOpts = panel.querySelector(`select[data-path="captions.${kind}.separator"]`)?.options;
         if (sepOpts) for (const o of sepOpts) o.textContent = separatorOptions(label).find(([v]) => v === o.value)?.[1] || o.textContent;
       }
@@ -393,11 +435,11 @@ export default {
       e.preventDefault();
       const values = Object.fromEntries(projectDetailFields({}).map((f) => [f.name, form.elements[f.name].value.trim()]));
       const err = form.querySelector('[data-error="name"]');
-      err.textContent = values.name ? '' : 'Project Name is required.';
+      err.textContent = values.name ? '' : t('{label} is required.', { label: t('Project Name') });
       form.elements.name.classList.toggle('invalid', !values.name);
       if (!values.name) { form.elements.name.focus(); return; }
       store.update((p) => Object.assign(p, values), { activity: 'Updated project details', source: 'settings' });
-      toast('Project details saved.', { type: 'success' });
+      toast(t('Project details saved.'), { type: 'success' });
     }));
     d.add(on(panel, 'click', '[data-action="reset-project"]', () => {
       const form = panel.querySelector('#project-form');
@@ -415,78 +457,85 @@ export default {
         const target = el.dataset.engine;
         const to = ENGINES[target];
         const ok = await confirmDialog({
-          title: `Switch to ${to.short}?`,
-          message: `All projects and backups will be <strong>copied</strong> to ${esc(to.label)} and GradDocs will use it from now on. The existing copy is left untouched, so nothing is lost.`,
-          confirmText: `Switch to ${to.short}`,
+          title: t('Switch to {name}?', { name: to.short }),
+          message: tHTML('All projects and backups will be <strong>copied</strong> to {name} and GradDocs will use it from now on. The existing copy is left untouched, so nothing is lost.', { name: `<bdi>${esc(to.label)}</bdi>` }),
+          confirmText: t('Switch to {name}', { name: to.short }),
         });
         if (!ok) return;
         try {
           await store.switchEngine(target);
-          toast(`Now using ${to.label}. Your projects were copied.`, { type: 'success', title: 'Storage switched' });
-        } catch (err) { toastError(err, 'Could not switch storage'); }
+          toast(t('Now using {name}. Your projects were copied.', { name: to.label }), { type: 'success', title: t('Storage switched') });
+        } catch (err) { toastError(err, t('Could not switch storage')); }
         if (alive && tab === 'storage') renderStorage();
       },
       async 'create-backup'() {
         try {
           await store.createBackup('Manual backup');
-          toast('Backup created.', { type: 'success' });
-        } catch (err) { toastError(err, 'Could not create the backup'); }
+          toast(t('Backup created.'), { type: 'success' });
+        } catch (err) { toastError(err, t('Could not create the backup')); }
         if (alive && tab === 'storage') renderStorage();
       },
       async 'restore-backup'(el) {
         const backup = findBackup(el.dataset.id);
         if (!backup) return;
         const ok = await confirmDialog({
-          title: 'Restore this backup?',
-          message: `The project will go back to how it was on <strong>${esc(formatDateTime(backup.at))}</strong>. Your current version is backed up first, so you can undo this.`,
-          confirmText: 'Restore backup',
+          title: t('Restore this backup?'),
+          message: tHTML('The project will go back to how it was on {date}. Your current version is backed up first, so you can undo this.', { date: strong(formatDateTime(backup.at)) }),
+          confirmText: t('Restore backup'),
         });
         if (!ok) return;
         try {
           await store.restoreBackup(backup);
-          toast('Backup restored.', { type: 'success' });
-        } catch (err) { toastError(err, 'Could not restore the backup'); }
+          toast(t('Backup restored.'), { type: 'success' });
+        } catch (err) { toastError(err, t('Could not restore the backup')); }
         if (alive && tab === 'storage') renderStorage();
       },
       'download-backup'(el) {
         const backup = findBackup(el.dataset.id);
         if (!backup) return;
         downloadText(JSON.stringify(backup.data, null, 2), `${slugify(backup.data?.name || store.project.name)}-backup-${stamp(backup.at)}.json`, 'application/json');
-        toast('Backup downloaded.', { type: 'success' });
+        toast(t('Backup downloaded.'), { type: 'success' });
       },
       async 'delete-backup'(el) {
         const backup = findBackup(el.dataset.id);
         if (!backup) return;
         const ok = await confirmDialog({
-          title: 'Delete this backup?', danger: true, confirmText: 'Delete backup',
-          message: `The backup from <strong>${esc(formatDateTime(backup.at))}</strong> will be removed permanently.`,
+          title: t('Delete this backup?'), danger: true, confirmText: t('Delete backup'),
+          message: tHTML('The backup from {date} will be removed permanently.', { date: strong(formatDateTime(backup.at)) }),
         });
         if (!ok) return;
         try {
           await store.repo.deleteBackup(store.project.id, backup.id);
-          toast('Backup deleted.', { type: 'success' });
-        } catch (err) { toastError(err, 'Could not delete the backup'); }
+          toast(t('Backup deleted.'), { type: 'success' });
+        } catch (err) { toastError(err, t('Could not delete the backup')); }
         if (alive && tab === 'storage') renderStorage();
       },
       async 'download-project'() {
         try {
           const data = await store.exportProjectData(store.project.id);
           downloadText(JSON.stringify(data, null, 2), `${slugify(data.name)}-project.json`, 'application/json');
-          toast('Project backup downloaded.', { type: 'success' });
-        } catch (err) { toastError(err, 'Could not export the project'); }
+          toast(t('Project backup downloaded.'), { type: 'success' });
+        } catch (err) { toastError(err, t('Could not export the project')); }
       },
       async 'delete-project'() {
         const project = store.project;
         const ok = await confirmDialog({
-          title: 'Delete project?', danger: true, confirmText: 'Delete project',
-          message: `This permanently deletes <strong>${esc(project.name)}</strong>, including all figures, tables, chapters, acronyms and backups stored in this browser. This cannot be undone.`,
+          title: t('Delete project?'), danger: true, confirmText: t('Delete project'),
+          message: tHTML('This permanently deletes {name}, including all figures, tables, chapters, acronyms and backups stored in this browser. This cannot be undone.', { name: strong(project.name) }),
         });
         if (!ok) return;
         try {
           await store.deleteProject(project.id);
-          toast(`Deleted “${project.name}”.`, { type: 'success' });
+          toast(t('Deleted “{name}”.', { name: iso(project.name) }), { type: 'success' });
           ctx.navigate('#/projects');
-        } catch (err) { toastError(err, 'Could not delete the project'); }
+        } catch (err) { toastError(err, t('Could not delete the project')); }
+      },
+      // Interface language: persist everything first, then save the choice and reload.
+      async 'set-language'(el) {
+        const id = el.dataset.lang;
+        if (!id || id === lang) return;
+        try { await store.flush(); } catch (err) { toastError(err, t('Changes could not be saved')); return; }
+        setLanguage(id);
       },
     };
     d.add(on(panel, 'click', '[data-action]', (e, el) => { actions[el.dataset.action]?.(el); }));
@@ -502,7 +551,7 @@ export default {
       renderPanel();
     }));
 
-    ctx.shell.setBreadcrumbs([{ label: 'Settings' }]);
+    ctx.shell.setBreadcrumbs([{ label: t('Settings') }]);
     renderPanel();
 
     return { unmount() { alive = false; storageToken += 1; d.dispose(); } };

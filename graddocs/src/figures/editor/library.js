@@ -4,6 +4,7 @@ import { LIBRARY, getShape } from '../shapes.js';
 import { renderThumbnail } from '../render.js';
 import { esc } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
+import { t } from '../../i18n/index.js';
 
 const thumbCache = new Map();
 
@@ -29,17 +30,19 @@ export function renderLibrary(container, { groupsFirst = [], onAdd }) {
   });
   const presets = [];
   container.innerHTML = `
-    <div class="ed-panel-head"><span>Elements</span></div>
-    <div class="ed-lib-search input-group">${icon('search')}<input class="input input-sm" type="search" placeholder="Search shapes" aria-label="Search shapes"></div>
+    <div class="ed-panel-head"><span>${t('Elements')}</span></div>
+    <div class="ed-lib-search input-group">${icon('search')}<input class="input input-sm" type="search" placeholder="${t('Search shapes')}" aria-label="${t('Search shapes')}"></div>
     <div class="ed-lib-groups">
       ${ordered.map((g, gi) => `
         <details class="ed-lib-group" ${gi < 2 || groupsFirst.includes(g.group) ? 'open' : ''}>
-          <summary>${icon('chevronRight', 'icon-sm chev')}${esc(g.group)}<span class="faint">${g.items.length}</span></summary>
+          <summary>${icon('chevronRight', 'icon-sm chev')}${esc(t(g.group))}<span class="faint">${g.items.length}</span></summary>
           <div class="ed-lib-grid">
             ${g.items.map((item) => {
               const idx = presets.push(item) - 1;
-              return `<button class="ed-lib-item" draggable="true" data-preset="${idx}" data-name="${esc(item.name.toLowerCase())}" data-tip="${esc(item.name)} — click or drag onto the canvas">
-                <span class="ed-lib-thumb">${presetThumb(item)}</span><span class="ed-lib-name truncate">${esc(item.name)}</span></button>`;
+              const name = t(item.name);
+              // Search matches the displayed name and the English one.
+              return `<button class="ed-lib-item" draggable="true" data-preset="${idx}" data-name="${esc(`${name} ${item.name}`.toLowerCase())}" data-tip="${esc(t('{name} — click or drag onto the canvas', { name }))}">
+                <span class="ed-lib-thumb">${presetThumb(item)}</span><span class="ed-lib-name truncate">${esc(name)}</span></button>`;
             }).join('')}
           </div>
         </details>`).join('')}

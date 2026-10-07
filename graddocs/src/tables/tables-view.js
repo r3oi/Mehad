@@ -10,10 +10,22 @@ import { getNumbering, moveInDocumentOrder } from '../core/numbering.js';
 import { createTable } from '../core/model.js';
 import { findUsages } from '../core/references.js';
 import { uid, clone, relativeTime, slugify, pad, downloadBlob, downloadText } from '../core/utils.js';
+import { t, isRTL } from '../i18n/index.js';
 import { svgToPngBlob } from '../export/png.js';
 import { svgToPdfBlob } from '../export/pdf.js';
 import { renderTableHTML, renderTableSVG, tableToCSV, tableToTSV, renderTableMiniHTML } from './table-render.js';
 import { TABLE_TEMPLATES, templateById } from './table-templates.js';
+
+// ---------------------------------------------------------------------------
+// Bidi helpers (shared with the editor). Table titles, codes and file names are document content / identifiers:
+// they keep their own direction inside translated sentences.
+
+/** Isolate user text (e.g. a table title) inside a plain-text sentence so it cannot reorder the Arabic around it. */
+export const isolate = (text) => (isRTL ? `\u2068${text}\u2069` : String(text));
+/** Same for text that must read left-to-right (file names). */
+export const ltr = (text) => (isRTL ? `\u2066${text}\u2069` : String(text));
+/** <bdi> wrapper for HTML contexts; pass dir="ltr" for codes and sizes. */
+export const bdi = (html, dir = '') => `<bdi${dir ? ` dir="${dir}"` : ''}>${html}</bdi>`;
 
 // ---------------------------------------------------------------------------
 // Export (shared with the editor)
@@ -45,7 +57,7 @@ export async function copyTableForWord(project, table) {
     let ok = false;
     try { ok = document.execCommand('copy'); } catch { ok = false; }
     sel.removeAllRanges(); holder.remove();
-    if (!ok) throw new Error(`Could not copy to the clipboard (${err.message}). Try the HTML export instead.`);
+    if (!ok) throw new Error(t('Could not copy to the clipboard ({reason}). Try the HTML export instead.', { reason: err.message }));
   }
 }
 
@@ -53,38 +65,39 @@ export async function copyTableForWord(project, table) {
 export async function exportTable(project, table, format) {
   const base = tableFileBase(project, table);
   const scale = project.settings.figureDefaults?.exportScale || 3;
-  if (format === 'word') { await copyTableForWord(project, table); return 'Copied. Paste into Word with Ctrl+V.'; }
-  if (format === 'csv') { downloadText(`﻿${tableToCSV(table)}`, `${base}.csv`, 'text/csv;charset=utf-8'); return `Saved ${base}.csv`; }
+  const saved = (file) => t('Saved {file}', { file: ltr(file) });
+  if (format === 'word') { await copyTableForWord(project, table); return t('Copied. Paste into Word with Ctrl+V.'); }
+  if (format === 'csv') { downloadText(`﻿${tableToCSV(table)}`, `${base}.csv`, 'text/csv;charset=utf-8'); return saved(`${base}.csv`); }
   if (format === 'html') {
     const doc = `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><title>${esc(table.title)}</title></head>\n<body style="margin:24px">\n${renderTableHTML(project, table, { caption: true })}\n</body></html>\n`;
     downloadText(doc, `${base}.html`, 'text/html;charset=utf-8');
-    return `Saved ${base}.html`;
+    return saved(`${base}.html`);
   }
   const { svg, width, height } = renderTableSVG(project, table);
-  if (format === 'svg') { downloadText(`<?xml version="1.0" encoding="UTF-8"?>\n${svg}`, `${base}.svg`, 'image/svg+xml;charset=utf-8'); return `Saved ${base}.svg`; }
-  if (format === 'png') { downloadBlob(await svgToPngBlob(svg, width, height, { scale }), `${base}.png`); return `Saved ${base}.png`; }
-  if (format === 'pdf') { downloadBlob(await svgToPdfBlob(svg, width, height, { scale, title: table.title }), `${base}.pdf`); return `Saved ${base}.pdf`; }
-  throw new Error(`Unknown export format: ${format}`);
+  if (format === 'svg') { downloadText(`<?xml version="1.0" encoding="UTF-8"?>\n${svg}`, `${base}.svg`, 'image/svg+xml;charset=utf-8'); return saved(`${base}.svg`); }
+  if (format === 'png') { downloadBlob(await svgToPngBlob(svg, width, height, { scale }), `${base}.png`); return saved(`${base}.png`); }
+  if (format === 'pdf') { downloadBlob(await svgToPdfBlob(svg, width, height, { scale, title: table.title }), `${base}.pdf`); return saved(`${base}.pdf`); }
+  throw new Error(t('Unknown export format: {format}', { format }));
 }
 
 export async function runExport(project, table, format) {
   try {
     const message = await exportTable(project, table, format);
     toast(message, { type: 'success', duration: 2400 });
-  } catch (err) { toastError(err, 'Export failed'); }
+  } catch (err) { toastError(err, t('Export failed')); }
 }
 
 export function openExportMenu(anchor, project, table, { before } = {}) {
   const go = (format) => () => { before?.(); runExport(project, table, format); };
   openMenu(anchor, [
-    { heading: 'Download' },
-    { label: 'PNG image', icon: 'image', onClick: go('png') },
-    { label: 'SVG (vector)', icon: 'figure', onClick: go('svg') },
-    { label: 'PDF document', icon: 'fileText', onClick: go('pdf') },
-    { label: 'HTML page', icon: 'file', onClick: go('html') },
-    { label: 'CSV spreadsheet', icon: 'table', onClick: go('csv') },
+    { heading: t('Download') },
+    { label: t('PNG image'), icon: 'image', onClick: go('png') },
+    { label: t('SVG (vector)'), icon: 'figure', onClick: go('svg') },
+    { label: t('PDF document'), icon: 'fileText', onClick: go('pdf') },
+    { label: t('HTML page'), icon: 'file', onClick: go('html') },
+    { label: t('CSV spreadsheet'), icon: 'table', onClick: go('csv') },
     '-',
-    { label: 'Copy for Word', icon: 'word', onClick: go('word') },
+    { label: t('Copy for Word'), icon: 'word', onClick: go('word') },
   ], { align: 'end' });
 }
 
@@ -115,22 +128,26 @@ export async function deleteTableWithUndo(store, id, { onDeleted } = {}) {
   if (!table) return false;
   const info = getNumbering(project).tables.get(id);
   const usages = findUsages(project, 'tab', id);
-  const refs = usages.length
-    ? `It is referenced in ${usages.length} place${usages.length === 1 ? '' : 's'}; those references will show as broken (${esc(info?.label || 'Table')} → ??) until you remove or relink them.`
-    : 'Any references to it will show as broken until you remove them.';
+  const label = bdi(esc(info?.label || 'Table'));
+  let refs;
+  if (!usages.length) refs = t('Any references to it will show as broken until you remove them.');
+  else if (usages.length === 1) refs = t('It is referenced in 1 place; those references will show as broken ({label} → ??) until you remove or relink them.', { label });
+  else refs = t('It is referenced in {n} places; those references will show as broken ({label} → ??) until you remove or relink them.', { n: usages.length, label });
   const ok = await confirmDialog({
-    title: 'Delete this table?',
-    message: `<strong>${esc(info?.label || 'Table')}: ${esc(table.title)}</strong> will be removed from the document. ${refs} You can undo right after deleting.`,
-    confirmText: 'Delete table', danger: true,
+    title: t('Delete this table?'),
+    message: t('{name} will be removed from the document. {refs} You can undo right after deleting.', {
+      name: `<strong>${bdi(`${esc(info?.label || 'Table')}: ${esc(table.title)}`)}</strong>`, refs,
+    }),
+    confirmText: t('Delete table'), danger: true,
   });
   if (!ok) return false;
   let removed = null; let index = -1;
   store.update((p) => { index = p.tables.findIndex((t) => t.id === id); if (index >= 0) [removed] = p.tables.splice(index, 1); },
     { activity: { text: `Deleted table "${table.title}"`, kind: 'delete' } });
   onDeleted?.();
-  toast(`Deleted "${table.title}"`, {
+  toast(t('Deleted "{title}"', { title: isolate(table.title) }), {
     type: 'success', duration: 6000,
-    action: { label: 'Undo', onClick: () => store.update((p) => { p.tables.splice(Math.min(index, p.tables.length), 0, removed); }, { activity: `Restored table "${table.title}"` }) },
+    action: { label: t('Undo'), onClick: () => store.update((p) => { p.tables.splice(Math.min(index, p.tables.length), 0, removed); }, { activity: `Restored table "${table.title}"` }) },
   });
   return true;
 }
@@ -147,7 +164,7 @@ function moveBlocker(project, id, dir) {
 
 export function moveTable(store, id, dir) {
   const blocked = moveBlocker(store.project, id, dir);
-  if (blocked === 'section') { toast('Can only reorder within the same section', { type: 'info' }); return false; }
+  if (blocked === 'section') { toast(t('Can only reorder within the same section'), { type: 'info' }); return false; }
   if (blocked) return false;
   const title = store.project.tables.find((t) => t.id === id)?.title;
   return store.update((p) => moveInDocumentOrder(p, 'tables', id, dir), { activity: `Moved table "${title}" ${dir < 0 ? 'up' : 'down'}` });
@@ -158,29 +175,29 @@ export function moveTable(store, id, dir) {
 
 const chapterOptions = (project, selected) => {
   const n = getNumbering(project);
-  return `<option value="">Unassigned</option>${project.chapters.map((ch) => `<option value="${esc(ch.id)}" ${ch.id === selected ? 'selected' : ''}>${esc(`${n.chapters.get(ch.id).label} · ${ch.title}`)}</option>`).join('')}`;
+  return `<option value="">${t('Unassigned')}</option>${project.chapters.map((ch) => `<option value="${esc(ch.id)}" ${ch.id === selected ? 'selected' : ''}>${esc(`${n.chapters.get(ch.id).label} · ${ch.title}`)}</option>`).join('')}`;
 };
 
 const sectionOptions = (project, chapterId, selected) => {
-  if (!chapterId) return '<option value="">Choose a chapter first</option>';
+  if (!chapterId) return `<option value="">${t('Choose a chapter first')}</option>`;
   const secs = getNumbering(project).outline.filter((o) => o.kind === 'section' && o.chapterId === chapterId);
-  return `<option value="">Whole chapter (no section)</option>${secs.map((s) => `<option value="${esc(s.id)}" ${s.id === selected ? 'selected' : ''}>${esc(`${s.number} ${s.title}`)}</option>`).join('')}`;
+  return `<option value="">${t('Whole chapter (no section)')}</option>${secs.map((s) => `<option value="${esc(s.id)}" ${s.id === selected ? 'selected' : ''}>${esc(`${s.number} ${s.title}`)}</option>`).join('')}`;
 };
 
 function detailsFormHTML(project, v) {
   return `
     <div class="field">
-      <label for="td-title">Title <span style="color:var(--danger)">*</span></label>
-      <input class="input" id="td-title" name="title" value="${esc(v.title)}" placeholder="e.g. Proposed System Features" autocomplete="off" maxlength="160">
+      <label for="td-title">${t('Title')} <span style="color:var(--danger)">*</span></label>
+      <input class="input" id="td-title" name="title" value="${esc(v.title)}" placeholder="${esc(t('e.g. Proposed System Features'))}" autocomplete="off" maxlength="160">
       <div class="error-text" data-error="title"></div>
     </div>
     <div class="field-row">
-      <div class="field"><label for="td-chapter">Chapter</label><select class="select" id="td-chapter" name="chapter">${chapterOptions(project, v.chapterId)}</select></div>
-      <div class="field"><label for="td-section">Section</label><select class="select" id="td-section" name="section" ${v.chapterId ? '' : 'disabled'}>${sectionOptions(project, v.chapterId, v.sectionId)}</select></div>
+      <div class="field"><label for="td-chapter">${t('Chapter')}</label><select class="select" id="td-chapter" name="chapter">${chapterOptions(project, v.chapterId)}</select></div>
+      <div class="field"><label for="td-section">${t('Section')}</label><select class="select" id="td-section" name="section" ${v.chapterId ? '' : 'disabled'}>${sectionOptions(project, v.chapterId, v.sectionId)}</select></div>
     </div>
     <div class="field">
-      <label for="td-desc">Description</label>
-      <textarea class="textarea" id="td-desc" name="description" rows="3" placeholder="What does this table show? (optional)">${esc(v.description || '')}</textarea>
+      <label for="td-desc">${t('Description')}</label>
+      <textarea class="textarea" id="td-desc" name="description" rows="3" placeholder="${esc(t('What does this table show? (optional)'))}">${esc(v.description || '')}</textarea>
     </div>
     <div class="tbl-hint" data-hint></div>`;
 }
@@ -206,7 +223,7 @@ function wireDetailsForm(root, project, { replaceId = null } = {}) {
     const tmp = { ...project, tables: replaceId ? project.tables.map((t) => (t.id === replaceId ? { ...t, ...loc } : t)) : [...project.tables, probe] };
     const info = getNumbering(tmp).tables.get(probe.id);
     hint.innerHTML = info
-      ? `${icon('info', 'icon-sm')}<span>${replaceId ? 'This table will be' : 'This will be'} <strong>${esc(info.label)}</strong> <span class="muted">(${esc(info.code)}) · ${esc(info.location)}</span></span>`
+      ? `${icon('info', 'icon-sm')}<span>${t(replaceId ? 'This table will be {label}' : 'This will be {label}', { label: `<strong>${bdi(esc(info.label))}</strong>` })} <span class="muted">${bdi(`(${esc(info.code)})`, 'ltr')} · ${bdi(esc(info.location))}</span></span>`
       : '';
   };
   chapter.addEventListener('change', () => {
@@ -229,21 +246,21 @@ export function openEditDetailsDialog(ctx, id) {
   const table = store.project.tables.find((t) => t.id === id);
   if (!table) return null;
   const modal = openModal({
-    title: 'Table details', subtitle: 'Title, location and description',
+    title: t('Table details'), subtitle: t('Title, location and description'),
     body: `<form class="form-grid" novalidate>${detailsFormHTML(store.project, table)}<button type="submit" hidden></button></form>`,
-    footer: '<button class="btn" data-close>Cancel</button><button class="btn btn-primary" data-save>Save</button>',
+    footer: `<button class="btn" data-close>${t('Cancel')}</button><button class="btn btn-primary" data-save>${t('Save')}</button>`,
   });
   const form = modal.$('form');
   const wired = wireDetailsForm(form, store.project, { replaceId: id });
   const save = () => {
     const v = wired.read();
-    if (!v.title) { showTitleError(form, 'Title is required.'); form.elements.title.focus(); return; }
+    if (!v.title) { showTitleError(form, t('Title is required.')); form.elements.title.focus(); return; }
     store.update((p) => {
       const t = p.tables.find((x) => x.id === id);
       Object.assign(t, { title: v.title, chapterId: v.chapterId, sectionId: v.sectionId, description: v.description, updatedAt: Date.now() });
     }, { activity: { text: `Edited details of table "${v.title}"`, targetId: id } });
     modal.close();
-    toast('Table details saved', { type: 'success', duration: 1800 });
+    toast(t('Table details saved'), { type: 'success', duration: 1800 });
   };
   form.addEventListener('submit', (e) => { e.preventDefault(); save(); });
   modal.$('[data-save]').addEventListener('click', save);
@@ -265,31 +282,31 @@ export function openNewTableDialog(ctx, preset = {}) {
   let wired = null;
 
   const modal = openModal({
-    title: 'New table', subtitle: 'Choose a starting point',
+    title: t('New table'), subtitle: t('Choose a starting point'),
     size: 'lg', className: 'tbl-new',
     body: '', footer: '<span></span>',
   });
   const subtitleEl = modal.root.querySelector('.modal-header p');
 
   const renderGallery = () => {
-    subtitleEl.textContent = 'Choose a starting point';
+    subtitleEl.textContent = t('Choose a starting point');
     modal.body.innerHTML = `<div class="tpl-grid">${TABLE_TEMPLATES.map((tpl) => {
       const content = tpl.build();
       const preview = renderTableMiniHTML({ ...content, style: { ...createTable().style, ...(content.style || {}) } }, { rows: 3, cols: 6 });
       return `<button type="button" class="tpl-card ${template?.id === tpl.id ? 'selected' : ''}" data-tpl="${tpl.id}">
         <div class="tpl-preview">${preview}</div>
-        <div class="tpl-name">${esc(tpl.name)}</div>
-        <div class="tpl-desc">${esc(tpl.description)}</div>
+        <div class="tpl-name">${esc(t(tpl.name))}</div>
+        <div class="tpl-desc">${esc(t(tpl.description))}</div>
       </button>`;
     }).join('')}</div>`;
-    modal.footer.innerHTML = '<button class="btn" data-close>Cancel</button>';
+    modal.footer.innerHTML = `<button class="btn" data-close>${t('Cancel')}</button>`;
   };
 
   const renderDetails = () => {
-    subtitleEl.textContent = `${template.name} · add a title and choose where it belongs`;
+    subtitleEl.textContent = t('{name} · add a title and choose where it belongs', { name: t(template.name) });
     modal.body.innerHTML = `<form class="form-grid" novalidate>${detailsFormHTML(project, values)}<button type="submit" hidden></button></form>`;
-    modal.footer.innerHTML = `<div class="left"><button class="btn btn-ghost" data-back>${icon('arrowLeft')}Templates</button></div>
-      <button class="btn" data-close>Cancel</button><button class="btn btn-primary" data-create>${icon('plus')}Create table</button>`;
+    modal.footer.innerHTML = `<div class="left"><button class="btn btn-ghost" data-back>${icon('arrowLeft')}${t('Templates')}</button></div>
+      <button class="btn" data-close>${t('Cancel')}</button><button class="btn btn-primary" data-create>${icon('plus')}${t('Create table')}</button>`;
     const form = modal.$('form');
     wired = wireDetailsForm(form, project);
     form.addEventListener('submit', (e) => { e.preventDefault(); create(); });
@@ -301,7 +318,7 @@ export function openNewTableDialog(ctx, preset = {}) {
   const create = () => {
     const v = wired.read();
     const form = modal.$('form');
-    if (!v.title) { showTitleError(form, 'Title is required.'); form.elements.title.focus(); return; }
+    if (!v.title) { showTitleError(form, t('Title is required.')); form.elements.title.focus(); return; }
     const content = template.build();
     const table = createTable({
       title: v.title, chapterId: v.chapterId, sectionId: v.sectionId, description: v.description,
@@ -331,8 +348,8 @@ export function openNewTableDialog(ctx, preset = {}) {
 // ---------------------------------------------------------------------------
 // The list view
 
-const dims = (t) => `${t.rows.length} × ${t.columns.length}`;
-const searchText = (t, info) => [t.title, t.description, info?.label, info?.code, ...t.rows.flat().map((c) => c.text)].join('\n').toLowerCase();
+const dims = (tbl) => `${tbl.rows.length} × ${tbl.columns.length}`;
+const searchText = (tbl, info) => [tbl.title, tbl.description, info?.label, info?.code, ...tbl.rows.flat().map((c) => c.text)].join('\n').toLowerCase();
 
 export default {
   title: 'Tables',
@@ -347,14 +364,14 @@ export default {
       <div class="page">
         <div class="page-header">
           <div class="titles">
-            <h1>Tables <span class="badge" data-count></span></h1>
-            <p class="subtitle">Tables are numbered automatically from their place in the document.</p>
+            <h1>${t('Tables')} <span class="badge" data-count></span></h1>
+            <p class="subtitle">${t('Tables are numbered automatically from their place in the document.')}</p>
           </div>
-          <div class="actions"><button class="btn btn-primary" data-action="new">${icon('plus')}New Table</button></div>
+          <div class="actions"><button class="btn btn-primary" data-action="new">${icon('plus')}${t('New Table')}</button></div>
         </div>
         <div class="toolbar">
-          <div class="input-group">${icon('search')}<input class="input" type="search" data-search placeholder="Search title, description or cell text…" aria-label="Search tables" autocomplete="off"></div>
-          <select class="select" style="width:auto;min-width:180px" data-chapter aria-label="Filter by chapter"></select>
+          <div class="input-group">${icon('search')}<input class="input" type="search" data-search placeholder="${esc(t('Search title, description or cell text…'))}" aria-label="${esc(t('Search tables'))}" autocomplete="off"></div>
+          <select class="select" style="width:auto;min-width:180px" data-chapter aria-label="${esc(t('Filter by chapter'))}"></select>
         </div>
         <div data-list></div>
       </div>`;
@@ -363,23 +380,25 @@ export default {
     const chapterEl = container.querySelector('[data-chapter]');
     const searchEl = container.querySelector('[data-search]');
 
-    const itemHTML = (t, n) => {
-      const info = n.tables.get(t.id);
-      const meta = [info.label, info.code, info.location, dims(t), `Last modified: ${relativeTime(t.updatedAt)}`].map(esc).join(' · ').replace(/ · /g, ' <span class="sep">·</span> ');
-      const href = ctx.href('tables', t.id);
+    const itemHTML = (tbl, n) => {
+      const info = n.tables.get(tbl.id);
+      // Labels, codes and sizes are document identifiers: isolated so the Arabic UI cannot reorder them.
+      const meta = [bdi(esc(info.label)), bdi(esc(info.code), 'ltr'), bdi(esc(info.location)), bdi(esc(dims(tbl)), 'ltr'), t('Last modified: {time}', { time: esc(relativeTime(tbl.updatedAt)) })]
+        .join(' · ').replace(/ · /g, ' <span class="sep">·</span> ');
+      const href = ctx.href('tables', tbl.id);
       return `
-        <div class="list-item tbl-item" data-id="${esc(t.id)}">
-          <a class="tbl-thumb" href="${esc(href)}" tabindex="-1" aria-hidden="true">${renderTableMiniHTML(t, { rows: 4, cols: 4 })}</a>
+        <div class="list-item tbl-item" data-id="${esc(tbl.id)}">
+          <a class="tbl-thumb" href="${esc(href)}" tabindex="-1" aria-hidden="true">${renderTableMiniHTML(tbl, { rows: 4, cols: 4 })}</a>
           <div class="grow tbl-main">
-            <a class="title tbl-title" href="${esc(href)}"><span class="tbl-index">#${info.index}</span> ${highlight(t.title, state.query.trim())}</a>
+            <a class="title tbl-title" href="${esc(href)}"><span class="tbl-index">#${info.index}</span> ${bdi(highlight(tbl.title, state.query.trim()))}</a>
             <div class="meta">${meta}</div>
-            ${t.description ? `<div class="tbl-desc-line truncate">${esc(t.description)}</div>` : ''}
+            ${tbl.description ? `<div class="tbl-desc-line truncate" dir="auto">${esc(tbl.description)}</div>` : ''}
           </div>
           <div class="actions">
-            <a class="btn btn-sm" href="${esc(href)}">${icon('edit')}Open</a>
-            <button class="btn btn-sm btn-ghost btn-icon" data-action="duplicate" data-tip="Duplicate" aria-label="Duplicate table">${icon('duplicate')}</button>
-            <button class="btn btn-sm btn-ghost" data-action="export" aria-label="Export table">${icon('export')}Export${icon('chevronDown', 'icon-sm')}</button>
-            <button class="btn btn-sm btn-ghost btn-icon" data-action="more" data-tip="More actions" aria-label="More actions">${icon('more')}</button>
+            <a class="btn btn-sm" href="${esc(href)}">${icon('edit')}${t('Open')}</a>
+            <button class="btn btn-sm btn-ghost btn-icon" data-action="duplicate" data-tip="${esc(t('Duplicate'))}" aria-label="${esc(t('Duplicate table'))}">${icon('duplicate')}</button>
+            <button class="btn btn-sm btn-ghost" data-action="export" aria-label="${esc(t('Export table'))}">${icon('export')}${t('Export')}${icon('chevronDown', 'icon-sm')}</button>
+            <button class="btn btn-sm btn-ghost btn-icon" data-action="more" data-tip="${esc(t('More actions'))}" aria-label="${esc(t('More actions'))}">${icon('more')}</button>
           </div>
         </div>`;
     };
@@ -389,36 +408,36 @@ export default {
       const n = getNumbering(project);
       countEl.textContent = project.tables.length;
       const keep = chapterEl.value || state.chapter;
-      chapterEl.innerHTML = `<option value="">All chapters</option>${project.chapters.map((ch) => `<option value="${esc(ch.id)}">${esc(`${n.chapters.get(ch.id).label} · ${ch.title}`)}</option>`).join('')}<option value="__none">Unassigned</option>`;
+      chapterEl.innerHTML = `<option value="">${t('All chapters')}</option>${project.chapters.map((ch) => `<option value="${esc(ch.id)}">${esc(`${n.chapters.get(ch.id).label} · ${ch.title}`)}</option>`).join('')}<option value="__none">${t('Unassigned')}</option>`;
       chapterEl.value = [...chapterEl.options].some((o) => o.value === keep) ? keep : '';
       state.chapter = chapterEl.value;
 
       if (!project.tables.length) {
-        listEl.innerHTML = `<div class="card"><div class="empty-state"><div class="empty-icon">${icon('table')}</div><h3>No tables yet</h3>
-          <p>Start from a template (features, comparison, requirements, test cases…) and fill it in with a Word-like editor.</p>
-          <button class="btn btn-primary" data-action="new">${icon('plus')}Create your first table</button></div></div>`;
+        listEl.innerHTML = `<div class="card"><div class="empty-state"><div class="empty-icon">${icon('table')}</div><h3>${t('No tables yet')}</h3>
+          <p>${t('Start from a template (features, comparison, requirements, test cases…) and fill it in with a Word-like editor.')}</p>
+          <button class="btn btn-primary" data-action="new">${icon('plus')}${t('Create your first table')}</button></div></div>`;
         return;
       }
       const q = state.query.trim().toLowerCase();
-      const items = n.tableOrder.filter((t) => {
-        const info = n.tables.get(t.id);
+      const items = n.tableOrder.filter((tbl) => {
+        const info = n.tables.get(tbl.id);
         if (state.chapter === '__none' ? info.chapterId : (state.chapter && info.chapterId !== state.chapter)) return false;
-        return !q || searchText(t, info).includes(q);
+        return !q || searchText(tbl, info).includes(q);
       });
       if (!items.length) {
-        listEl.innerHTML = `<div class="card"><div class="empty-state"><div class="empty-icon">${icon('search')}</div><h3>No matching tables</h3><p>Try a different search or clear the chapter filter.</p>
-          <button class="btn" data-action="clear">Clear filters</button></div></div>`;
+        listEl.innerHTML = `<div class="card"><div class="empty-state"><div class="empty-icon">${icon('search')}</div><h3>${t('No matching tables')}</h3><p>${t('Try a different search or clear the chapter filter.')}</p>
+          <button class="btn" data-action="clear">${t('Clear filters')}</button></div></div>`;
         return;
       }
       let html = ''; let lastKey;
-      for (const t of items) {
-        const info = n.tables.get(t.id);
+      for (const tbl of items) {
+        const info = n.tables.get(tbl.id);
         const key = info.chapterId || '__none';
         if (key !== lastKey) {
           lastKey = key;
-          html += `<div class="list-group-title">${info.chapterId ? esc(`${n.chapters.get(info.chapterId).label} · ${n.chapters.get(info.chapterId).title}`) : 'Unassigned'}</div>`;
+          html += `<div class="list-group-title">${info.chapterId ? esc(`${n.chapters.get(info.chapterId).label} · ${n.chapters.get(info.chapterId).title}`) : t('Unassigned')}</div>`;
         }
-        html += itemHTML(t, n);
+        html += itemHTML(tbl, n);
       }
       listEl.innerHTML = `<div class="list">${html}</div>`;
     };
@@ -432,22 +451,22 @@ export default {
     disposer.add(on(container, 'click', '[data-action]', (e, el) => {
       const action = el.dataset.action;
       const id = idOf(el);
-      const table = id && store.project.tables.find((t) => t.id === id);
+      const table = id && store.project.tables.find((x) => x.id === id);
       if (action === 'new') track(openNewTableDialog(ctx, { chapterId: state.chapter && state.chapter !== '__none' ? state.chapter : null }));
       else if (action === 'clear') { state.query = ''; state.chapter = ''; searchEl.value = ''; chapterEl.value = ''; render(); } else if (action === 'duplicate' && table) {
         const copyId = duplicateTable(store, id);
-        toast(`Duplicated "${table.title}"`, { type: 'success', action: { label: 'Open copy', onClick: () => ctx.navigate(ctx.href('tables', copyId)) } });
+        toast(t('Duplicated "{title}"', { title: isolate(table.title) }), { type: 'success', action: { label: t('Open copy'), onClick: () => ctx.navigate(ctx.href('tables', copyId)) } });
       } else if (action === 'export' && table) openExportMenu(el, store.project, table);
       else if (action === 'more' && table) {
         const up = moveBlocker(store.project, id, -1); const down = moveBlocker(store.project, id, 1);
         openMenu(el, [
-          { label: 'Move up', icon: 'arrowUp', disabled: up === 'top', onClick: () => moveTable(store, id, -1) },
-          { label: 'Move down', icon: 'arrowDown', disabled: down === 'bottom', onClick: () => moveTable(store, id, 1) },
+          { label: t('Move up'), icon: 'arrowUp', disabled: up === 'top', onClick: () => moveTable(store, id, -1) },
+          { label: t('Move down'), icon: 'arrowDown', disabled: down === 'bottom', onClick: () => moveTable(store, id, 1) },
           '-',
-          { label: 'Edit details…', icon: 'edit', onClick: () => track(openEditDetailsDialog(ctx, id)) },
-          { label: 'Open editor', icon: 'table', onClick: () => ctx.navigate(ctx.href('tables', id)) },
+          { label: t('Edit details…'), icon: 'edit', onClick: () => track(openEditDetailsDialog(ctx, id)) },
+          { label: t('Open editor'), icon: 'table', onClick: () => ctx.navigate(ctx.href('tables', id)) },
           '-',
-          { label: 'Delete…', icon: 'trash', danger: true, onClick: () => deleteTableWithUndo(store, id) },
+          { label: t('Delete…'), icon: 'trash', danger: true, onClick: () => deleteTableWithUndo(store, id) },
         ], { align: 'end' });
       }
     }));
