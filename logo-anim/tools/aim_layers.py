@@ -2,11 +2,11 @@
 
 The mark is two opaque circles with a vertical gradient, a deeper lens where they
 overlap, and A·I·M knocked out (transparent) — the letters always show the background.
-  base.png     both circles in the single-circle gradient (lens and letters filled in)
-  lens.png     the overlap in its own deeper gradient
-  letters.png  the knock-out shapes, straight from the file's alpha
-  rings.png    the two circle outlines (inner stroke) — the clean mark of the build-up
-Circles are fitted to the file, colours are fitted per row from the file's own pixels.
+  mint_col.png  the circles' vertical gradient (1px wide, one row per source row)
+  deep_col.png  the overlap's deeper vertical gradient
+  letters.png   the knock-out shapes, straight from the file's alpha
+Circles are fitted to the file and colours per row from its own pixels, so the circles
+can slide and overlap anywhere and still paint the file's exact colours.
 The animation ends on the source file itself.
 """
 import json
@@ -50,15 +50,10 @@ for n, m, col in [("single", single, mint), ("lens", both, deep)]:
 def save(name, color_rows, alpha):
     o = np.zeros((H, W, 4)); o[..., :3] = color_rows[:, None, :]; o[..., 3] = alpha * 255
     Image.fromarray(np.clip(o, 0, 255).round().astype(np.uint8)).save(A + name)
-save("base.png", mint, union)
-save("lens.png", deep, lens_a)
+for n, col in [("mint_col.png", mint), ("deep_col.png", deep)]:
+    Image.fromarray(np.clip(col[:, None, :], 0, 255).round().astype(np.uint8)).save(A + n)
 letters = np.clip(union - a, 0, 1) * (ndi.binary_erosion(union > .5, iterations=3))
 save("letters.png", np.full((H, 3), 255.0), letters)
-RW = 46                                            # ring stroke, drawn inside each circle
-ring = np.maximum(np.clip(np.minimum(C1[2] - d1, d1 - (C1[2] - RW)) + .5, 0, 1) * (a1 > 0),
-                  np.clip(np.minimum(C2[2] - d2, d2 - (C2[2] - RW)) + .5, 0, 1) * (a2 > 0))
-save("rings.png", np.full((H, 3), 255.0), ring)
-
 # verify: base, lens over it, letters knocked out — against the source on white
 bg = np.array([255.0] * 3)
 comp = mint[:, None] * (1 - lens_a[..., None]) + deep[:, None] * lens_a[..., None]
@@ -67,7 +62,7 @@ out = comp * cov[..., None] + bg * (1 - cov[..., None])
 src = rgb * a[..., None] + bg * (1 - a[..., None])
 err = np.abs(out - src); print(f"recomposite vs source: mean {err.mean():.2f}  p99 {np.percentile(err, 99):.1f}  p99.9 {np.percentile(err, 99.9):.1f}")
 
-geo = {"size": [W, H], "c1": [round(v, 2) for v in C1], "c2": [round(v, 2) for v in C2], "ring_w": RW}
+geo = {"size": [W, H], "c1": [round(float(v), 2) for v in C1], "c2": [round(float(v), 2) for v in C2]}
 ys, xs = np.where(letters > .5); geo["letters_box"] = [int(xs.min()), int(ys.min()), int(xs.max() + 1), int(ys.max() + 1)]
 lab, n = ndi.label(letters > .5)
 geo["letters"] = sorted([[int(s[1].start), int(s[0].start), int(s[1].stop), int(s[0].stop)] for s in ndi.find_objects(lab) if (s[1].stop - s[1].start) > 40])

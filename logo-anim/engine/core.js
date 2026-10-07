@@ -93,7 +93,7 @@ let BRAND = null;
 let ACC = null;
 function renderFrame(n) {
   const t = n / FPS;
-  const N = (t >= TIMING.blur[0] && t <= TIMING.blur[1]) ? 16 : 1;
+  const N = (BRAND.blur || [TIMING.blur]).some(([a, b]) => t >= a && t <= b) ? 16 : 1;
   if (N === 1) { BRAND.draw(t, n); return; }
   if (!ACC) ACC = new Float32Array(W * H * 4);
   ACC.fill(0);

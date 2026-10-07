@@ -1,118 +1,100 @@
-/* AIM — same timing sheet, camera and blur as MEHAD; a different personality.
-   The two circles (body ∩ digital) are searched for through tech and garment materials
-   (wireframe, point cloud, knit, chrome, measuring tape…), resolve to two clean rings,
-   orbit half a turn into place, the mint floods out from the overlap, the lens deepens,
-   and a scan beam passes left→right cutting A·I·M out of the mark.
-   AIM's letters are knock-outs in the official file, so they always show the background:
-   the background stays light. Last frames = the official file. */
+/* AIM — two circles slide in and meet; the I is born in their intersection.
+   1  the left circle enters from the left, the right from the right (ease-out)
+   2  where they overlap the deeper lens forms and glows softly
+   3  the I grows inside the lens, bottom → top
+   4  A and M fade in with a small move, each from its own circle's side
+   5  one small pulse, then the logo holds — the last frames are the official file
+   AIM's letters are knock-outs in the file (they show the background), so the
+   background stays light and the letters are cut, never painted. */
 "use strict";
 (() => {
   const A = "../assets/aim/";
-  const INK = "#23B2A8";                              // the lens teal, from the file
   const BG = ["#FAFCFC", "#E6ECEC"];
   const MARK_W = { "16x9": 900, "1x1": 780 };
-  const KNOT_SCALE = 1.15;
+  const T = {
+    slide: [0.10, 1.70],      // both circles, outQuart
+    glow: [0.90, 1.70, 2.60], // rise, peak, gone
+    I: [1.85, 2.45],          // bottom → top
+    AM: [2.30, 2.90],         // fade + 70px move toward the centre
+    pulse: [3.00, 3.16, 3.70],// up to 1.03, back to 1
+    swap: [3.72, 3.84],
+    dur: 6.4,
+  };
+  const MOVE = 70, PULSE = .03;
 
-  const SEQ = [
-    ["s07", 3, 1.10], ["p_hair", 2, .86], ["s01", 3, 1.00], ["s04", 2, .92], ["s06", 3, 1.06],
-    ["p_dots", 2, .90], ["s00", 3, 1.00], ["s03", 2, .94], ["s10", 3, 1.04], ["s09", 3, .96],
-    ["p_outline", 2, 1.02], ["s08", 3, .98], ["s05", 2, 1.03], ["s11", 3, .97], ["s12", 2, 1.01],
-    ["s03", 3, 1.00], ["s02", 4, 1.00],
-  ].map(([img, frames, scale]) => ({ img, frames, scale }));
-
-  let G, REG, L, LX, LY, SRC, CX, CY, BOX, ringsInk, layer, lctx;
+  let G, L, LX, LY, SRC, CX, CY, R, layer, lctx, glow, gctx, enterDx;
 
   async function load() {
     G = await (await fetch(A + "geometry.json")).json();
-    REG = await (await fetch(A + "flash/registration.json")).json();
-    const layers = ["logo_source.webp", "base.png", "lens.png", "letters.png", "rings.png"];
-    const flashes = [...new Set(SEQ.map(s => s.img))];
-    await Promise.all([...layers.map(f => loadImg(f.split(".")[0], A + f)), ...flashes.map(f => loadImg(f, A + "flash/" + f + ".png"))]);
-    ringsInk = tinted(IMG.rings, INK);
+    await Promise.all(["logo_source.webp", "mint_col.png", "deep_col.png", "letters.png"].map(f => loadImg(f.split(".")[0], A + f)));
     SRC = { w: G.size[0], h: G.size[1] };
     L = MARK_W[FORMAT] / SRC.w; LX = (W - SRC.w * L) / 2; LY = (H - SRC.h * L) / 2;
-    CX = (G.c1[0] + G.c2[0]) / 2; CY = G.c1[1];              // centre of the lens
-    BOX = [G.c1[0] - G.c1[2], G.c1[1] - G.c1[2], G.c2[0] + G.c2[2], G.c2[1] + G.c2[2]];
+    CX = (G.c1[0] + G.c2[0]) / 2; CY = G.c1[1]; R = G.c1[2];
+    enterDx = LX / L + G.c1[0] + R + 60;                      // start fully outside the frame
     layer = Object.assign(document.createElement("canvas"), { width: W, height: H }); lctx = layer.getContext("2d");
+    glow = Object.assign(document.createElement("canvas"), { width: W, height: H }); gctx = glow.getContext("2d");
   }
 
-  const lockTr = () => [L, LX, LY];
-  function drawSrc(g, img, tr, rot = 0) {
-    g.save(); g.transform(tr[0], 0, 0, tr[0], tr[1], tr[2]);
-    if (rot) { g.translate(CX, CY); g.rotate(rot); g.translate(-CX, -CY); }
-    g.drawImage(img, 0, 0, SRC.w, SRC.h); g.restore();
-  }
-  // mark pose: p=0 centred & enlarged, p=1 in the lockup (the lockup is centred too)
-  function markTransform(p) { const k = lerp(KNOT_SCALE, 1, p) * L; return [k, W / 2 - CX * k, H / 2 - CY * k]; }
-
-  function drawFlash(s) {
-    const [k] = markTransform(0), rb = REG.box;
-    const f = (BOX[2] - BOX[0]) * k * s.scale / (rb[2] - rb[0]);
-    const im = IMG[s.img];
-    ctx.drawImage(im, W / 2 - (rb[0] + rb[2]) / 2 * f, H / 2 - (rb[1] + rb[3]) / 2 * f, im.width * f, im.height * f);
-  }
-  function circlePath(g, x, y, r) { g.beginPath(); g.arc(x, y, Math.max(r, 0), 0, Math.PI * 2); }
+  // source px → screen, around the mark centre with the pulse scale
+  function setTr(g, k) { g.setTransform(L * k, 0, 0, L * k, W / 2 - CX * L * k, H / 2 - CY * L * k); }
+  const circle = (g, x) => { g.beginPath(); g.arc(x, CY, R, 0, Math.PI * 2); };
+  const gradFill = (g, col) => g.drawImage(IMG[col], 0, 0, 1, SRC.h, -enterDx * 2, 0, SRC.w + enterDx * 4, SRC.h);
 
   function draw(t, frame) {
-    const T = TIMING;
     background(BG);
-    withCamera(t, cam => {
-      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-      // 01 build-up
-      if (t < T.clean[0]) { const s = flashAt(SEQ, frame); if (s) drawFlash(s); return; }
-      // 03 lockup: the official file, untouched
-      const swap = seg(t, T.swap[0], T.swap[1]);
-      if (swap >= 1) { drawSrc(ctx, IMG.logo_source, lockTr()); return; }
+    const swap = seg(t, T.swap[0], T.swap[1]);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+    if (swap >= 1) { setTr(ctx, 1); ctx.drawImage(IMG.logo_source, 0, 0, SRC.w, SRC.h); return; }
 
-      // 02 reveal — rings orbit half a turn into place (the pair is symmetric, so it lands as it started)
-      const p = E.inOutQuint(seg(t, T.glide[0], T.glide[1]));
-      const ringsA = 1 - seg(t, T.flood[1], T.flood[1] + .12);
-      if (ringsA > 0) { ctx.globalAlpha = ringsA; drawSrc(ctx, ringsInk, markTransform(p), Math.PI * (1 - p)); ctx.globalAlpha = 1; }
+    const s = E.outQuart(seg(t, T.slide[0], T.slide[1]));
+    const x1 = G.c1[0] - (1 - s) * enterDx, x2 = G.c2[0] + (1 - s) * enterDx;
+    const up = E.outCubic(seg(t, T.pulse[0], T.pulse[1])), down = E.inOutSine(seg(t, T.pulse[1], T.pulse[2]));
+    const k = 1 + PULSE * (up - down);
 
-      // mark layer, composited once so the knock-outs show the background
-      const fl = E.outQuart(seg(t, T.flood[0], T.flood[1]));
-      if (fl > 0) {
-        const c = ctx.getTransform();
-        lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.clearRect(0, 0, W, H);
-        lctx.setTransform(c); lctx.imageSmoothingQuality = "high";
-        const sx = x => LX + x * L, sy = y => LY + y * L;
-        lctx.save(); circlePath(lctx, sx(CX), sy(CY), 1010 * L * fl); lctx.clip(); drawSrc(lctx, IMG.base, lockTr()); lctx.restore();
-        const q = E.outCubic(seg(t, T.fills[0], T.fills[0] + T.fills[2]));
-        if (q > 0) { lctx.save(); circlePath(lctx, sx(CX), sy(CY), 590 * L * q); lctx.clip(); drawSrc(lctx, IMG.lens, lockTr()); lctx.restore(); }
-        // scan beam cuts the letters out, left → right, landing on the lock frame
-        const lb = G.letters_box, b = E.inOutCubic(seg(t, T.write2[0], T.lock));
-        const bx = lerp(lb[0] - 70, lb[2] + 70, b);
-        if (b > 0) {
-          lctx.save(); lctx.beginPath(); lctx.rect(sx(0), sy(0), (bx) * L, SRC.h * L); lctx.clip();
-          lctx.globalCompositeOperation = "destination-out"; drawSrc(lctx, IMG.letters, lockTr()); lctx.restore();
-        }
-        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layer, 0, 0); ctx.restore();
-        // the beam itself: a thin light line, only on the mark
-        const beamA = seg(t, T.write2[0], T.write2[0] + .08) * (1 - seg(t, T.lock - .12, T.lock));
-        if (beamA > 0) {
-          ctx.save();
-          circlePath(ctx, sx(G.c1[0]), sy(G.c1[1]), G.c1[2] * L); ctx.moveTo(sx(G.c2[0] + G.c2[2]), sy(G.c2[1])); ctx.arc(sx(G.c2[0]), sy(G.c2[1]), G.c2[2] * L, 0, Math.PI * 2); ctx.clip("nonzero");
-          const x = sx(bx), gw = 26 * L / .45;
-          const g = ctx.createLinearGradient(x - gw, 0, x + gw, 0);
-          g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(.5, `rgba(255,255,255,${.38 * beamA})`); g.addColorStop(1, "rgba(255,255,255,0)");
-          ctx.fillStyle = g; ctx.fillRect(x - gw, sy(0), gw * 2, SRC.h * L);
-          ctx.fillStyle = `rgba(255,255,255,${.95 * beamA})`; ctx.fillRect(x - 1.25 / cam, sy(0), 2.5 / cam, SRC.h * L);
-          ctx.restore();
-        }
-      }
-      if (swap > 0) { ctx.globalAlpha = swap; drawSrc(ctx, IMG.logo_source, lockTr()); ctx.globalAlpha = 1; }
-    });
+    // mark layer: circles, lens, then letters cut out (so they show the background)
+    lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.clearRect(0, 0, W, H); setTr(lctx, k);
+    lctx.imageSmoothingQuality = "high";
+    for (const x of [x1, x2]) { lctx.save(); circle(lctx, x); lctx.clip(); gradFill(lctx, "mint_col"); lctx.restore(); }
+    lctx.save(); circle(lctx, x1); lctx.clip(); circle(lctx, x2); lctx.clip(); gradFill(lctx, "deep_col"); lctx.restore();
+
+    const cut = (box, amount, dx = 0, clipY = null) => {
+      if (amount <= 0) return;
+      lctx.save();
+      if (clipY !== null) { lctx.beginPath(); lctx.rect(box[0] - 2, clipY, box[2] - box[0] + 4, box[3] + 2 - clipY); lctx.clip(); }
+      lctx.translate(dx, 0);                                       // the letter's own pixels, moved by dx
+      lctx.beginPath(); lctx.rect(box[0] - 2, box[1] - 2, box[2] - box[0] + 4, box[3] - box[1] + 4); lctx.clip();
+      lctx.globalAlpha = amount; lctx.globalCompositeOperation = "destination-out";
+      lctx.drawImage(IMG.letters, 0, 0, SRC.w, SRC.h); lctx.restore();
+    };
+    const [bA, bI, bM] = G.letters;
+    const gi = E.inOutCubic(seg(t, T.I[0], T.I[1]));
+    cut(bI, gi > 0 ? 1 : 0, 0, lerp(bI[3] + 2, bI[1] - 2, gi));       // I: grows bottom → top
+    const am = E.outCubic(seg(t, T.AM[0], T.AM[1]));
+    cut(bA, am, -MOVE * (1 - am));                                // A from its circle's side (left)
+    cut(bM, am, MOVE * (1 - am));                                 // M from the right
+    ctx.drawImage(layer, 0, 0);
+
+    // the lens glows softly while it forms
+    const gl = E.inOutSine(seg(t, T.glow[0], T.glow[1])) * (1 - E.inOutSine(seg(t, T.glow[1], T.glow[2])));
+    if (gl > 0) {
+      gctx.setTransform(1, 0, 0, 1, 0, 0); gctx.clearRect(0, 0, W, H); setTr(gctx, k);
+      gctx.save(); circle(gctx, x1); gctx.clip(); circle(gctx, x2); gctx.fillStyle = "#62EADB"; gctx.fill(); gctx.restore();
+      ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = .32 * gl;   // soft halo
+      ctx.filter = `blur(${Math.round(30 * L / .45)}px)`; ctx.drawImage(glow, 0, 0);
+      ctx.filter = "none"; ctx.globalAlpha = .07 * gl; ctx.drawImage(glow, 0, 0); ctx.restore(); // the lens itself, barely
+    }
+    if (swap > 0) { ctx.globalAlpha = swap; setTr(ctx, 1); ctx.drawImage(IMG.logo_source, 0, 0, SRC.w, SRC.h); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; }
   }
 
   function cues() {
-    const T = TIMING, flashes = []; let f = 0;
-    for (const q of SEQ) { flashes.push(f / FPS); f += q.frames; }
-    flashes.push(T.clean[0]);
     return {
-      style: "digital", dur: T.dur, flashes, glide: T.glide, glidePan: [0, 0], flood: T.flood[0],
-      fills: [{ t: T.fills[0], pan: 0 }], scan: [T.write2[0], T.lock], write: [], lock: T.lock,
+      style: "digital", dur: T.dur,
+      whooshes: [{ t: T.slide, pan: [-.85, -.2] }, { t: T.slide, pan: [.85, .2] }],
+      bloom: lerp(T.slide[0], T.slide[1], .4), shimmer: [T.glow[0], T.glow[2]],
+      rise: T.I, swells: [{ t: T.AM[0], pan: -.35 }, { t: T.AM[0], pan: .35 }], lock: T.pulse[0],
     };
   }
 
-  window.BRAND_DEF = { name: "aim", load, draw, cues };
+  TIMING.dur = T.dur;
+  window.BRAND_DEF = { name: "aim", load, draw, cues, blur: [[T.slide[0], 1.15], [T.AM[0], T.AM[1]]] };
 })();

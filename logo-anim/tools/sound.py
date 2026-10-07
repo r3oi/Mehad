@@ -37,42 +37,46 @@ def hp(x, f, order=2): return signal.sosfilt(signal.butter(order, f, "highpass",
 def norm(x): return x / (np.abs(x).max() + 1e-12)
 
 # --- build-up: ticks + air bed --------------------------------------------------
-for k, t0 in enumerate(cues["flashes"][:-1]):
-    t = tt(.05)
-    click = bp(rng.standard_normal(len(t)), 1800, 6500) * np.exp(-t / .004)
-    tone = np.sin(2 * np.pi * rng.uniform(1900, 2600) * t) * np.exp(-t / .007) * .35
-    if STYLE == "digital":                          # short clean blips instead of paper
-        click *= .25; tone = np.sin(2 * np.pi * rng.choice([2637.0, 3136.0, 3520.0]) * t) * np.exp(-t / .012)
-    place(norm(click + tone), t0, -27 + rng.uniform(-2, 1.5), pan=.14 * (-1) ** k)
-t = tt(cues["glide"][0] + .1)
-f, frames, Z = signal.stft(rng.standard_normal(len(t)), SR, nperseg=2048)
-cut = 250 + 1500 * (frames / t[-1]) ** 2                  # the bed opens up as the flicker runs
-Z /= np.sqrt(1 + (f[:, None] / cut[None]) ** 4)
-bed = signal.istft(Z, SR, nperseg=2048)[1][:len(t)]
-bed *= np.minimum(1, t / .3) * (.35 + .65 * (t / t[-1]) ** 2) * np.minimum(1, (t[-1] - t) / .1)
-place(np.stack([bed, np.roll(bed, 517)], 1) / np.abs(bed).max(), 0, -33)
+if cues.get("flashes"):
+    for k, t0 in enumerate(cues["flashes"][:-1]):
+        t = tt(.05)
+        click = bp(rng.standard_normal(len(t)), 1800, 6500) * np.exp(-t / .004)
+        tone = np.sin(2 * np.pi * rng.uniform(1900, 2600) * t) * np.exp(-t / .007) * .35
+        if STYLE == "digital":                          # short clean blips instead of paper
+            click *= .25; tone = np.sin(2 * np.pi * rng.choice([2637.0, 3136.0, 3520.0]) * t) * np.exp(-t / .012)
+        place(norm(click + tone), t0, -27 + rng.uniform(-2, 1.5), pan=.14 * (-1) ** k)
+    t = tt(cues["glide"][0] + .1)
+    f, frames, Z = signal.stft(rng.standard_normal(len(t)), SR, nperseg=2048)
+    cut = 250 + 1500 * (frames / t[-1]) ** 2                  # the bed opens up as the flicker runs
+    Z /= np.sqrt(1 + (f[:, None] / cut[None]) ** 4)
+    bed = signal.istft(Z, SR, nperseg=2048)[1][:len(t)]
+    bed *= np.minimum(1, t / .3) * (.35 + .65 * (t / t[-1]) ** 2) * np.minimum(1, (t[-1] - t) / .1)
+    place(np.stack([bed, np.roll(bed, 517)], 1) / np.abs(bed).max(), 0, -33)
 
 # --- reveal: whoosh following the glide's velocity -------------------------------
-g0, g1 = cues["glide"]
-t = tt(g1 - g0 + .25); u = np.clip(t / (g1 - g0), 0, 1)
-pos = np.where(u < .5, 16 * u ** 5, 1 - (-2 * u + 2) ** 5 / 2)        # inOutQuint, as on screen
-vel = np.gradient(pos, t); vel = vel / vel.max()
-f, frames, Z = signal.stft(rng.standard_normal(len(t)), SR, nperseg=1024)
-vf = np.interp(frames, t, vel)
-fc = 250 + 2300 * vf
-Z *= np.exp(-.5 * (np.log(f[:, None] + 1) - np.log(fc[None] + 1)) ** 2 / .55 ** 2) * (vf[None] ** 1.3 + .02)
-whoosh = signal.istft(Z, SR, nperseg=1024)[1][:len(t)]
-place(norm(whoosh) * np.minimum(1, (t[-1] - t) / .15), g0, -13, pan=cues["glidePan"][1] * .6)
+if cues.get("glide"):
+    g0, g1 = cues["glide"]
+    t = tt(g1 - g0 + .25); u = np.clip(t / (g1 - g0), 0, 1)
+    pos = np.where(u < .5, 16 * u ** 5, 1 - (-2 * u + 2) ** 5 / 2)        # inOutQuint, as on screen
+    vel = np.gradient(pos, t); vel = vel / vel.max()
+    f, frames, Z = signal.stft(rng.standard_normal(len(t)), SR, nperseg=1024)
+    vf = np.interp(frames, t, vel)
+    fc = 250 + 2300 * vf
+    Z *= np.exp(-.5 * (np.log(f[:, None] + 1) - np.log(fc[None] + 1)) ** 2 / .55 ** 2) * (vf[None] ** 1.3 + .02)
+    whoosh = signal.istft(Z, SR, nperseg=1024)[1][:len(t)]
+    place(norm(whoosh) * np.minimum(1, (t[-1] - t) / .15), g0, -13, pan=cues["glidePan"][1] * .6)
 
-# colour flood: low bloom
-t = tt(1.2)
-sub = np.sin(2 * np.pi * np.cumsum(48 + 34 * np.exp(-t / .09)) / SR) * np.exp(-t / .38) * np.minimum(1, t / .012)
-puff = lp(rng.standard_normal(len(t)), 420) * np.exp(-t / .16) * np.minimum(1, t / .02)
-place(norm(sub + .5 * norm(puff)), cues["flood"], -15, pan=cues["glidePan"][1] * .5)
+# colour flood / circles meeting: low bloom
+for key in ["flood", "bloom"]:
+    if key not in cues: continue
+    t = tt(1.2)
+    sub = np.sin(2 * np.pi * np.cumsum(48 + 34 * np.exp(-t / .09)) / SR) * np.exp(-t / .38) * np.minimum(1, t / .012)
+    puff = lp(rng.standard_normal(len(t)), 420) * np.exp(-t / .16) * np.minimum(1, t / .02)
+    place(norm(sub + .5 * norm(puff)), cues[key], -15, pan=cues.get("glidePan", [0, 0])[1] * .5)
 
 # counters: soft mallet notes, right → left, descending (A5 F#5 D5); digital: one FM ping (B5)
 notes = [987.77] if STYLE == "digital" else [880.0, 739.99, 587.33]
-for c, f0 in zip(cues["fills"], notes):
+for c, f0 in zip(cues.get("fills", []), notes):
     t = tt(1.0)
     if STYLE == "digital":
         note = np.sin(2 * np.pi * f0 * t + 1.2 * np.exp(-t / .08) * np.sin(2 * np.pi * f0 * 2 * t)) * np.exp(-t / .45) * np.minimum(1, t / .004)
@@ -98,6 +102,37 @@ for (a, b), lvl in [(w, l) for w, l in [(cues.get("write"), -36), (cues.get("wri
     speed = np.sin(np.pi * u) ** 1.5
     hiss = bp(rng.standard_normal(len(t)), 2500, 9000) * speed * (.7 + .3 * np.abs(np.sin(2 * np.pi * 11 * t)))
     place(norm(hiss), a, lvl, pan=-.25)
+
+# --- AIM: circles sliding in, lens glow, I rising, A/M swells -------------------------
+def shaped_noise(n, fc_of_frame, width, nper=1024):
+    f, frames, Z = signal.stft(rng.standard_normal(n), SR, nperseg=nper)
+    fc = fc_of_frame(frames)
+    Z *= np.exp(-.5 * (np.log(f[:, None] + 1) - np.log(fc[None] + 1)) ** 2 / width ** 2)
+    return norm(signal.istft(Z, SR, nperseg=nper)[1][:n])
+def place_panned(sig, t0, gain, p0, p1, parts=10):
+    for k, pn in enumerate(np.linspace(p0, p1, parts)):
+        sl = slice(k * len(sig) // parts, (k + 1) * len(sig) // parts); piece = np.zeros_like(sig); piece[sl] = sig[sl]
+        place(piece, t0, gain, pan=pn)
+for w in cues.get("whooshes", []):                       # outQuart: fastest at the start
+    (a, b), (p0, p1) = w["t"], w["pan"]
+    t = tt(b - a); u = t / t[-1]; vel = (1 - u) ** 3
+    sig = shaped_noise(len(t), lambda fr: 300 + 2600 * np.interp(fr, t, vel), .5) * (vel ** 1.4 + .01) * np.minimum(1, t / .03)
+    place_panned(sig, a, -15, p0, p1)
+if cues.get("shimmer"):                                  # the lens glowing: a high, airy swell
+    a, b = cues["shimmer"]; t = tt(b - a); u = t / t[-1]
+    tones = sum(np.sin(2 * np.pi * f0 * t + ph) for f0, ph in [(1318.51, 0), (1975.53, 1.1), (2489.02, 2.3)]) * (1 + .3 * np.sin(2 * np.pi * 3 * t))
+    air = shaped_noise(len(t), lambda fr: 6000 + 0 * fr, .35)
+    place(norm(tones) * .6 * np.sin(np.pi * u) ** 1.5 + .4 * air * np.sin(np.pi * u) ** 2, a, -31)
+if cues.get("rise"):                                     # the I growing upward
+    a, b = cues["rise"]; t = tt(b - a + .2); u = np.clip(t / (b - a), 0, 1)
+    pos = np.where(u < .5, 4 * u ** 3, 1 - (-2 * u + 2) ** 3 / 2)
+    sweep = shaped_noise(len(t), lambda fr: 700 + 4300 * np.interp(fr, t, pos), .3)
+    tone = np.sin(2 * np.pi * np.cumsum(659.26 * 2 ** pos) / SR)
+    env = np.sin(np.pi * np.clip(t / (b - a + .2), 0, 1)) ** .8
+    place((.6 * sweep + .4 * tone) * env, a, -26)
+for sw in cues.get("swells", []):                        # A and M arriving from their sides
+    t = tt(.7); env = np.where(t < .28, (t / .28) ** 2, np.exp(-(t - .28) / .14))
+    place(shaped_noise(len(t), lambda fr: 1800 + 0 * fr, .45) * env, sw["t"], -27, pan=sw["pan"])
 
 # --- lockup impact ------------------------------------------------------------------
 L0 = cues["lock"]; t = tt(cues["dur"] - L0)
