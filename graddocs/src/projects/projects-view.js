@@ -7,6 +7,7 @@ import { openModal, confirmDialog, formDialog } from '../ui/modal.js';
 import { toast, toastError } from '../ui/toast.js';
 import { href } from '../app/routes.js';
 import { createChapter, createSection } from '../core/model.js';
+import { PRESETS, presetById, presetProjectFields } from '../core/presets.js';
 import { relativeTime, downloadText, slugify, pickFile, readFileAsText } from '../core/utils.js';
 import { t, isRTL } from '../i18n/index.js';
 
@@ -29,12 +30,14 @@ export function projectDetailFields(v = {}) {
     { name: 'name', label: t('Project Name'), value: v.name ?? '', required: true, placeholder: t('e.g. Meyar'), span: true, autofocus: true },
     { name: 'description', label: t('Project Description'), type: 'textarea', rows: 3, value: v.description ?? '', span: true, placeholder: t('A short summary of what the project does.') },
     { name: 'type', label: t('Project Type'), value: v.type ?? DEFAULT_PROJECT_TYPE },
-    { name: 'academicYear', label: t('Academic Year'), value: v.academicYear ?? String(new Date().getFullYear()) },
     { name: 'university', label: t('University'), value: v.university ?? '' },
     { name: 'college', label: t('College'), value: v.college ?? '' },
     { name: 'department', label: t('Department'), value: v.department ?? '' },
     { name: 'supervisor', label: t('Supervisor'), value: v.supervisor ?? '' },
-    { name: 'students', label: t('Students'), type: 'textarea', rows: 3, value: v.students ?? '', span: true, hint: t('One student per line.'), placeholder: t('Full name, one per line') },
+    { name: 'coSupervisor', label: t('Co-Supervisor (optional)'), value: v.coSupervisor ?? '' },
+    { name: 'academicYear', label: t('Academic Year'), value: v.academicYear ?? String(new Date().getFullYear()) },
+    { name: 'submissionDate', label: t('Submission date'), value: v.submissionDate ?? '', placeholder: 'May 2026', hint: t('Shown on the title page (month and year)') },
+    { name: 'students', label: t('Students'), type: 'textarea', rows: 3, value: v.students ?? '', span: true, hint: t('One student per line, e.g. Ahmed Ali Alharbi (443001234)'), placeholder: t('Full name, one per line') },
   ];
 }
 
@@ -162,28 +165,67 @@ export default {
     };
 
     // ----- Actions ----------------------------------------------------------
+    // Starting structures of the New Project dialog (the first one is the default). `hint` describes the selected option.
+    const structures = () => [
+      ...PRESETS.map((pr) => ({
+        value: pr.id, preset: pr,
+        label: t('Umm Al-Qura University — SWE Graduation Project 1'),
+        hint: t('Front matter (Declaration, Abstract, Acknowledgment, Content and lists), four chapters with writing hints, Conclusions and References, with the department’s page and font formatting. You can change everything later.'),
+      })),
+      { value: 'standard', label: t('Standard software engineering report (6 chapters)'), hint: t('The standard structure adds six chapters with their usual sections. You can edit it freely afterwards.') },
+      { value: 'empty', label: t('Empty'), hint: t('No chapters are added. The default front-matter pages (Declaration, Abstract and the generated lists) are still created.') },
+    ];
+
+    // Keeps the hint under "Starting structure" in step with the choice, and shows the template's university, college
+    // and department as placeholders (they are filled in when left empty).
+    const wireStructureDialog = (options) => {
+      const root = [...document.querySelectorAll('.modal-root')].pop();
+      const select = root?.querySelector('#f_structure');
+      if (!select) return;
+      const hintEl = select.closest('.field')?.querySelector('.hint');
+      const typeInput = root.querySelector('#f_type');
+      const knownTypes = new Set([DEFAULT_PROJECT_TYPE, ...PRESETS.map((pr) => pr.fields.type)]);
+      const sync = (changed) => {
+        const option = options.find((o) => o.value === select.value);
+        if (hintEl && option) hintEl.textContent = option.hint;
+        const defaults = option?.preset?.fields || {};
+        for (const name of ['university', 'college', 'department']) {
+          const input = root.querySelector(`#f_${name}`);
+          if (input) input.placeholder = defaults[name] || '';
+        }
+        if (changed && typeInput && knownTypes.has(typeInput.value.trim())) typeInput.value = defaults.type || DEFAULT_PROJECT_TYPE;
+      };
+      select.addEventListener('change', () => sync(true));
+      sync(false);
+    };
+
     const newProject = async () => {
-      const values = await formDialog({
+      const options = structures();
+      const first = options[0].preset;
+      const pending = formDialog({
         title: t('New project'),
         subtitle: t('Set up the basics now — everything can be changed later in Settings.'),
         size: 'lg',
         submitText: t('Create project'),
-        fields: [
-          ...projectDetailFields({}),
-          {
-            name: 'structure', label: t('Starting structure'), type: 'select', value: 'standard', span: true,
-            options: [
-              { value: 'standard', label: t('Standard software engineering report (6 chapters)') },
-              { value: 'empty', label: t('Empty') },
-            ],
-            hint: t('The standard structure adds six chapters with their usual sections. You can edit it freely afterwards.'),
-          },
-        ],
+        fields: (() => {
+          // The structure comes right after the name and description: it decides the placeholders of the fields below.
+          const details = projectDetailFields({ type: first?.fields.type });
+          const structure = {
+            name: 'structure', label: t('Starting structure'), type: 'select', value: options[0].value, span: true,
+            options: options.map(({ value, label }) => ({ value, label })),
+            hint: options[0].hint,
+          };
+          return [...details.slice(0, 2), structure, ...details.slice(2)];
+        })(),
       });
+      wireStructureDialog(options);
+      const values = await pending;
       if (!values) return;
       const { structure, ...fields } = values;
       try {
-        const project = await store.createProject({ ...fields, chapters: structure === 'empty' ? [] : standardChapters() });
+        const preset = presetById(structure);
+        const data = preset ? presetProjectFields(preset.id, fields) : { ...fields, chapters: structure === 'empty' ? [] : standardChapters() };
+        const project = await store.createProject(data);
         toast(t('“{name}” is ready.', { name: iso(project.name) }), { type: 'success', title: t('Project created') });
         ctx.navigate(href(project.id, 'dashboard'));
       } catch (err) { toastError(err, t('Could not create the project')); }

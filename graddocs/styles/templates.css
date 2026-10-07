@@ -1,1 +1,51 @@
-/* templates.css */
+/* =========================================================================
+   Report templates: New Project dialog, Settings > Document (template card, title page card, logo)
+   ========================================================================= */
+
+/* ----- Report template card (prominent, first card of the Document tab) ----- */
+.set-template {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+  box-shadow: var(--shadow-xs);
+}
+.set-template .card-header { align-items: center; flex-wrap: nowrap; gap: 12px; border-bottom-color: color-mix(in srgb, var(--primary) 20%, var(--border)); }
+.set-template .set-row { border-bottom-color: color-mix(in srgb, var(--primary) 14%, var(--border)); }
+.tpl-ico {
+  flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px;
+  color: var(--primary-text); background: var(--primary-soft);
+}
+.tpl-ico .icon { width: 19px; height: 19px; }
+.tpl-badge { font-size: 12.5px; padding: 4px 10px; }
+.set-row.tpl-action .set-control { flex: none; }
+.set-row.tpl-action .btn { white-space: normal; text-align: start; height: auto; min-height: 34px; }
+
+/* ----- Title page card ----- */
+.set-row.tpl-stack { flex-direction: column; align-items: stretch; gap: 10px; }
+.set-row.tpl-stack .set-label { flex: none; }
+.set-row.tpl-stack .set-control { width: 100%; justify-content: stretch; }
+.set-row.tpl-stack .textarea { width: 100%; min-height: 72px; resize: vertical; font-size: 13px; }
+.set-titlepage .set-control .input[type="text"] { width: 240px; }
+
+.logo-ctl { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.logo-thumb {
+  flex: none; width: 88px; height: 88px; display: grid; place-items: center; padding: 6px; overflow: hidden;
+  background: #fff; border: 1px solid var(--border-strong); border-radius: var(--radius);
+}
+.logo-thumb img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+.logo-thumb.empty { color: var(--faint); background: var(--surface-2); border-style: dashed; }
+.logo-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; max-width: 220px; }
+.logo-actions .hint { flex-basis: 100%; font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+/* ----- Confirmation with a list of changes ----- */
+.tpl-confirm { display: flex; flex-direction: column; gap: 12px; color: var(--text-2); font-size: 13.5px; line-height: 1.55; }
+.tpl-confirm p { margin: 0; }
+.tpl-list { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; }
+.tpl-list li::marker { color: var(--primary); }
+
+@media (max-width: 640px) {
+  .set-row.tpl-action .set-control { width: 100%; }
+  .set-row.tpl-action .btn { width: 100%; justify-content: center; }
+  .set-titlepage .set-control .input[type="text"] { width: 100%; }
+  .logo-ctl { width: 100%; }
+  .logo-actions { max-width: none; }
+}

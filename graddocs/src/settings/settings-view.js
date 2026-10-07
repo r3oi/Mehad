@@ -1,13 +1,16 @@
 // Settings (#/p/<id>/settings): Document | Captions | Figures | Project | Storage.
 // Every control writes straight to project.settings through store.update, so
-// numbering, preview and exports follow immediately.
+// numbering, preview and exports follow immediately. The Document tab starts with the report
+// template (apply its formatting / add its missing chapters) and the title-page card.
 import { esc, on, Disposer } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { confirmDialog } from '../ui/modal.js';
+import { confirmDialog, openModal } from '../ui/modal.js';
 import { toast, toastError } from '../ui/toast.js';
 import { getNumbering, captionText } from '../core/numbering.js';
 import { renderThumbnail } from '../figures/render.js';
-import { formatBytes, formatDateTime, downloadText, slugify } from '../core/utils.js';
+import { DEFAULT_DEGREE_STATEMENT } from '../core/model.js';
+import { PRESETS, presetById, applyPresetFormatting, mergePresetStructure } from '../core/presets.js';
+import { formatBytes, formatDateTime, downloadText, slugify, pickFile, clone } from '../core/utils.js';
 import { t, isRTL, lang, LANGUAGES, setLanguage } from '../i18n/index.js';
 import { projectDetailFields, iso, strong, tHTML } from '../projects/projects-view.js';
 import { getAIConfig, setAIConfig, AI_MODELS, modelLabel, maskKey, KEYS_URL } from '../figures/generate/ai.js';
@@ -25,6 +28,9 @@ const TABS = [
 ];
 const SETTINGS_TABS = new Set(['document', 'captions', 'figures']);
 const FONTS = ['Times New Roman', 'Arial', 'Calibri', 'Cambria', 'Georgia'];
+const HEADING_FONTS = ['Arial', 'Calibri', 'Helvetica', 'Times New Roman', 'Cambria', 'Georgia'];
+const INDENTS = [0, 0.5, 1, 1.27]; // cm
+const LOGO_MAX = 600; // px, longest side of an uploaded raster logo
 const SEPARATORS = [[':', t('Colon'), ':'], ['.', t('Period'), '.'], [' —', t('Em dash'), ' —'], [' -', t('Hyphen'), ' -']];
 // The example in brackets shows how the printed caption will look (report text, always left-to-right).
 const separatorOptions = (label) => SEPARATORS.map(([value, name, sep]) => [value, `${name}  ${ltr(`( ${label} 1${sep} Title )`)}`]);
@@ -60,6 +66,11 @@ function setPath(obj, path, value) {
 }
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const round = (v) => Math.round(v * 100) / 100;
+// Typed project data may be English or Arabic: once a field has text it follows that
+// text's own direction (so a trailing full stop lands on the right side).
+const dirAuto = (value) => (isRTL && value ? 'dir="auto"' : '');
+// Title-page fields hold English report text (or Arabic names) and have an English placeholder: always follow the text.
+const dirText = isRTL ? 'dir="auto"' : '';
 
 // ----- Control builders -----------------------------------------------------
 const row = (title, desc, control, cls = '') => `
@@ -96,6 +107,75 @@ const toggle = (path, checked, label) => `
 const text = (path, value, { placeholder = '', label = '' } = {}) => `
   <input class="input input-sm" type="text" data-path="${path}" data-kind="text" data-required value="${esc(value)}" placeholder="${esc(placeholder)}" maxlength="40" aria-label="${esc(label || path)}">`;
 
+/** Text input bound to a project field (not a setting): data-field="submissionDate" … */
+const fieldInput = (name, value, { placeholder = '', label = '' } = {}) => `
+  <input class="input input-sm" type="text" data-field="${name}" value="${esc(value)}" placeholder="${esc(placeholder)}" maxlength="160" aria-label="${esc(label || name)}" ${dirText}>`;
+
+// ----- Report template ---------------------------------------------------------
+// What "apply formatting" changes, as shown in the confirmation (one sentence per area, so each translates as a unit).
+const FORMATTING_CHANGES = {
+  'uqu-swe-gp1': () => [
+    t('Page: US Letter with a 3.81 cm binding margin on the left and 2.54 cm elsewhere.'),
+    t('Text: Times New Roman 12 pt, double-spaced and justified, with a 1.27 cm first-line indent and no extra space between paragraphs.'),
+    t('Headings: Arial 16 / 14 / 12 pt, chapter titles in capitals on a new page, and sub-headings (1.2.3) in bold italic.'),
+    t('Captions: left-aligned, with a bold label and a bold title.'),
+    t('Title page: the university submission page (logo, degree statement, students, supervisors and date).'),
+    t('Front matter: Declaration, ABSTRACT (150 words at most), ACKNOWLEDGMENT (added if it is missing), CONTENT, LIST OF TABLES, LIST OF FIGURES and LIST OF ACRONYMS AND ABBREVIATIONS, renamed and put in this order. The contents list them too, in the academic style.'),
+    t('Chapters called “Conclusions” become unnumbered.'),
+    t('References: a REFERENCES page in the compact style, in alphabetical order.'),
+  ],
+};
+
+/** Confirmation dialog with a list of changes (confirmDialog only takes a paragraph). Resolves true when confirmed. */
+function confirmList({ title, intro, items = [], outro = '', confirmText }) {
+  return new Promise((resolve) => {
+    let result = false;
+    const modal = openModal({
+      title, size: 'lg',
+      body: `<div class="tpl-confirm"><p>${esc(intro)}</p>${items.length ? `<ul class="tpl-list">${items.map((li) => `<li>${esc(li)}</li>`).join('')}</ul>` : ''}${outro ? `<p>${esc(outro)}</p>` : ''}</div>`,
+      footer: `<button class="btn" data-close>${esc(t('Cancel'))}</button><button class="btn btn-primary" data-ok autofocus>${esc(confirmText)}</button>`,
+      onClose: () => resolve(result),
+    });
+    modal.$('[data-ok]').addEventListener('click', () => { result = true; modal.close(); });
+  });
+}
+
+// ----- Logo ---------------------------------------------------------------------
+const readDataURL = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result));
+  reader.onerror = () => reject(reader.error || new Error('read'));
+  reader.readAsDataURL(blob);
+});
+const loadImage = (src) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => resolve(img);
+  img.onerror = () => reject(new Error('decode'));
+  img.src = src;
+});
+
+/** Uploaded logo file → data: URL. SVG is kept as is; PNG / JPG / WebP are downscaled to LOGO_MAX px and stored as PNG. */
+async function logoDataURL(file) {
+  const name = String(file.name || '');
+  if (/svg/i.test(file.type) || /\.svg$/i.test(name)) {
+    if (file.size > 1_500_000) throw new Error(t('That SVG file is too large (the limit is 1.5 MB).'));
+    const text = await file.text();
+    if (!/<svg[\s>]/i.test(text)) throw new Error(t('That file is not a valid SVG image.'));
+    return readDataURL(new Blob([text], { type: 'image/svg+xml' }));
+  }
+  if (!/^image\/(png|jpeg|webp)$/i.test(file.type) && !/\.(png|jpe?g|webp)$/i.test(name)) throw new Error(t('Choose a PNG, JPG, SVG or WebP image.'));
+  let img;
+  try { img = await loadImage(await readDataURL(file)); } catch { throw new Error(t('That image could not be read.')); }
+  const scale = Math.min(1, LOGO_MAX / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const g = canvas.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/png');
+}
+
 // ----- Previews -------------------------------------------------------------
 function pagePreview(s) {
   let [w, h] = s.page.size === 'Letter' ? [21.59, 27.94] : [21, 29.7];
@@ -120,13 +200,16 @@ function typographyPreview(s) {
   const pt = (v) => `${round(v * k)}pt`;
   const heading = s.chapterTitle.style === 'upper' ? 'CHAPTER 1: INTRODUCTION' : 'Chapter 1: Introduction';
   // A sample of the printed report page: report text stays English and left-to-right.
-  const p = `margin:0 0 ${pt(ty.paragraphSpacing)};text-align:${ty.justify ? 'justify' : 'left'}`;
+  const indent = Math.max(0, Number(ty.firstLineIndent) || 0) * 28.3465; // cm → pt
+  const p = `margin:0 0 ${pt(ty.paragraphSpacing)};text-align:${ty.justify ? 'justify' : 'left'};text-indent:${pt(indent)}`;
+  const headFont = ty.headingFontFamily || ty.fontFamily;
+  const h = `font-family:'${esc(headFont)}',${/arial|calibri|helvetica/i.test(headFont) ? 'sans-serif' : 'serif'};line-height:1.25`;
   return `
     <div class="typo-page" dir="ltr" style="font-family:'${esc(ty.fontFamily)}',serif;font-size:${pt(ty.fontSize)};line-height:${ty.lineSpacing}">
-      <div style="font-size:${pt(ty.headingSizes.h1)};font-weight:700;text-align:center;line-height:1.25;margin-bottom:${pt(10)}">${heading}</div>
-      <div style="font-size:${pt(ty.headingSizes.h2)};font-weight:700;line-height:1.25;margin-bottom:${pt(6)}">1.1 Introduction</div>
+      <div style="${h};font-size:${pt(ty.headingSizes.h1)};font-weight:700;text-align:center;margin-bottom:${pt(10)}">${heading}</div>
+      <div style="${h};font-size:${pt(ty.headingSizes.h2)};font-weight:700;margin-bottom:${pt(6)}">1.1 Introduction</div>
       <p style="${p}">This project presents a secure platform for storing, analysing and reporting on project data, designed for students and researchers.</p>
-      <div style="font-size:${pt(ty.headingSizes.h3)};font-weight:700;line-height:1.25;margin-bottom:${pt(4)}">1.1.1 Aims</div>
+      <div style="${h};font-size:${pt(ty.headingSizes.h3)};font-weight:700;font-style:${ty.subheadingItalic ? 'italic' : 'normal'};margin-bottom:${pt(4)}">1.1.1 Aims</div>
       <p style="${p}">The aim is to provide role-based access to datasets and built-in analysis so teams can work in one place.</p>
     </div>`;
 }
@@ -146,7 +229,7 @@ function captionPreview(project, kind) {
   }
   const prefix = full.slice(0, full.length - title.length);
   const caption = `<div class="cap-text" style="text-align:${cfg.align};font-family:'${esc(s.typography.fontFamily)}',serif;font-size:${Math.min(s.typography.fontSize, 14)}pt">
-      <span style="font-weight:${cfg.labelBold ? 700 : 400}">${esc(prefix)}</span><span style="font-style:${cfg.titleItalic ? 'italic' : 'normal'}">${esc(title)}</span></div>`;
+      <span style="font-weight:${cfg.labelBold ? 700 : 400}">${esc(prefix)}</span><span style="font-style:${cfg.titleItalic ? 'italic' : 'normal'};font-weight:${cfg.titleBold ? 700 : 400}">${esc(title)}</span></div>`;
   const object = kind === 'figure'
     ? `<div class="thumb cap-object">${first ? renderThumbnail(first) : icon('figure', 'icon-lg')}</div>`
     : `<div class="cap-object cap-table"><table><thead><tr><th>ID</th><th>Requirement</th><th>Priority</th></tr></thead><tbody><tr><td>F-1</td><td>User login</td><td>High</td></tr><tr><td>F-2</td><td>Upload dataset</td><td>Medium</td></tr></tbody></table></div>`;
@@ -206,10 +289,58 @@ export default {
         </div>
       </section>`;
 
-    const documentTab = (s) => `
+    // ----- Report template + title page cards --------------------------------------
+    const templateCard = (project) => {
+      const current = presetById(project.preset);
+      const name = current ? current.short : project.preset ? String(project.preset) : '';
+      const buttons = PRESETS.map((pr) => `
+        ${row(t('Formatting'), t('Page, fonts, captions, contents, title page and references, as the template asks.'),
+          `<button type="button" class="btn btn-primary" data-action="apply-preset-format" data-preset="${esc(pr.id)}">${icon('wand')}${esc(t('Apply {template} formatting', { template: ltr(pr.short) }))}</button>`, 'tpl-action')}
+        ${row(t('Structure'), t('Adds the template’s chapters and sections that are missing, matched by title. Nothing is deleted or moved.'),
+          `<button type="button" class="btn" data-action="apply-preset-structure" data-preset="${esc(pr.id)}">${icon('plus')}${esc(t('Add missing chapters and sections'))}</button>`, 'tpl-action')}`).join('');
+      return `
+        <section class="card set-card set-template">
+          <div class="card-header"><span class="tpl-ico">${icon('graduation')}</span>
+            <div class="grow"><h3>${t('Report template')}</h3>
+              <div class="set-desc">${t('Start from a university template, or bring this project in line with one. Your text, figures and tables are never deleted.')}</div></div></div>
+          <div class="set-rows">
+            ${row(t('Template in use'), '', name
+              ? `<span class="badge badge-primary tpl-badge"><bdi dir="ltr">${esc(name)}</bdi></span>`
+              : `<span class="badge tpl-badge">${t('None')}</span>`)}
+            ${buttons}
+          </div>
+        </section>`;
+    };
+
+    const logoControl = (project) => `
+      <div class="logo-thumb ${project.logo ? '' : 'empty'}" aria-hidden="${project.logo ? 'false' : 'true'}">${project.logo ? `<img src="${esc(project.logo)}" alt="${esc(t('Logo'))}">` : icon('image', 'icon-lg')}</div>
+      <div class="logo-actions">
+        <button type="button" class="btn btn-sm" data-action="upload-logo">${icon('upload')}${project.logo ? t('Replace logo') : t('Upload logo')}</button>
+        ${project.logo ? `<button type="button" class="btn btn-sm" data-action="remove-logo">${icon('trash')}${t('Remove')}</button>` : ''}
+        <div class="hint">${t('PNG, JPG, SVG or WebP. Shown at the top of the title page.')}</div>
+      </div>`;
+
+    const titlePageCard = (project) => card(t('Title page'), t('Which title page the report opens with, and the details printed on it.'), `
+      ${row(t('Layout'), t('Classic shows the name between rules. The university page adds the logo, degree statement, students, supervisors and date.'),
+        select('titlePage.layout', project.settings.titlePage?.layout || 'classic', [['classic', t('Classic')], ['submission', t('University submission page')]], { label: t('Title page layout') }))}
+      ${row(t('Degree statement'), t('The sentence above the students’ names on the university page. Leave empty for the default.'),
+        `<textarea class="textarea" rows="3" data-field="degreeStatement" ${dirText} placeholder="${esc(DEFAULT_DEGREE_STATEMENT)}" aria-label="${esc(t('Degree statement'))}">${esc(project.degreeStatement)}</textarea>`, 'tpl-stack')}
+      ${row(t('Submission date'), t('Shown on the title page (month and year)'), fieldInput('submissionDate', project.submissionDate, { placeholder: 'May 2026', label: t('Submission date') }))}
+      ${row(t('Co-Supervisor (optional)'), '', fieldInput('coSupervisor', project.coSupervisor, { label: t('Co-Supervisor (optional)') }))}
+      ${row(t('Logo'), t('Your university’s logo is not included with GradDocs: upload your own copy.'), `<div class="logo-ctl" data-logo>${logoControl(project)}</div>`)}`, 'set-titlepage');
+
+    const referencesCard = (s) => card(t('References'), t('The bibliography printed at the end of the report. Add the entries in the References section.'), `
+      ${row(t('Include References page'), '', toggle('references.include', s.references.include !== false, t('Include')))}
+      ${row(t('Page title'), '', text('references.title', s.references.title, { placeholder: 'References', label: t('References page title') }))}
+      ${row(t('Style'), t('How each entry is written.'), select('references.style', s.references.style, [['ieee', 'IEEE'], ['compact', t('Compact')]], { label: t('Reference style') }))}
+      ${row(t('Order'), t('Order of the entries (and of their numbers) in the list.'), select('references.order', s.references.order, [['citation', t('Order of first citation')], ['alphabetical', t('Alphabetical by first author')], ['manual', t('Manual order')]], { label: t('Reference order') }))}`);
+
+    const documentTab = (project) => { const s = project.settings; return `
       ${languageCard()}
       <div class="set-split">
         <div class="set-main">
+          ${templateCard(project)}
+          ${titlePageCard(project)}
           ${card(t('Page'), t('Paper size, orientation and margins.'), `
             ${row(t('Page size'), t('Paper format for preview and Word export.'), seg('page.size', s.page.size, [['A4', 'A4'], ['Letter', 'Letter']], { label: t('Page size') }))}
             ${row(t('Orientation'), '', seg('page.orientation', s.page.orientation, [['portrait', t('Portrait')], ['landscape', t('Landscape')]], { label: t('Orientation') }))}
@@ -220,15 +351,21 @@ export default {
             ${row(t('Font size'), '', num('typography.fontSize', s.typography.fontSize, { min: 8, max: 24, step: 0.5, unit: t('pt'), label: t('Font size') }))}
             ${row(t('Line spacing'), '', select('typography.lineSpacing', s.typography.lineSpacing, [[1, '1.0'], [1.15, '1.15'], [1.5, '1.5'], [2, t('2.0 (double)')]], { numeric: true, label: t('Line spacing') }))}
             ${row(t('Paragraph spacing'), t('Space after each paragraph.'), num('typography.paragraphSpacing', s.typography.paragraphSpacing, { min: 0, max: 36, step: 1, unit: t('pt'), label: t('Paragraph spacing') }))}
+            ${row(t('First-line indent'), t('Indent of the first line of every paragraph.'), select('typography.firstLineIndent', s.typography.firstLineIndent ?? 0, INDENTS.map((v) => [v, v === 0 ? t('None') : `${v} ${t('cm')}`]), { numeric: true, label: t('First-line indent') }))}
             ${row(t('Justify text'), t('Align paragraphs to both margins.'), toggle('typography.justify', s.typography.justify, t('Justified')))}`)}
-          ${card(t('Headings'), t('Font sizes for chapter and section titles.'), `
+          ${card(t('Headings'), t('Font and sizes for chapter and section titles.'), `
+            ${row(t('Heading font'), '', select('typography.headingFontFamily', s.typography.headingFontFamily || '', [['', t('Same as body text')], ...HEADING_FONTS], { label: t('Heading font') }))}
             ${row(t('Chapter title (H1)'), '', num('typography.headingSizes.h1', s.typography.headingSizes.h1, { min: 10, max: 40, unit: t('pt'), label: t('Heading 1 size') }))}
             ${row(t('Section (H2)'), '', num('typography.headingSizes.h2', s.typography.headingSizes.h2, { min: 10, max: 36, unit: t('pt'), label: t('Heading 2 size') }))}
-            ${row(t('Subsection (H3)'), '', num('typography.headingSizes.h3', s.typography.headingSizes.h3, { min: 10, max: 32, unit: t('pt'), label: t('Heading 3 size') }))}`)}
+            ${row(t('Subsection (H3)'), '', num('typography.headingSizes.h3', s.typography.headingSizes.h3, { min: 10, max: 32, unit: t('pt'), label: t('Heading 3 size') }))}
+            ${row(t('Sub-headings'), t('Headings numbered 1.2.3 and deeper.'), toggle('typography.subheadingItalic', !!s.typography.subheadingItalic, t('Sub-headings (1.2.3) in bold italic')))}`)}
           ${card(t('Chapters & contents'), '', `
             ${row(t('Chapter title style'), '', seg('chapterTitle.style', s.chapterTitle.style, [['upper', 'CHAPTER 1: INTRODUCTION'], ['title', 'Chapter 1: Introduction']], { label: t('Chapter title style') }), 'stack-sm')}
             ${row(t('Start chapters on a new page'), '', toggle('chapterTitle.newPage', s.chapterTitle.newPage, t('New page')))}
-            ${row(t('Table of contents depth'), t('How many heading levels are listed.'), select('toc.depth', s.toc.depth, [[1, t('1 — Chapters only')], [2, t('2 — Chapters and sections')], [3, t('3 — Down to subsections')], [4, t('4 — Down to sub-subsections')]], { numeric: true, label: t('Table of contents depth') }))}`)}
+            ${row(t('Table of contents depth'), t('How many heading levels are listed.'), select('toc.depth', s.toc.depth, [[1, t('1 — Chapters only')], [2, t('2 — Chapters and sections')], [3, t('3 — Down to subsections')], [4, t('4 — Down to sub-subsections')]], { numeric: true, label: t('Table of contents depth') }))}
+            ${row(t('Front matter in contents'), t('List front-matter pages (Abstract, lists …) in the table of contents'), toggle('toc.includeFrontMatter', !!s.toc.includeFrontMatter, t('Listed')))}
+            ${row(t('Contents style'), t('Academic sets chapters in bold and sections in small caps.'), select('toc.style', s.toc.style || 'plain', [['plain', t('Plain')], ['academic', t('Academic')]], { label: t('Contents style') }))}`)}
+          ${referencesCard(s)}
         </div>
         <aside class="set-aside">
           <div class="card set-sticky">
@@ -236,7 +373,7 @@ export default {
             <div class="card-body" data-preview="document"></div>
           </div>
         </aside>
-      </div>`;
+      </div>`; };
 
     const captionsTab = (s) => `
       <div class="set-captions">
@@ -255,6 +392,7 @@ export default {
                 ${row(t('Numbering'), '', select(`captions.${kind}.numbering`, c.numbering, numberingOptions(c.label), { label: L.numbering }))}
                 ${row(t('Alignment'), '', seg(`captions.${kind}.align`, c.align, [['left', t('Left')], ['center', t('Center')]], { label: L.align }))}
                 ${row(t('Label bold'), t('Make the label and number bold.'), toggle(`captions.${kind}.labelBold`, c.labelBold, t('Bold label')))}
+                ${row(t('Title bold'), t('Make the caption title bold.'), toggle(`captions.${kind}.titleBold`, !!c.titleBold, t('Bold caption title')))}
                 ${row(t('Title italic'), '', toggle(`captions.${kind}.titleItalic`, c.titleItalic, t('Italic title')))}
               </div>
               <div class="cap-preview"><div class="set-preview-title">${t('Preview')}</div><div data-preview="caption-${kind}"></div></div>
@@ -293,9 +431,6 @@ export default {
       </div>`;
     const aiTab = () => `<div class="set-main set-narrow">${aiCard()}</div>`;
 
-    // Typed project data may be English or Arabic: once a field has text it follows that
-    // text's own direction (so a trailing full stop lands on the right side).
-    const dirAuto = (value) => (isRTL && value ? 'dir="auto"' : '');
     const projectTab = (project) => {
       const f = (def) => {
         const id = `pf_${def.name}`;
@@ -405,7 +540,7 @@ export default {
       if (!alive || !project) return;
       renderTabs();
       storageToken += 1; // cancel any in-flight storage render
-      if (tab === 'document') panel.innerHTML = documentTab(project.settings);
+      if (tab === 'document') panel.innerHTML = documentTab(project);
       else if (tab === 'captions') panel.innerHTML = captionsTab(project.settings);
       else if (tab === 'figures') panel.innerHTML = figuresTab(project.settings);
       else if (tab === 'ai') panel.innerHTML = aiTab();
@@ -455,6 +590,22 @@ export default {
       apply(btn.dataset.path, value);
     }));
 
+    // ----- Title page fields (project data, saved like the settings) ----------------------
+    const applyField = (name, value) => {
+      const project = store.project;
+      if (!project || project[name] === value) return;
+      store.update((p) => { p[name] = value; }, { activity: 'Updated project details', source: 'settings' });
+    };
+    d.add(on(panel, 'input', '[data-field]', (e, el) => applyField(el.dataset.field, el.value)));
+    d.add(on(panel, 'change', '[data-field]', (e, el) => {
+      el.value = el.value.trim();
+      applyField(el.dataset.field, el.value);
+    }));
+    const refreshLogo = () => {
+      const box = panel.querySelector('[data-logo]');
+      if (box && store.project) box.innerHTML = logoControl(store.project);
+    };
+
     // ----- AI card (prefs, not project data) ----------------------------------------
     const refreshAIStatus = () => {
       const cfg = getAIConfig();
@@ -492,6 +643,56 @@ export default {
     const stamp = (ts) => new Date(ts).toISOString().slice(0, 16).replace(/[:T]/g, '-');
 
     const actions = {
+      // Report template: formatting and structure of a preset (see core/presets.js).
+      async 'apply-preset-format'(el) {
+        const preset = presetById(el.dataset.preset);
+        if (!preset) return;
+        const ok = await confirmList({
+          title: t('Apply {template} formatting?', { template: ltr(preset.short) }),
+          intro: t('The formatting of the whole report changes to match the template:'),
+          items: (FORMATTING_CHANGES[preset.id]?.() || [t('Page, fonts, captions, contents, title page and references.')]),
+          outro: t('Your text, figures and tables are not deleted, and every setting can be changed again afterwards.'),
+          confirmText: t('Apply formatting'),
+        });
+        if (!ok || !alive || !store.project) return;
+        try {
+          store.update((p) => applyPresetFormatting(p, preset.id), { activity: `Applied ${preset.short} formatting` });
+          toast(t('{template} formatting applied.', { template: ltr(preset.short) }), { type: 'success' });
+        } catch (err) { toastError(err, t('Could not apply the template')); }
+      },
+      async 'apply-preset-structure'(el) {
+        const preset = presetById(el.dataset.preset);
+        if (!preset) return;
+        const ok = await confirmDialog({
+          title: t('Add the missing chapters and sections?'),
+          message: tHTML('This adds the chapters and sections of {template} that your project does not have yet, matched by title. Nothing is deleted, renamed or moved, and the text you wrote stays as it is.', { template: strong(preset.short) }),
+          confirmText: t('Add missing'),
+        });
+        if (!ok || !alive || !store.project) return;
+        try {
+          // Count first on a copy, so the activity log only records real additions.
+          const probe = mergePresetStructure({ chapters: clone(store.project.chapters) }, preset.id);
+          const added = probe.chapters + probe.sections > 0;
+          const result = store.update((p) => mergePresetStructure(p, preset.id), added ? { activity: 'Added missing template chapters and sections' } : {});
+          toast(added ? t('{chapters} chapters and {sections} sections added', result) : t('Nothing to add — the structure already matches'), { type: added ? 'success' : 'info' });
+        } catch (err) { toastError(err, t('Could not add the template structure')); }
+      },
+      async 'upload-logo'() {
+        const file = await pickFile('.png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/svg+xml,image/webp');
+        if (!file || !alive || !store.project) return;
+        try {
+          const dataUrl = await logoDataURL(file);
+          store.update((p) => { p.logo = dataUrl; }, { activity: 'Updated project details', source: 'settings' });
+          refreshLogo();
+          toast(t('Logo updated.'), { type: 'success' });
+        } catch (err) { toastError(err, t('Could not use that image')); }
+      },
+      'remove-logo'() {
+        if (!store.project?.logo) return;
+        store.update((p) => { p.logo = ''; }, { activity: 'Updated project details', source: 'settings' });
+        refreshLogo();
+        toast(t('Logo removed.'), { type: 'success', duration: 2200 });
+      },
       async 'switch-engine'(el) {
         const target = el.dataset.engine;
         const to = ENGINES[target];

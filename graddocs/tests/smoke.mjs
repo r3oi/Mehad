@@ -162,13 +162,14 @@ await check('chapters show live reference chips', async () => {
   assert(chips.includes('Figure 1') && chips.includes('Table 1'), `chips: ${chips.join(', ')}`);
 });
 await check('adding a chapter renumbers the outline', async () => {
+  const before = await evalStore(() => window.graddocs.store.project.chapters.length);
   await go('structure', '?new=chapter');
   await page.waitForSelector('.modal input');
   await page.fill('.modal input', 'Appendix');
   await page.keyboard.press('Enter');
   await page.waitForTimeout(300);
   const n = await evalStore(() => window.graddocs.store.project.chapters.length);
-  assert(n === 7, `expected 7 chapters, got ${n}`);
+  assert(n === before + 1, `expected ${before + 1} chapters, got ${n}`);
 });
 await check('duplicate acronyms are rejected', async () => {
   await go('acronyms');
