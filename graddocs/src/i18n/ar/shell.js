@@ -62,6 +62,7 @@ export default {
   'New Project': 'مشروع جديد',
   'Toggle Dark / Light Mode': 'تبديل الوضع الليلي / النهاري',
   'Keyboard Shortcuts': 'اختصارات لوحة المفاتيح',
+  'Switch to English': 'التبديل إلى الإنجليزية (English)',
   // Shortcuts dialog
   'All changes saved': 'تم حفظ كل التغييرات',
   'General': 'عام',

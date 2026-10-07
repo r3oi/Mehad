@@ -59,7 +59,7 @@ export function formatDate(ts, opts = {}) {
 export function formatDateTime(ts) {
   if (!ts) return '—';
   const d = new Date(ts);
-  return `${formatDate(ts, { month: 'short' })}, ${d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`;
+  return `${formatDate(ts, { month: 'short' })}${t(', ')}${d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`;
 }
 export function relativeTime(ts) {
   if (!ts) return t('never');

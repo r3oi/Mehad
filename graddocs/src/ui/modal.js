@@ -105,7 +105,7 @@ export function formDialog({ title, subtitle = '', fields = [], submitText = t('
     let result = null;
     const fieldHTML = (f) => {
       const id = `f_${f.name}`;
-      const common = `id="${id}" name="${esc(f.name)}" ${f.required ? 'required' : ''} placeholder="${esc(f.placeholder || '')}"`;
+      const common = `id="${id}" name="${esc(f.name)}" ${f.required ? 'required' : ''} placeholder="${esc(f.placeholder || '')}" dir="auto"`;
       let control;
       if (f.type === 'textarea') control = `<textarea class="textarea" rows="${f.rows || 3}" ${common}>${esc(f.value ?? '')}</textarea>`;
       else if (f.type === 'select') {
