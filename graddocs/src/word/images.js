@@ -61,6 +61,6 @@ export async function prepareImage(image) {
     result = { dataUrl, width: w, height: h };
   }
   if (bmp.close) bmp.close();
-  if (image.hash) { cache.set(image.hash, result); if (cache.size > 24) cache.delete(cache.keys().next().value); }
+  if (image.hash) { cache.set(image.hash, result); if (cache.size > 8) cache.delete(cache.keys().next().value); }
   return result;
 }

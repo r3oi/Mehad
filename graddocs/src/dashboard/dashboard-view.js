@@ -23,6 +23,7 @@ const ACTIVITY_ICONS = { create: 'plus', revision: 'history', edit: 'edit', dele
 // every module. For display they are matched against these templates and
 // re-rendered in the interface language. Specific templates come before generic ones.
 export const ACTIVITY_TEMPLATES = [
+  'Synced with Word: 1 change', 'Synced with Word: {n} changes', 'Linked to a Word file', 'Unlinked the Word file', 'Undid a Word sync',
   'Created project', 'Updated project details', 'Updated {tab} settings', 'Reordered front matter', 'Reordered figures',
   'Added a table row', 'Deleted a table row', 'Added a table column', 'Deleted a table column', 'Merged table cells', 'Unmerged table cells', 'Duplicated a table',
   'Imported 1 acronym', 'Imported {n} acronyms', 'Added 1 detected acronym', 'Added {n} detected acronyms',

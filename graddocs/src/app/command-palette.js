@@ -20,6 +20,7 @@ function commands(shell) {
       { title: 'Create Chapter', sub: 'Add a chapter to the document', icon: 'plus', keywords: 'new chapter add section', run: go('structure', null, { new: 'chapter' }) },
       { title: 'Go to Dashboard', icon: 'dashboard', keywords: 'home overview', run: go('dashboard') },
       { title: 'Go to Project Structure', icon: 'structure', keywords: 'outline toc sections', run: go('structure') },
+      { title: 'Sync with Word', sub: 'Link your report’s .docx and pull changes when you save', icon: 'word', keywords: 'word docx link import sync ربط وورد مزامنة', run: go('word') },
       { title: 'Go to Figures', icon: 'figure', keywords: 'diagrams', run: go('figures') },
       { title: 'Go to Tables', icon: 'table', run: go('tables') },
       { title: 'Go to Chapters', icon: 'chapters', keywords: 'write content sections', run: go('chapters') },

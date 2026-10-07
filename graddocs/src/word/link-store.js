@@ -53,4 +53,14 @@ export async function deleteHandle(projectId) {
   try { await tx('readwrite', (s) => s.delete(projectId)); } catch { /* nothing stored */ }
 }
 
+/** Forget the handles of projects that no longer exist. */
+export async function pruneHandles(validIds) {
+  for (const id of [...memory.keys()]) if (!validIds.has(id)) memory.delete(id);
+  try {
+    const keys = await tx('readonly', (s) => s.getAllKeys());
+    const stale = (keys || []).filter((k) => !validIds.has(String(k)));
+    for (const k of stale) await tx('readwrite', (s) => s.delete(k));
+  } catch { /* nothing stored */ }
+}
+
 export const hasMemoryHandle = (projectId) => memory.has(projectId);

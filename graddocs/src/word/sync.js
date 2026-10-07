@@ -62,15 +62,20 @@ export async function parseSource(source) {
 // ---------------------------------------------------------------------------
 // Notifications
 
+/** A copy of the applied items that keeps no reference to the parsed document (pictures can be large). */
+const lightItems = (items) => items.map(({ group, kind, unit, title, context, detail, extra, rawDetail, diff }) => ({ group, kind, unit, title, context, detail, extra, rawDetail, diff, checked: true }));
+
 export function notifySynced(store, shell, res, { fileName, auto = false } = {}) {
-  wordState.lastApplied = { at: Date.now(), items: res.applied, fileName, backup: res.backup, auto };
+  const items = lightItems(res.applied);
+  const backup = res.backup ? { id: res.backup.id, projectId: store.project?.id } : null;
+  wordState.lastApplied = { at: Date.now(), items, fileName, backup, auto };
   wordEvents.emit('synced', wordState.lastApplied);
   if (res.failedImages) toast(t('{n} pictures could not be read and were skipped.', { n: res.failedImages }), { type: 'warning', duration: 7000 });
   if (!res.count) return;
   const message = res.count === 1 ? t('Synced with Word: 1 change') : t('Synced with Word: {n} changes', { n: res.count });
   toast(message, {
     type: 'success', duration: 9000,
-    action: res.backup ? { label: t('Undo'), onClick: () => undoSync(store, res.backup) } : null,
+    action: backup ? { label: t('Undo'), onClick: () => undoSync(store, backup) } : null,
   });
   // The toast component supports a single action; add "Details" next to "Undo" with the same markup.
   const el = document.querySelector('.toast-stack .toast:last-child');
@@ -78,14 +83,16 @@ export function notifySynced(store, shell, res, { fileName, auto = false } = {})
   if (close) {
     const btn = document.createElement('button');
     btn.className = 'toast-action'; btn.textContent = t('Details');
-    btn.addEventListener('click', () => openAppliedDialog({ items: res.applied, fileName, at: Date.now() }));
+    btn.addEventListener('click', () => openAppliedDialog({ items, fileName, at: Date.now() }));
     close.before(btn);
   }
 }
 
-/** Restore the backup taken before a sync. */
-export async function undoSync(store, backup) {
+/** Restore the backup that was taken right before a sync ({ id, projectId }). */
+export async function undoSync(store, { id, projectId }) {
   try {
+    const backup = (await store.repo.listBackups(projectId)).find((b) => b.id === id);
+    if (!backup) throw new Error(t('The backup from before this sync is no longer available.'));
     await store.restoreBackup(backup);
     // Remember the Word version we just rejected so it is not offered again until the file is saved anew.
     const seen = wordState.lastInfo?.lastModified;

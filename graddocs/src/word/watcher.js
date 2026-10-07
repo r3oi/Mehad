@@ -7,7 +7,7 @@
 import { toast } from '../ui/toast.js';
 import { t } from '../i18n/index.js';
 import { href } from '../app/routes.js';
-import { loadHandle, saveHandle } from './link-store.js';
+import { loadHandle, saveHandle, pruneHandles } from './link-store.js';
 import { wordEvents, wordState, withLock, hasReadPermission, setPending, supportsLiveWatch } from './state.js';
 
 const POLL_MS = 3000;
@@ -35,6 +35,7 @@ export class WordWatcher {
     this.store.on('project', () => this.refresh());
     this.store.on('change', () => this.refresh());
     wordEvents.on('relink', () => this.refresh(true));
+    this.store.on('projects', (list) => { if (Array.isArray(list) && list.length) pruneHandles(new Set(list.map((p) => p.id))); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) this.tick(); });
     window.addEventListener('focus', () => this.tick());
     this.refresh(true);

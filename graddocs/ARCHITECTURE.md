@@ -119,6 +119,15 @@ are reported by `findBrokenPlacements`). Helpers in references.js: `makePlacemen
 `buildDocument(project)` → `{ titlePage, front[], toc[], figures[], tables[], acronyms[], body[] }` — the single
 source for Document Preview and the Word export. Body blocks: chapter, heading, paragraph, bullet, figure, table.
 
+## Word Sync (src/word/)
+
+Word → GradDocs only; the user's .docx is never written. `docx-reader.js` (ZIP + DecompressionStream, DOMParser) →
+`docx-parse.js` (headings, front matter, captions, tables, pictures, acronyms) → `plan.js` (change set against the project;
+diagrams made in GradDocs are only linked, never replaced) → `review-dialog.js` → apply in one `store.update` after
+`store.createBackup('Before Word sync')`. Link state lives in `project.wordLink` (fileName, lastModified, autoSync, history,
+map, hashes). `watcher.js` (started in main.js) polls the File System Access handle (stored in IndexedDB `graddocs-word`)
+every 3 s and auto-applies safe changes; other browsers fall back to picking the file again.
+
 ## Diagram generation & auto-layout
 
 - `figures/layout.js`: `autoLayout(diagram, { mode: 'layered'|'tree'|'auto', direction: 'TB'|'LR', ids })` — layered (Sugiyama-style) or tidy-tree layout, undoable when called through `editor.mutate`.

@@ -53,6 +53,8 @@ export default {
   'Add a chapter to the document': 'أضف فصلًا إلى المستند',
   'Go to Dashboard': 'الذهاب إلى لوحة التحكم',
   'Go to Project Structure': 'الذهاب إلى هيكل المشروع',
+  'Sync with Word': 'المزامنة مع Word',
+  'Link your report’s .docx and pull changes when you save': 'اربط ملف تقريرك (.docx) واسحب التعديلات عند الحفظ',
   'Go to Figures': 'الذهاب إلى الأشكال',
   'Go to Tables': 'الذهاب إلى الجداول',
   'Go to Chapters': 'الذهاب إلى الفصول',

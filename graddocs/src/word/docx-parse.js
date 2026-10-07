@@ -190,7 +190,12 @@ function readRun(r, ctx, styleRes, paraStyle) {
 const INLINE_CONTAINERS = new Set(['hyperlink', 'ins', 'smartTag', 'fldSimple', 'customXml', 'moveTo', 'dir', 'bdo']);
 function walkInline(el, ctx, styleRes, paraStyle) {
   for (const k of el.children) {
-    if (k.namespaceURI === NS.mc && k.localName === 'AlternateContent') { readRunChildren(el, ctx, { bold: false, italic: false }); break; }
+    if (k.namespaceURI === NS.mc && k.localName === 'AlternateContent') {
+      const options = [...k.children];
+      const pick = options.find((x) => x.localName === 'Choice') || options.find((x) => x.localName === 'Fallback');
+      if (pick) walkInline(pick, ctx, styleRes, paraStyle);
+      continue;
+    }
     if (k.namespaceURI !== W) continue;
     if (k.localName === 'r') readRun(k, ctx, styleRes, paraStyle);
     else if (INLINE_CONTAINERS.has(k.localName)) walkInline(k, ctx, styleRes, paraStyle);

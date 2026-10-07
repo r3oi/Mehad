@@ -118,6 +118,7 @@ export default {
   'Synced with Word: {n} changes': 'تمت المزامنة مع Word: {n} من التغييرات',
   'Your Word file changed': 'تغيّر ملف Word الخاص بك',
   'The Word sync was undone.': 'تم التراجع عن المزامنة.',
+  'The backup from before this sync is no longer available.': 'لم تعد النسخة الاحتياطية السابقة لهذه المزامنة متوفرة.',
   'Could not undo the sync': 'تعذّر التراجع عن المزامنة',
   'Could not read the Word file': 'تعذّرت قراءة ملف Word',
   'Could not read the Word file.': 'تعذّرت قراءة ملف Word.',

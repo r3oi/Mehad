@@ -1,6 +1,8 @@
 // Text helpers shared by the Word parser and the sync planner: title cleaning, normalisation for
 // matching, hashing and a few Arabic/English patterns. Pure functions, no DOM.
 
+import { isRTL } from '../i18n/index.js';
+
 const DIGITS_AR = '٠١٢٣٤٥٦٧٨٩';
 /** Arabic-Indic digits → ASCII digits. */
 export const asciiDigits = (s) => String(s ?? '').replace(/[٠-٩]/g, (d) => String(DIGITS_AR.indexOf(d)));
@@ -11,7 +13,7 @@ const SPACES = new RegExp(`[${cc(0xa0, 0x2007, 0x202f)}]`, 'g');
 const MARKS = new RegExp(`[${cc(0x300)}-${cc(0x36f)}${cc(0x64b)}-${cc(0x65f)}${cc(0x670)}${cc(0x6d6)}-${cc(0x6ed)}]`, 'g');
 
 /** Wrap report text (file and project names, titles) so it keeps its own direction inside translated UI text. */
-export const isolate = (text) => `${cc(0x2068)}${text}${cc(0x2069)}`;
+export const isolate = (text) => (isRTL ? `${cc(0x2068)}${text}${cc(0x2069)}` : String(text));
 
 /** Collapse whitespace (incl. NBSP / zero-width) into single spaces. */
 export function tidy(s) {
