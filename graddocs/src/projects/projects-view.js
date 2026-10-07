@@ -114,7 +114,7 @@ export default {
               <div class="pj-type"><bdi>${esc(p.type || t('Graduation project'))}</bdi>${p.academicYear ? ` · <bdi>${esc(p.academicYear)}</bdi>` : ''}</div>
             </div>
           </div>
-          <p class="pj-desc ${p.description ? '' : 'muted'}">${p.description ? esc(p.description) : t('No description yet.')}</p>
+          <p class="pj-desc ${p.description ? '' : 'muted'}">${p.description ? `<bdi>${esc(p.description)}</bdi>` : t('No description yet.')}</p>
           <div class="pj-stats">
             ${stat('figure', c.figures, t('Figures'))}${stat('table', c.tables, t('Tables'))}${stat('acronym', c.acronyms, t('Acronyms'))}${stat('chapters', c.chapters, t('Chapters'))}
           </div>

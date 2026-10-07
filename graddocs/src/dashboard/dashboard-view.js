@@ -55,7 +55,7 @@ const ACTIVITY_MATCHERS = ACTIVITY_TEMPLATES.map((key) => {
   return { key, names, re: new RegExp(`^${source}$`) };
 });
 /** Interface-language text for a stored activity entry (unknown sentences are shown as stored). */
-function activityText(text) {
+export function activityText(text) {
   const raw = String(text ?? '');
   if (!isRTL) return raw;
   for (const { key, names, re } of ACTIVITY_MATCHERS) {
@@ -186,7 +186,7 @@ export default {
 
     const fact = (ico, label, value) => `
       <div class="dash-fact">${icon(ico)}<div class="min0"><div class="df-label">${esc(label)}</div>
-      <div class="df-value ${value ? '' : 'muted'}">${value ? esc(value) : t('Not set')}</div></div></div>`;
+      <div class="df-value ${value ? '' : 'muted'}">${value ? `<bdi>${esc(value)}</bdi>` : t('Not set')}</div></div></div>`;
 
     const render = () => {
       const project = store.project;
@@ -212,7 +212,7 @@ export default {
                 <h1>${esc(project.name)}</h1>
                 ${project.type ? `<span class="badge badge-primary">${esc(project.type)}</span>` : ''}
               </div>
-              <p class="dash-desc ${project.description ? '' : 'muted'}">${project.description ? esc(project.description) : t('No description yet. Add one in Edit details.')}</p>
+              <p class="dash-desc ${project.description ? '' : 'muted'}">${project.description ? `<bdi>${esc(project.description)}</bdi>` : t('No description yet. Add one in Edit details.')}</p>
             </div>
             <button class="btn" data-action="edit-details">${icon('edit')}${t('Edit details')}</button>
           </div>
@@ -292,7 +292,7 @@ export default {
               <div class="card-body dash-activity">
                 ${activity.length ? activity.map((a) => `
                   <div class="act-row"><span class="act-ico">${icon(ACTIVITY_ICONS[a.kind] || 'activity', 'icon-sm')}</span>
-                    <span class="act-text">${esc(activityText(a.text))}</span><span class="act-time">${esc(relativeTime(a.at))}</span></div>`).join('')
+                    <span class="act-text"><bdi>${esc(activityText(a.text))}</bdi></span><span class="act-time">${esc(relativeTime(a.at))}</span></div>`).join('')
                   : `<div class="dash-empty">${icon('activity')}<div><b>${t('No activity yet')}</b><div class="muted">${t('Your edits will show up here.')}</div></div></div>`}
               </div>
             </section>

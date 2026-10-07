@@ -388,7 +388,7 @@ export default {
         openMenu(el, [
           { label: t('Export as PDF'), icon: 'printer', onClick: () => exportPdf(project()) },
           { label: t('Copy as table for Word'), icon: 'clipboard', onClick: () => copyAsWordTable(project()) },
-        ], { align: 'end' });
+        ], { align: isRTL ? 'start' : 'end' }); // the menu opens towards the inside of the page
       }
     }));
     d.add(on(container, 'input', '[data-role="search"]', (e, el) => { query = el.value; renderList(); }));

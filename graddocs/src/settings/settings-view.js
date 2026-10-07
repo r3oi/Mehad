@@ -108,7 +108,7 @@ function pagePreview(s) {
       <div class="pg" dir="ltr" style="width:${pw}px;height:${ph}px">
         <div class="pg-inner" style="top:${pct(m.top, h)};bottom:${pct(m.bottom, h)};left:${pct(m.left, w)};right:${pct(m.right, w)}"></div>
       </div>
-      <div class="pg-caption">${esc(s.page.size)} · ${esc(t(cap(s.page.orientation)))} · <bdi>${w} × ${h} ${esc(t('cm'))}</bdi></div>
+      <div class="pg-caption">${esc(s.page.size)} · ${esc(t(cap(s.page.orientation)))} · <span dir="ltr">${w} × ${h} ${esc(t('cm'))}</span></div>
     </div>`;
 }
 
@@ -272,12 +272,15 @@ export default {
           ${row(t('Transparent background'), t('Export PNGs without the white page background.'), toggle('figureDefaults.transparentBackground', s.figureDefaults.transparentBackground, t('Transparent')))}`)}
       </div>`;
 
+    // Typed project data may be English or Arabic: once a field has text it follows that
+    // text's own direction (so a trailing full stop lands on the right side).
+    const dirAuto = (value) => (isRTL && value ? 'dir="auto"' : '');
     const projectTab = (project) => {
       const f = (def) => {
         const id = `pf_${def.name}`;
         const control = def.type === 'textarea'
-          ? `<textarea class="textarea" id="${id}" name="${def.name}" rows="${def.rows || 3}" placeholder="${esc(def.placeholder || '')}">${esc(def.value)}</textarea>`
-          : `<input class="input" id="${id}" name="${def.name}" type="text" value="${esc(def.value)}" placeholder="${esc(def.placeholder || '')}">`;
+          ? `<textarea class="textarea" id="${id}" name="${def.name}" rows="${def.rows || 3}" ${dirAuto(def.value)} placeholder="${esc(def.placeholder || '')}">${esc(def.value)}</textarea>`
+          : `<input class="input" id="${id}" name="${def.name}" type="text" value="${esc(def.value)}" ${dirAuto(def.value)} placeholder="${esc(def.placeholder || '')}">`;
         return `<div class="field ${def.span ? 'span-all' : ''}"><label for="${id}">${esc(def.label)}${def.required ? ' <span class="req">*</span>' : ''}</label>${control}
           ${def.hint ? `<div class="hint">${esc(def.hint)}</div>` : ''}<div class="error-text" data-error="${def.name}"></div></div>`;
       };
@@ -441,9 +444,12 @@ export default {
       store.update((p) => Object.assign(p, values), { activity: 'Updated project details', source: 'settings' });
       toast(t('Project details saved.'), { type: 'success' });
     }));
+    d.add(on(panel, 'input', '#project-form .input, #project-form .textarea', (e, el) => {
+      if (isRTL) el.dir = el.value ? 'auto' : '';
+    }));
     d.add(on(panel, 'click', '[data-action="reset-project"]', () => {
       const form = panel.querySelector('#project-form');
-      projectDetailFields(store.project).forEach((f) => { form.elements[f.name].value = f.value; });
+      projectDetailFields(store.project).forEach((f) => { form.elements[f.name].value = f.value; form.elements[f.name].dir = isRTL && f.value ? 'auto' : ''; });
       form.querySelectorAll('.invalid').forEach((el) => el.classList.remove('invalid'));
       form.querySelectorAll('[data-error]').forEach((el) => { el.textContent = ''; });
     }));

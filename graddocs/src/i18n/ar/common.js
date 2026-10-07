@@ -112,4 +112,5 @@ export default {
   'List of Figures': 'قائمة الأشكال',
   'List of Acronyms and Abbreviations': 'قائمة الاختصارات',
   'Untitled Page': 'صفحة بدون عنوان',
+  ', ': '، ',
 };

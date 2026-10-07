@@ -301,6 +301,7 @@
 .toc-chapter { margin-top: 7px; font-weight: 700; }
 .toc-front + .toc-chapter { margin-top: 12px; }
 .toc-empty { margin: 14px 0 0; text-align: center; color: #6b7280; font-style: italic; }
+[dir="rtl"] .toc-empty { font-style: normal; }
 .toc-foot { display: flex; align-items: center; gap: 8px; flex: none; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
 .toc-foot .icon { flex: none; }
 @media (max-width: 1180px) { .toc-card { max-height: none; } .toc-scroll { max-height: 520px; } }
