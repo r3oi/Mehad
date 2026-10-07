@@ -106,8 +106,8 @@
     const [[x0, y0], [x1, y1]] = box, m = 58 * sc;
     const items = [
       () => sparkle(ctx, x1 + m * .6, y0 - m * .3, 18 * sc, o),
-      () => handText(ctx, "© 2025", x1 - 10 * sc, y1 + m * 1.1, { font: F(26), color: C.note, seed, align: "right" }),
-      () => { handArrow(ctx, [[x0 - m * 1.6, y0 - m * .2], [x0 - m * 1.0, y0 + m * .1], [x0 - m * .35, y0 + m * .55]], { ...o, head: 11 * sc }); handText(ctx, isM ? "2025" : "v1", x0 - m * 1.8, y0 - m * .6, { font: F(26), color: C.note, seed }); },
+      () => handText(ctx, "© 2026", x1 - 10 * sc, y1 + m * 1.1, { font: F(26), color: C.note, seed, align: "right" }),
+      () => { handArrow(ctx, [[x0 - m * 1.6, y0 - m * .2], [x0 - m * 1.0, y0 + m * .1], [x0 - m * .35, y0 + m * .55]], { ...o, head: 11 * sc }); handText(ctx, isM ? "2026" : "v1", x0 - m * 1.8, y0 - m * .6, { font: F(26), color: C.note, seed }); },
       () => isM ? handText(ctx, "مِهاد", x0 - m * .2, y1 + m * 1.1, { font: F(30, 1), color: C.note, seed, dir: "rtl", align: "left" }) : handText(ctx, "body ∩ digital", x0, y1 + m * 1.1, { font: F(26), color: C.note, seed }),
       () => sparkle(ctx, x0 - m * .7, y1 - m * .2, 9 * sc, { ...o, seed: seed + 3 }),
       () => handEllipse(ctx, x1 + m * .9, y1 - m * .1, 6 * sc, 6 * sc, { ...o, w: 2 * sc }),
