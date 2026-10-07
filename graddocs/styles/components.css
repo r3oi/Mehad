@@ -30,11 +30,11 @@
 .btn-icon.btn-sm { width: 28px; }
 .btn-block { width: 100%; }
 .btn-group { display: inline-flex; }
-.btn-group > .btn { border-radius: 0; margin-left: -1px; }
-.btn-group > .btn:first-child { border-radius: var(--radius) 0 0 var(--radius); margin-left: 0; }
-.btn-group > .btn:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
-.btn-group > .btn.btn-sm:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
-.btn-group > .btn.btn-sm:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.btn-group > .btn { border-radius: 0; margin-inline-start: -1px; }
+.btn-group > .btn:first-child { border-start-start-radius: var(--radius); border-end-start-radius: var(--radius); margin-inline-start: 0; }
+.btn-group > .btn:last-child { border-start-end-radius: var(--radius); border-end-end-radius: var(--radius); }
+.btn-group > .btn.btn-sm:first-child { border-start-start-radius: var(--radius-sm); border-end-start-radius: var(--radius-sm); }
+.btn-group > .btn.btn-sm:last-child { border-start-end-radius: var(--radius-sm); border-end-end-radius: var(--radius-sm); }
 
 /* ---------- Forms ---------- */
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -58,13 +58,13 @@
 .input-sm, .select-sm { height: 30px; font-size: 12.5px; padding: 0 9px; border-radius: var(--radius-sm); }
 .textarea { height: auto; min-height: 84px; padding: 9px 11px; line-height: 1.5; resize: vertical; }
 .select {
-  appearance: none; padding-right: 30px; cursor: pointer;
+  appearance: none; padding-inline-end: 30px; cursor: pointer;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 9px center; background-size: 15px;
 }
 .input-group { position: relative; display: flex; align-items: center; }
-.input-group > .icon { position: absolute; left: 10px; color: var(--faint); pointer-events: none; }
-.input-group > .input { padding-left: 33px; }
+.input-group > .icon { position: absolute; inset-inline-start: 10px; color: var(--faint); pointer-events: none; }
+.input-group > .input { padding-inline-start: 33px; }
 .input-color {
   width: 36px; height: 30px; padding: 2px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
   background: var(--surface); cursor: pointer;
@@ -75,7 +75,7 @@
 .switch { position: relative; display: inline-flex; align-items: center; gap: 9px; cursor: pointer; font-size: 13.5px; user-select: none; }
 .switch input { position: absolute; opacity: 0; pointer-events: none; }
 .switch .track { width: 32px; height: 18px; border-radius: 10px; background: var(--border-strong); position: relative; transition: background .15s; flex: none; }
-.switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-sm); transition: transform .15s var(--ease); }
+.switch .track::after { content: ""; position: absolute; top: 2px; inset-inline-start: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-sm); transition: transform .15s var(--ease); }
 .switch input:checked + .track { background: var(--primary); }
 .switch input:checked + .track::after { transform: translateX(14px); }
 .switch input:focus-visible + .track { box-shadow: var(--ring); }
@@ -144,7 +144,7 @@
 /* ---------- Data table (app UI, not documents) ---------- */
 .data-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
 .data-table th {
-  text-align: left; font-weight: 600; font-size: 12px; color: var(--muted);
+  text-align: start; font-weight: 600; font-size: 12px; color: var(--muted);
   padding: 10px 16px; background: var(--surface-2); border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 1;
 }
@@ -180,7 +180,7 @@
 .modal-header p { color: var(--muted); font-size: 13px; margin-top: 3px; }
 .modal-body { padding: 8px 20px 20px; overflow: auto; }
 .modal-footer { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--surface-2); border-radius: 0 0 var(--radius-xl) var(--radius-xl); }
-.modal-footer .left { margin-right: auto; display: flex; gap: 8px; align-items: center; }
+.modal-footer .left { margin-inline-end: auto; display: flex; gap: 8px; align-items: center; }
 @media (max-width: 560px) {
   .modal .form-grid { grid-template-columns: 1fr !important; }
   .modal-root { padding: 12px; }
@@ -199,11 +199,11 @@
 .menu-item {
   display: flex; align-items: center; gap: 9px; width: 100%;
   height: 32px; padding: 0 9px; border: 0; border-radius: var(--radius-sm);
-  background: transparent; color: var(--text-2); font-size: 13px; text-align: left;
+  background: transparent; color: var(--text-2); font-size: 13px; text-align: start;
 }
 .menu-item:hover, .menu-item.focused { background: var(--surface-hover); color: var(--text); }
 .menu-item .icon { color: var(--muted); }
-.menu-item .shortcut { margin-left: auto; color: var(--faint); font-size: 11.5px; }
+.menu-item .shortcut { margin-inline-start: auto; color: var(--faint); font-size: 11.5px; }
 .menu-item.danger { color: var(--danger); }
 .menu-item.danger .icon { color: var(--danger); }
 .menu-item:disabled { opacity: .45; }
@@ -212,7 +212,7 @@
 @keyframes menu-in { from { opacity: 0; transform: translateY(-4px); } }
 
 /* ---------- Toasts ---------- */
-.toast-stack { position: fixed; bottom: 20px; right: 20px; z-index: 300; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
+.toast-stack { position: fixed; bottom: 20px; inset-inline-end: 20px; z-index: 300; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
 .toast {
   pointer-events: auto; display: flex; align-items: flex-start; gap: 10px;
   min-width: 260px; max-width: 420px; padding: 11px 12px 11px 14px;
@@ -238,7 +238,7 @@
   background: #101828; color: #fff; font-size: 12px; font-weight: 500; line-height: 1.35;
   box-shadow: var(--shadow-md); animation: fade-in .1s ease;
 }
-.tooltip kbd { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.18); color: #fff; height: 17px; min-width: 17px; font-size: 10.5px; margin-left: 4px; }
+.tooltip kbd { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.18); color: #fff; height: 17px; min-width: 17px; font-size: 10.5px; margin-inline-start: 4px; }
 
 /* ---------- Tabs ---------- */
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
@@ -265,7 +265,7 @@
 .palette-item .pi-icon { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--bg-subtle); color: var(--muted); flex: none; }
 .palette-item .pi-title { font-size: 13.5px; font-weight: 550; color: var(--text); }
 .palette-item .pi-sub { font-size: 12px; color: var(--muted); }
-.palette-item .pi-hint { margin-left: auto; font-size: 11.5px; color: var(--faint); }
+.palette-item .pi-hint { margin-inline-start: auto; font-size: 11.5px; color: var(--faint); }
 .palette-item.active { background: var(--primary-soft); }
 .palette-item.active .pi-icon { background: var(--primary-soft-2); color: var(--primary); }
 .palette-item mark, .search-hit mark { background: transparent; color: var(--primary); font-weight: 650; }
@@ -310,3 +310,10 @@
 
 .highlight-flash { animation: flash 1.6s ease; }
 @keyframes flash { 0%, 40% { box-shadow: 0 0 0 3px var(--primary); } 100% { box-shadow: 0 0 0 3px transparent; } }
+
+/* ---------- Right-to-left (Arabic) ---------- */
+[dir="rtl"] .select { background-position: left 9px center; }
+[dir="rtl"] .switch input:checked + .track::after { transform: translateX(-14px); }
+[dir="rtl"] .rtl-flip { transform: scaleX(-1); }
+/* Diagrams, thumbnails and document pages keep left-to-right geometry. */
+.thumb, .ed-canvas, .ed-lib-thumb, .new-fig-preview { direction: ltr; }

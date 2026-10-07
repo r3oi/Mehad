@@ -15,7 +15,7 @@
   grid-area: sidebar;
   display: flex; flex-direction: column;
   background: var(--surface);
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   min-height: 0;
   z-index: 30;
 }
@@ -39,7 +39,7 @@
   margin: 12px 12px 4px; padding: 8px 10px;
   display: flex; align-items: center; gap: 10px;
   border: 1px solid var(--border); border-radius: var(--radius);
-  background: var(--surface-2); cursor: pointer; text-align: left; width: calc(100% - 24px);
+  background: var(--surface-2); cursor: pointer; text-align: start; width: calc(100% - 24px);
   transition: border-color .15s, background .15s;
 }
 .project-switcher:hover { border-color: var(--border-strong); background: var(--surface-hover); }
@@ -70,7 +70,7 @@
 .nav-item.active { background: var(--primary-soft); color: var(--primary-text); }
 .nav-item.active .icon { color: var(--primary); }
 .nav-item .count {
-  margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--muted);
+  margin-inline-start: auto; font-size: 11.5px; font-weight: 600; color: var(--muted);
   background: var(--bg-subtle); padding: 0 7px; border-radius: 10px; line-height: 18px;
 }
 .nav-item.active .count { background: var(--primary-soft-2); color: var(--primary-text); }
@@ -108,7 +108,7 @@
   transition: border-color .15s, background .15s;
 }
 .search-trigger:hover { border-color: var(--border-strong); background: var(--surface); }
-.search-trigger .kbds { margin-left: auto; display: flex; gap: 3px; }
+.search-trigger .kbds { margin-inline-start: auto; display: flex; gap: 3px; }
 
 .save-indicator {
   display: inline-flex; align-items: center; gap: 6px;
@@ -144,6 +144,7 @@
     position: fixed; inset: 0 auto 0 0; width: min(var(--sidebar-w), 84vw);
     transform: translateX(-102%); transition: transform .22s var(--ease); box-shadow: var(--shadow-xl);
   }
+  [dir="rtl"] .sidebar { transform: translateX(102%); }
   .app.nav-open .sidebar { transform: none; }
   .app.nav-open .sidebar-backdrop { display: block; position: fixed; inset: 0; background: rgba(15, 18, 25, .4); z-index: 25; }
   .topbar .menu-toggle { display: inline-flex; }

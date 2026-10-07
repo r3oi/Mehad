@@ -21,7 +21,7 @@
 .exp-head-text { flex: 1 1 220px; min-width: 0; }
 .exp-head-text h2 { font-size: 15px; }
 .exp-head-text p { margin-top: 2px; font-size: 13px; font-weight: 400; color: var(--muted); line-height: 1.45; }
-.exp-head-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.exp-head-actions { margin-inline-start: auto; display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Featured package card */
 .exp-featured {
@@ -65,7 +65,7 @@
 .exp-includes b { display: block; font-size: 13.5px; font-weight: 600; font-family: var(--font-mono); letter-spacing: -0.01em; }
 .exp-includes li > div > span { display: block; margin-top: 1px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
 .exp-count {
-  display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 10px;
+  display: inline-block; margin-inline-start: 4px; padding: 0 7px; border-radius: 10px;
   font-family: var(--font-ui); font-size: 11.5px; font-weight: 650; line-height: 18px;
   color: var(--primary-text); background: var(--primary-soft-2); vertical-align: 1px;
 }
@@ -89,7 +89,7 @@
 .exp-row-main { flex: 1 1 240px; min-width: 0; }
 .exp-row .title { font-size: 14px; }
 .exp-row .meta { margin-top: 3px; min-width: 0; row-gap: 2px; }
-.exp-actions { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; opacity: 1 !important; }
+.exp-actions { margin-inline-start: auto; flex-wrap: wrap; justify-content: flex-end; opacity: 1 !important; }
 
 .exp-empty { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 22px 18px; }
 .exp-empty > div:nth-child(2) { flex: 1 1 240px; }
@@ -122,7 +122,7 @@
   .exp-stats { display: none; }
   .exp-rows .list-item { padding: 14px; gap: 12px; }
   .exp-thumb { width: 72px; height: 50px; }
-  .exp-actions { margin-left: 0; width: 100%; justify-content: flex-start; }
-  .exp-head-actions { margin-left: 0; width: 100%; }
+  .exp-actions { margin-inline-start: 0; width: 100%; justify-content: flex-start; }
+  .exp-head-actions { margin-inline-start: 0; width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .btn.is-busy::after { animation-duration: 1.6s; } }

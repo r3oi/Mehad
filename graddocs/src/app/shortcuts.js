@@ -4,6 +4,7 @@
 import { modKey, modLabel, isTypingTarget } from '../core/utils.js';
 import { openModal, hasOpenModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { t } from '../i18n/index.js';
 
 export function installGlobalShortcuts(shell) {
   document.addEventListener('keydown', async (e) => {
@@ -19,7 +20,7 @@ export function installGlobalShortcuts(shell) {
       e.preventDefault();
       if (!shell.store.project) return;
       await shell.store.flush();
-      toast('All changes saved', { type: 'success', duration: 1600 });
+      toast(t('All changes saved'), { type: 'success', duration: 1600 });
       return;
     }
     if (e.key === '?' && !isTypingTarget(e.target) && !hasOpenModal()) {
@@ -37,7 +38,7 @@ const GROUPS = [
   ]],
   ['Figure editor', [
     [[modLabel, 'Z'], 'Undo'],
-    [[modLabel, 'Y'], 'Redo (also ⇧+' + modLabel + '+Z)'],
+    [[modLabel, 'Y'], 'Redo (also ⇧+{mod}+Z)'],
     [['Delete'], 'Delete selected elements'],
     [[modLabel, 'D'], 'Duplicate selection'],
     [[modLabel, 'C'], 'Copy'], [[modLabel, 'V'], 'Paste'],
@@ -61,11 +62,11 @@ const GROUPS = [
 
 export function showShortcutsHelp() {
   openModal({
-    title: 'Keyboard shortcuts', size: 'lg', footer: false,
+    title: t('Keyboard shortcuts'), size: 'lg', footer: false,
     body: `<div class="grid grid-2" style="gap:24px">${GROUPS.map(([title, rows]) => `
-      <div><div class="section-title">${title}</div>
+      <div><div class="section-title">${t(title)}</div>
         <div class="col" style="gap:7px">${rows.map(([keys, label]) => `
-          <div class="row" style="justify-content:space-between;font-size:13px"><span>${label}</span><span class="row" style="gap:3px">${keys.map((k) => `<kbd>${k}</kbd>`).join('')}</span></div>`).join('')}
+          <div class="row" style="justify-content:space-between;font-size:13px"><span>${t(label, { mod: modLabel })}</span><span class="row" style="gap:3px" dir="ltr">${keys.map((k) => `<kbd>${t(k)}</kbd>`).join('')}</span></div>`).join('')}
         </div></div>`).join('')}</div>`,
   });
 }

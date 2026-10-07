@@ -8,6 +8,7 @@ import { closeMenu, openMenu } from '../ui/menu.js';
 import { closeAllModals } from '../ui/modal.js';
 import { formatBytes, relativeTime, modLabel } from '../core/utils.js';
 import { prefs } from './prefs.js';
+import { t, lang, setLanguage } from '../i18n/index.js';
 
 export class Shell {
   constructor(root, store) {
@@ -21,17 +22,18 @@ export class Shell {
   start() {
     this.root.innerHTML = `
       <div class="app no-project" id="app">
-        <aside class="sidebar" aria-label="Main navigation"></aside>
+        <aside class="sidebar" aria-label="${t('Main navigation')}"></aside>
         <div class="sidebar-backdrop" data-action="close-nav"></div>
         <header class="topbar">
-          <button class="btn btn-ghost btn-icon menu-toggle" data-action="toggle-nav" aria-label="Open navigation">${icon('menu')}</button>
-          <nav class="breadcrumbs grow" aria-label="Breadcrumb"></nav>
-          <button class="search-trigger" data-action="palette" aria-label="Search and commands">
-            ${icon('search')}<span class="label">Search or jump to…</span>
+          <button class="btn btn-ghost btn-icon menu-toggle" data-action="toggle-nav" aria-label="${t('Open navigation')}">${icon('menu')}</button>
+          <nav class="breadcrumbs grow" aria-label="${t('Breadcrumb')}"></nav>
+          <button class="search-trigger" data-action="palette" aria-label="${t('Search and commands')}">
+            ${icon('search')}<span class="label">${t('Search or jump to…')}</span>
             <span class="kbds"><kbd>${modLabel}</kbd><kbd>K</kbd></span>
           </button>
           <span class="save-indicator" aria-live="polite"></span>
-          <button class="btn btn-ghost btn-icon" data-action="theme" data-tip="Toggle theme" aria-label="Toggle theme">${icon('moon')}</button>
+          <button class="btn btn-ghost btn-sm lang-toggle" data-action="language" data-tip="${lang === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}" aria-label="${lang === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}" lang="${lang === 'ar' ? 'en' : 'ar'}">${lang === 'ar' ? 'EN' : 'عربي'}</button>
+          <button class="btn btn-ghost btn-icon" data-action="theme" data-tip="${t('Toggle theme')}" aria-label="${t('Toggle theme')}">${icon('moon')}</button>
         </header>
         <main class="main" id="main" tabindex="-1"></main>
       </div>`;
@@ -50,8 +52,8 @@ export class Shell {
     this.store.on('status', () => this.#renderSaveStatus());
     this.store.on('project', () => this.#renderSaveStatus());
     this.store.on('save-error', (err) => toast(err.message, {
-      type: 'error', title: 'Changes could not be saved', duration: 9000,
-      action: err.code === 'QUOTA_EXCEEDED' ? { label: 'Open storage settings', onClick: () => this.navigate(href(this.store.project.id, 'settings', null, { tab: 'storage' })) } : null,
+      type: 'error', title: t('Changes could not be saved'), duration: 9000,
+      action: err.code === 'QUOTA_EXCEEDED' ? { label: t('Open storage settings'), onClick: () => this.navigate(href(this.store.project.id, 'settings', null, { tab: 'storage' })) } : null,
     }));
     setInterval(() => this.#renderSaveStatus(), 30000);
     this.#renderThemeButton();
@@ -69,7 +71,7 @@ export class Shell {
   setBreadcrumbs(crumbs) {
     this.crumbs = crumbs;
     const project = this.store.project;
-    const base = project && this.viewName !== 'projects' ? [{ label: 'Projects', href: '#/projects', hideSm: true }, { label: project.name, href: href(project.id, 'dashboard') }] : [];
+    const base = project && this.viewName !== 'projects' ? [{ label: t('Projects'), href: '#/projects', hideSm: true }, { label: project.name, href: href(project.id, 'dashboard') }] : [];
     const all = [...base, ...crumbs];
     this.breadcrumbsEl.innerHTML = all.map((c, i) => {
       const last = i === all.length - 1;
@@ -94,7 +96,7 @@ export class Shell {
         await this.store.flush();
       }
     } catch (err) {
-      toastError(err, 'Could not open project');
+      toastError(err, t('Could not open project'));
       this.navigate('#/projects', { replace: true });
       return;
     }
@@ -105,7 +107,7 @@ export class Shell {
     try { mod = (await loader()).default; } catch (err) {
       console.error(err);
       this.#unmountCurrent();
-      this.main.innerHTML = `<div class="page"><div class="empty-state"><div class="empty-icon">${icon('alert')}</div><h3>This page failed to load</h3><p>${esc(err.message)}</p></div></div>`;
+      this.main.innerHTML = `<div class="page"><div class="empty-state"><div class="empty-icon">${icon('alert')}</div><h3>${t('This page failed to load')}</h3><p>${esc(err.message)}</p></div></div>`;
       return;
     }
     if (token !== this.navToken) return;
@@ -117,8 +119,9 @@ export class Shell {
     this.main.innerHTML = '';
     this.main.scrollTop = 0;
     this.crumbs = [];
-    this.setBreadcrumbs(mod.title ? [{ label: typeof mod.title === 'function' ? mod.title() : mod.title }] : []);
-    document.title = `${mod.title ? `${typeof mod.title === 'function' ? mod.title() : mod.title} · ` : ''}${this.store.project ? `${this.store.project.name} · ` : ''}GradDocs`;
+    const viewTitle = mod.title ? t(typeof mod.title === 'function' ? mod.title() : mod.title) : '';
+    this.setBreadcrumbs(viewTitle ? [{ label: viewTitle }] : []);
+    document.title = `${viewTitle ? `${viewTitle} · ` : ''}${this.store.project ? `${this.store.project.name} · ` : ''}GradDocs`;
     this.#renderSidebar(parsed.section);
     const ctx = {
       store: this.store,
@@ -133,7 +136,7 @@ export class Shell {
       instance = (await mod.mount(this.main, ctx)) || {};
     } catch (err) {
       console.error(err);
-      this.main.innerHTML = `<div class="page"><div class="empty-state"><div class="empty-icon">${icon('alert')}</div><h3>Something went wrong</h3><p>${esc(err.message)}</p></div></div>`;
+      this.main.innerHTML = `<div class="page"><div class="empty-state"><div class="empty-icon">${icon('alert')}</div><h3>${t('Something went wrong')}</h3><p>${esc(err.message)}</p></div></div>`;
       instance = {};
     }
     this.current = { key, view: parsed.view, section: parsed.section, instance };
@@ -153,27 +156,27 @@ export class Shell {
     this.sidebar.innerHTML = `
       <div class="sidebar-brand">
         <div class="brand-mark">${icon('graduation')}</div>
-        <div><div class="brand-name">GradDocs</div><div class="brand-sub">Documentation Builder</div></div>
+        <div><div class="brand-name">GradDocs</div><div class="brand-sub">${t('Documentation Builder')}</div></div>
       </div>
-      <button class="project-switcher" data-action="switch-project" aria-label="Switch project">
+      <button class="project-switcher" data-action="switch-project" aria-label="${t('Switch project')}">
         <span class="project-avatar">${esc(initials || 'P')}</span>
-        <span class="grow"><div class="name truncate">${esc(project.name)}</div><div class="sub truncate">${esc(project.type || 'Graduation Project')}</div></span>
+        <span class="grow"><div class="name truncate">${esc(project.name)}</div><div class="sub truncate">${esc(project.type || t('Graduation Project'))}</div></span>
         ${icon('chevronDown', 'icon-sm')}
       </button>
       <nav class="nav">
         ${NAV.map((group) => `
           <div class="nav-section">
-            <div class="nav-label">${esc(group.group)}</div>
+            <div class="nav-label">${esc(t(group.group))}</div>
             ${group.items.map((item) => `
               <a class="nav-item ${section === item.id ? 'active' : ''}" href="${href(project.id, item.id)}" ${section === item.id ? 'aria-current="page"' : ''}>
-                ${icon(item.icon)}<span>${esc(item.label)}</span>
+                ${icon(item.icon)}<span>${esc(t(item.label))}</span>
                 ${item.count ? `<span class="count">${item.count(project)}</span>` : ''}
               </a>`).join('')}
           </div>`).join('')}
       </nav>
       <div class="sidebar-footer">
-        <div class="storage-meter" data-storage-meter>Storage: ${esc(this.store.repo.engine)}</div>
-        <button class="btn btn-ghost btn-icon btn-sm" data-action="shortcuts" data-tip="Keyboard shortcuts" aria-label="Keyboard shortcuts">${icon('keyboard')}</button>
+        <div class="storage-meter" data-storage-meter>${esc(this.store.repo.engine)}</div>
+        <button class="btn btn-ghost btn-icon btn-sm" data-action="shortcuts" data-tip="${t('Keyboard shortcuts')}" aria-label="${t('Keyboard shortcuts')}">${icon('keyboard')}</button>
       </div>`;
     this.#renderStorageMeter();
   }
@@ -184,7 +187,7 @@ export class Shell {
     try {
       const { used, quota } = await this.store.repo.usage();
       const pct = quota ? Math.min(100, (used / quota) * 100) : 0;
-      el.innerHTML = `<div class="row"><span class="grow truncate">${this.store.repo.engine === 'indexedDB' ? 'IndexedDB' : 'Local storage'}</span><span>${formatBytes(used)}</span></div>
+      el.innerHTML = `<div class="row"><span class="grow truncate">${this.store.repo.engine === 'indexedDB' ? 'IndexedDB' : t('Local storage')}</span><span>${formatBytes(used)}</span></div>
         <div class="bar"><span style="width:${Math.max(2, pct).toFixed(1)}%;${pct > 80 ? 'background:var(--danger)' : ''}"></span></div>`;
     } catch { /* ignore */ }
   }
@@ -194,10 +197,10 @@ export class Shell {
     const el = this.saveEl;
     if (!this.store.project) { el.innerHTML = ''; el.className = 'save-indicator'; return; }
     el.className = `save-indicator ${status}`;
-    if (status === 'saving') el.innerHTML = '<span class="dot"></span>Saving…';
-    else if (status === 'error') el.innerHTML = `<span class="dot"></span>Not saved`;
-    else el.innerHTML = `${icon('check', 'icon-sm')}<span>Saved</span>`;
-    el.title = lastSavedAt ? `Last saved ${relativeTime(lastSavedAt)}` : 'All changes are saved in this browser';
+    if (status === 'saving') el.innerHTML = `<span class="dot"></span>${t('Saving…')}`;
+    else if (status === 'error') el.innerHTML = `<span class="dot"></span>${t('Not saved')}`;
+    else el.innerHTML = `${icon('check', 'icon-sm')}<span>${t('Saved')}</span>`;
+    el.title = lastSavedAt ? t('Last saved {time}', { time: relativeTime(lastSavedAt) }) : t('All changes are saved in this browser');
   }
 
   #renderThemeButton() {
@@ -220,6 +223,7 @@ export class Shell {
     if (action === 'toggle-nav') this.app.classList.toggle('nav-open');
     else if (action === 'close-nav') this.app.classList.remove('nav-open');
     else if (action === 'theme') this.toggleTheme();
+    else if (action === 'language') { await this.store.flush(); setLanguage(lang === 'ar' ? 'en' : 'ar'); }
     else if (action === 'palette') (await import('./command-palette.js')).openPalette(this);
     else if (action === 'shortcuts') (await import('./shortcuts.js')).showShortcutsHelp();
     else if (action === 'switch-project') {
@@ -227,7 +231,7 @@ export class Shell {
         label: p.name, icon: p.id === this.store.project?.id ? 'check' : 'folder',
         onClick: () => this.navigate(href(p.id, 'dashboard')),
       }));
-      openMenu(el, [{ heading: 'Switch project' }, ...items, '-', { label: 'All projects', icon: 'folderOpen', onClick: () => this.navigate('#/projects') }, { label: 'New project…', icon: 'plus', onClick: () => this.navigate('#/projects?new=1') }]);
+      openMenu(el, [{ heading: t('Switch project') }, ...items, '-', { label: t('All projects'), icon: 'folderOpen', onClick: () => this.navigate('#/projects') }, { label: t('New project…'), icon: 'plus', onClick: () => this.navigate('#/projects?new=1') }]);
     }
   }
 }

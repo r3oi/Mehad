@@ -8,10 +8,10 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
   <script>
     // Apply the saved theme before first paint to avoid a flash.
-    try { var t = JSON.parse(localStorage.getItem('graddocs:prefs') || '{}').theme; if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; } catch (e) {}
+    try { var p = JSON.parse(localStorage.getItem('graddocs:prefs') || '{}'); if (p.theme === 'dark' || p.theme === 'light') document.documentElement.dataset.theme = p.theme; if (p.lang === 'ar') { document.documentElement.lang = 'ar'; document.documentElement.dir = 'rtl'; } } catch (e) {}
   </script>
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/base.css">

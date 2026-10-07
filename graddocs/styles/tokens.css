@@ -1,7 +1,7 @@
 /* Design tokens. Light theme is the default; dark theme follows the OS
    unless the user picks one explicitly (html[data-theme]). */
 :root {
-  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-ui: "Inter", "IBM Plex Sans Arabic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-doc: "Times New Roman", Times, "Liberation Serif", serif;
 

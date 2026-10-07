@@ -1,6 +1,7 @@
 // Modal dialogs: generic modal, confirm, prompt and declarative form dialogs.
 import { esc, focusFirst } from './dom.js';
 import { icon } from './icons.js';
+import { t } from '../i18n/index.js';
 
 const stack = [];
 
@@ -16,7 +17,7 @@ export function openModal({ title = '', subtitle = '', size = '', body = '', foo
     <div class="modal ${size ? `modal-${size}` : ''} ${className}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
       ${title ? `<div class="modal-header">
         <div class="titles"><h2>${esc(title)}</h2>${subtitle ? `<p>${esc(subtitle)}</p>` : ''}</div>
-        <button class="btn btn-ghost btn-icon btn-sm" data-close aria-label="Close">${icon('x')}</button>
+        <button class="btn btn-ghost btn-icon btn-sm" data-close aria-label="${t('Close')}">${icon('x')}</button>
       </div>` : ''}
       <div class="modal-body"></div>
       ${footer === false ? '' : '<div class="modal-footer"></div>'}
@@ -73,7 +74,7 @@ export const hasOpenModal = () => stack.length > 0;
 /** Close every open dialog (used when the route changes). */
 export function closeAllModals() { [...stack].reverse().forEach((m) => m.close()); }
 
-export function confirmDialog({ title = 'Are you sure?', message = '', confirmText = 'Confirm', cancelText = 'Cancel', danger = false } = {}) {
+export function confirmDialog({ title = t('Are you sure?'), message = '', confirmText = t('Confirm'), cancelText = t('Cancel'), danger = false } = {}) {
   return new Promise((resolve) => {
     let result = false;
     const modal = openModal({
@@ -87,7 +88,7 @@ export function confirmDialog({ title = 'Are you sure?', message = '', confirmTe
   });
 }
 
-export function promptDialog({ title, label = '', value = '', placeholder = '', submitText = 'Save', validate } = {}) {
+export function promptDialog({ title, label = '', value = '', placeholder = '', submitText = t('Save'), validate } = {}) {
   return formDialog({
     title, submitText,
     fields: [{ name: 'value', label, value, placeholder, required: true }],
@@ -99,7 +100,7 @@ export function promptDialog({ title, label = '', value = '', placeholder = '', 
  * Declarative form dialog. fields: [{ name, label, type, value, options, required, placeholder, hint, rows, span }]
  * Resolves with an object of values, or null when cancelled.
  */
-export function formDialog({ title, subtitle = '', fields = [], submitText = 'Save', size = '', validate, extraFooter = '' } = {}) {
+export function formDialog({ title, subtitle = '', fields = [], submitText = t('Save'), size = '', validate, extraFooter = '' } = {}) {
   return new Promise((resolve) => {
     let result = null;
     const fieldHTML = (f) => {
@@ -123,7 +124,7 @@ export function formDialog({ title, subtitle = '', fields = [], submitText = 'Sa
     const modal = openModal({
       title, subtitle, size,
       body: `<form class="form-grid" novalidate style="grid-template-columns:${fields.length > 3 ? 'repeat(2, minmax(0,1fr))' : '1fr'}">${fields.map(fieldHTML).join('')}<button type="submit" hidden></button></form>`,
-      footer: `<div class="left">${extraFooter}</div><button class="btn" data-close>Cancel</button><button class="btn btn-primary" data-submit>${esc(submitText)}</button>`,
+      footer: `<div class="left">${extraFooter}</div><button class="btn" data-close>${t('Cancel')}</button><button class="btn btn-primary" data-submit>${esc(submitText)}</button>`,
       onClose: () => resolve(result),
     });
     const form = modal.$('form');
@@ -131,7 +132,7 @@ export function formDialog({ title, subtitle = '', fields = [], submitText = 'Sa
     const submit = () => {
       const values = collect();
       const errors = {};
-      for (const f of fields) if (f.required && !values[f.name]) errors[f.name] = `${f.label || f.name} is required.`;
+      for (const f of fields) if (f.required && !values[f.name]) errors[f.name] = t('{label} is required.', { label: f.label || f.name });
       Object.assign(errors, validate?.(values) || {});
       form.querySelectorAll('[data-error]').forEach((el) => { el.textContent = errors[el.dataset.error] || ''; });
       form.querySelectorAll('.input, .textarea').forEach((el) => el.classList.toggle('invalid', !!errors[el.name]));

@@ -1,6 +1,7 @@
 // Toast notifications. toast('Saved', { type: 'success', action: { label, onClick } })
 import { esc } from './dom.js';
 import { icon } from './icons.js';
+import { t } from '../i18n/index.js';
 
 let stackEl = null;
 const ICONS = { success: 'checkCircle', error: 'alert', warning: 'alert', info: 'info' };
@@ -18,7 +19,7 @@ export function toast(message, { type = 'info', title = '', duration = 3600, act
   el.innerHTML = `${icon(ICONS[type] || 'info')}
     <div class="msg">${title ? `<strong>${esc(title)}</strong>` : ''}${esc(message)}</div>
     ${action ? `<button class="toast-action">${esc(action.label)}</button>` : ''}
-    <button class="toast-close" aria-label="Dismiss">${icon('x', 'icon-sm')}</button>`;
+    <button class="toast-close" aria-label="${t('Dismiss notification')}">${icon('x', 'icon-sm')}</button>`;
   const remove = () => {
     if (!el.isConnected) return;
     el.classList.add('leaving');
@@ -31,7 +32,7 @@ export function toast(message, { type = 'info', title = '', duration = 3600, act
   return remove;
 }
 
-export const toastError = (err, fallback = 'Something went wrong') => {
+export const toastError = (err, fallback = t('Something went wrong')) => {
   console.error(err);
   toast(err?.message || String(err || fallback), { type: 'error', title: fallback, duration: 6000 });
 };

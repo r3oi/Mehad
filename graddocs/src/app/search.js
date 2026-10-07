@@ -4,6 +4,7 @@ import { getNumbering } from '../core/numbering.js';
 import { resolveText } from '../core/references.js';
 import { walkSections } from '../core/model.js';
 import { href } from './routes.js';
+import { t } from '../i18n/index.js';
 
 function snippet(text, query, radius = 38) {
   const idx = text.toLowerCase().indexOf(query.toLowerCase());
@@ -51,12 +52,12 @@ export function searchProject(project, query, { limit = 40 } = {}) {
       [[tab.title, 10], [info?.label, 6], [info?.code, 6], [tab.description, 3], [cells, 2]]);
   }
   for (const a of project.acronyms) {
-    push({ kind: 'acronym', id: a.id, title: `${a.acronym} — ${a.meaning}`, sub: 'Acronym', href: href(project.id, 'acronyms', null, { focus: a.id }) },
+    push({ kind: 'acronym', id: a.id, title: `${a.acronym} — ${a.meaning}`, sub: t('Acronym'), href: href(project.id, 'acronyms', null, { focus: a.id }) },
       [[a.acronym, 10], [a.meaning, 7], [a.description, 2]]);
   }
   for (const ch of project.chapters) {
     const info = n.chapters.get(ch.id);
-    push({ kind: 'chapter', id: ch.id, title: `${info.label}: ${ch.title}`, sub: 'Chapter', href: href(project.id, 'chapters', null, { focus: ch.id }) },
+    push({ kind: 'chapter', id: ch.id, title: `${info.label}: ${ch.title}`, sub: t('Chapter'), href: href(project.id, 'chapters', null, { focus: ch.id }) },
       [[ch.title, 9], [info.label, 5], [resolveText(project, ch.body), 2]]);
   }
   walkSections(project, (sec) => {
@@ -66,7 +67,7 @@ export function searchProject(project, query, { limit = 40 } = {}) {
       [[sec.title, 8], [info.number, 5], [`Section ${info.number}`, 4], [resolveText(project, sec.body), 2]]);
   });
   for (const fm of project.frontMatter) {
-    push({ kind: 'front', id: fm.id, title: fm.title, sub: 'Front matter', href: href(project.id, 'structure', null, { focus: fm.id }) },
+    push({ kind: 'front', id: fm.id, title: fm.title, sub: t('Front matter'), href: href(project.id, 'structure', null, { focus: fm.id }) },
       [[fm.title, 6], [fm.body, 2]]);
   }
 

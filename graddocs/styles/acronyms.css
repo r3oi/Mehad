@@ -2,7 +2,7 @@
    Acronyms & Abbreviations
    ========================================================================= */
 .acr-page { max-width: 1100px; }
-.acr-count { margin-left: 6px; height: 22px; font-size: 12.5px; vertical-align: middle; font-variant-numeric: tabular-nums; }
+.acr-count { margin-inline-start: 6px; height: 22px; font-size: 12.5px; vertical-align: middle; font-variant-numeric: tabular-nums; }
 .acr-toolbar .input-group { max-width: 420px; }
 .acr-result { font-size: 12.5px; }
 
@@ -18,9 +18,9 @@
 .acr-table th { position: static; }
 .acr-table td.acr-meaning { font-weight: 500; }
 .acr-table td.acr-desc { max-width: 360px; color: var(--muted); overflow-wrap: anywhere; }
-.acr-table .acr-used-col, .acr-table td.acr-used { white-space: nowrap; text-align: right; width: 84px; font-variant-numeric: tabular-nums; }
+.acr-table .acr-used-col, .acr-table td.acr-used { white-space: nowrap; text-align: end; width: 84px; font-variant-numeric: tabular-nums; }
 .acr-table td.acr-used { color: var(--text-2); font-weight: 550; }
-.acr-table .acr-actions-col, .acr-table td.acr-actions { width: 84px; text-align: right; white-space: nowrap; }
+.acr-table .acr-actions-col, .acr-table td.acr-actions { width: 84px; text-align: end; white-space: nowrap; }
 .acr-actions .btn { opacity: .65; }
 .acr-table tr:hover .acr-actions .btn, .acr-actions .btn:focus-visible { opacity: 1; }
 .acr-del:hover { color: var(--danger); background: var(--danger-soft); }
@@ -73,14 +73,14 @@
     padding: 12px 14px; border-bottom: 1px solid var(--border);
   }
   .acr-table tr:last-child { border-bottom: 0; }
-  .acr-table td { display: block; padding: 0; border: 0; width: auto; max-width: none; text-align: left; }
+  .acr-table td { display: block; padding: 0; border: 0; width: auto; max-width: none; text-align: start; }
   .acr-table tbody tr:hover td { background: transparent; }
   .acr-table tbody tr:hover { background: var(--surface-2); }
   .acr-table td[data-label="Acronym"] { grid-area: a; }
   .acr-table td.acr-meaning { grid-area: m; }
   .acr-table td.acr-desc { grid-area: d; font-size: 13px; }
   .acr-table td.acr-desc:has(> .faint) { display: none; }
-  .acr-table td.acr-used { grid-area: u; font-size: 12.5px; text-align: left; width: auto; }
+  .acr-table td.acr-used { grid-area: u; font-size: 12.5px; text-align: start; width: auto; }
   .acr-table td.acr-used::before { content: "Used: "; color: var(--muted); font-weight: 400; }
   .acr-table td.acr-actions { grid-area: x; align-self: start; }
   .acr-actions .btn { opacity: 1; }

@@ -162,4 +162,17 @@ test('normalizeProject repairs partial imports', () => {
   assert.equal(p.settings.captions.figure.label, 'Figure');
 });
 
+console.log('translations');
+const { AR } = await import('../src/i18n/ar/index.js');
+test('every Arabic translation keeps the English placeholders', () => {
+  const ph = (s) => [...String(s).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',');
+  const bad = Object.entries(AR).filter(([en, ar]) => typeof ar !== 'string' || !ar.trim() || ph(en) !== ph(ar));
+  assert.deepEqual(bad.map(([en]) => en), []);
+});
+const { t } = await import('../src/i18n/index.js');
+test('t() falls back to English and fills placeholders', () => {
+  assert.equal(t('Last saved {time}', { time: 'now' }), 'Last saved now');
+  assert.equal(t('No such key'), 'No such key');
+});
+
 console.log(`\n${passed} passed${process.exitCode ? ', some FAILED' : ''}`);

@@ -1,6 +1,7 @@
 // Data model: factories, defaults and normalisation for every entity.
 // Numbers (Figure 3, Table 2, 1.4.2 …) are never stored; see numbering.js.
 import { uid, clone } from './utils.js';
+import { t } from '../i18n/index.js';
 
 export const SCHEMA_VERSION = 1;
 
@@ -16,10 +17,10 @@ export const FRONT_MATTER_KINDS = {
 };
 
 export const SECTION_STATUSES = [
-  { value: 'todo', label: 'Not started', weight: 0 },
-  { value: 'draft', label: 'Draft', weight: 0.4 },
-  { value: 'review', label: 'In review', weight: 0.75 },
-  { value: 'done', label: 'Done', weight: 1 },
+  { value: 'todo', label: t('Not started'), weight: 0 },
+  { value: 'draft', label: t('Draft'), weight: 0.4 },
+  { value: 'review', label: t('In review'), weight: 0.75 },
+  { value: 'done', label: t('Done'), weight: 1 },
 ];
 
 export const DEFAULT_SETTINGS = {

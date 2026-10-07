@@ -2,6 +2,7 @@
 // Figure N / Table N labels and FIG-00N codes are recomputed from document
 // order whenever the project changes, so references never go stale.
 import { pad } from './utils.js';
+import { t } from '../i18n/index.js';
 
 const cache = new WeakMap();
 
@@ -77,7 +78,7 @@ function computeNumbering(project) {
       const location = [
         k.chapterId ? chapters.get(k.chapterId).label : null,
         k.sectionId ? `Section ${sections.get(k.sectionId).number}` : null,
-      ].filter(Boolean).join(' · ') || 'Unassigned';
+      ].filter(Boolean).join(' · ') || t('Unassigned');
       map.set(k.item.id, { id: k.item.id, index, number, label, code: `${codePrefix === 'Figure' ? 'FIG' : 'TAB'}-${pad(index)}`, chapterId: k.chapterId, sectionId: k.sectionId, location });
     });
     return { map, order: keyed.map((k) => k.item) };

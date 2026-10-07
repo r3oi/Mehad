@@ -129,9 +129,13 @@ const P = {
   tGeneric: '<rect x="3" y="3" width="8" height="6" rx="1"/><circle cx="17" cy="6" r="3.5"/><path d="M7 15.5 10 21H4z"/><path d="M14 14h7v7h-7z"/>',
 };
 
+const DIRECTIONAL = new Set(['arrowLeft', 'arrowRight', 'chevronLeft', 'chevronRight', 'undo', 'redo', 'indent', 'outdent']);
+const RTL = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+
 export function icon(name, cls = '') {
   const body = P[name] || P.info;
-  return `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+  const flip = RTL && DIRECTIONAL.has(name) ? ' rtl-flip' : '';
+  return `<svg class="icon ${cls}${flip}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 }
 
 export const iconNames = Object.keys(P);

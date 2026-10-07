@@ -1,4 +1,5 @@
 // Small, dependency-free helpers shared across modules.
+import { t, locale } from '../i18n/index.js';
 
 export function uid(prefix = 'id') {
   const rand = (crypto?.randomUUID?.() ?? `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`)
@@ -53,23 +54,23 @@ const DAY = 86400000;
 export function formatDate(ts, opts = {}) {
   if (!ts) return '—';
   const d = new Date(ts);
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', ...opts });
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric', ...opts });
 }
 export function formatDateTime(ts) {
   if (!ts) return '—';
   const d = new Date(ts);
-  return `${formatDate(ts, { month: 'short' })}, ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+  return `${formatDate(ts, { month: 'short' })}, ${d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`;
 }
 export function relativeTime(ts) {
-  if (!ts) return 'never';
+  if (!ts) return t('never');
   const now = Date.now();
   const diff = now - ts;
-  if (diff < 45 * 1000) return 'just now';
-  if (diff < 60 * 60 * 1000) return `${Math.round(diff / 60000)} min ago`;
+  if (diff < 45 * 1000) return t('just now');
+  if (diff < 60 * 60 * 1000) return t('{n} min ago', { n: Math.round(diff / 60000) });
   const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
-  if (ts >= startToday.getTime()) return `Today, ${new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
-  if (ts >= startToday.getTime() - DAY) return 'Yesterday';
-  if (diff < 7 * DAY) return `${Math.round(diff / DAY)} days ago`;
+  if (ts >= startToday.getTime()) return t('Today, {time}', { time: new Date(ts).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) });
+  if (ts >= startToday.getTime() - DAY) return t('Yesterday');
+  if (diff < 7 * DAY) return t('{n} days ago', { n: Math.round(diff / DAY) });
   return formatDate(ts, { month: 'short' });
 }
 

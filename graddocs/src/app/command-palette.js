@@ -4,6 +4,7 @@ import { icon } from '../ui/icons.js';
 import { searchProject, KIND_ICONS } from './search.js';
 import { href } from './routes.js';
 import { modLabel } from '../core/utils.js';
+import { t, lang, setLanguage } from '../i18n/index.js';
 
 let open = null;
 
@@ -34,8 +35,12 @@ function commands(shell) {
     { title: 'New Project', icon: 'plus', keywords: 'create project', run: () => shell.navigate('#/projects?new=1') },
     { title: 'Toggle Dark / Light Mode', icon: 'moon', keywords: 'theme dark light', run: () => shell.toggleTheme() },
     { title: 'Keyboard Shortcuts', icon: 'keyboard', keywords: 'help keys', run: async () => (await import('./shortcuts.js')).showShortcutsHelp() },
+    lang === 'ar'
+      ? { title: 'Switch to English', icon: 'refresh', keywords: 'language english لغة انجليزي', run: async () => { await shell.store.flush(); setLanguage('en'); } }
+      : { title: 'التبديل إلى العربية', icon: 'refresh', keywords: 'language arabic rtl عربي لغة', run: async () => { await shell.store.flush(); setLanguage('ar'); } },
   );
-  return list;
+  // Translated titles; English titles stay searchable as keywords.
+  return list.map((c) => ({ ...c, keywords: `${c.title} ${c.keywords || ''}`, title: t(c.title), sub: c.sub ? t(c.sub) : '' }));
 }
 
 export function openPalette(shell, initialQuery = '') {
@@ -44,10 +49,10 @@ export function openPalette(shell, initialQuery = '') {
   root.className = 'palette-root';
   root.innerHTML = `
     <div class="modal-backdrop" data-close></div>
-    <div class="palette" role="dialog" aria-label="Command palette">
-      <div class="palette-input">${icon('search')}<input type="text" placeholder="Search figures, tables, acronyms, sections… or type a command" aria-label="Search" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></div>
+    <div class="palette" role="dialog" aria-label="${t('Command palette')}">
+      <div class="palette-input">${icon('search')}<input type="text" placeholder="${t('Search figures, tables, acronyms, sections… or type a command')}" aria-label="${t('Search')}" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></div>
       <div class="palette-results" role="listbox"></div>
-      <div class="palette-footer"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>Enter</kbd> open</span><span><kbd>${modLabel}</kbd><kbd>K</kbd> toggle</span></div>
+      <div class="palette-footer"><span><kbd>↑</kbd><kbd>↓</kbd> ${t('navigate')}</span><span><kbd>Enter</kbd> ${t('open')}</span><span><kbd>${modLabel}</kbd><kbd>K</kbd> ${t('toggle')}</span></div>
     </div>`;
   document.body.append(root);
   const input = root.querySelector('input');
@@ -61,14 +66,14 @@ export function openPalette(shell, initialQuery = '') {
     const q = input.value.trim();
     const ql = q.toLowerCase();
     const cmds = (q ? allCommands.filter((c) => `${c.title} ${c.keywords || ''} ${c.sub || ''}`.toLowerCase().includes(ql)) : allCommands.slice(0, 8))
-      .map((c) => ({ ...c, group: 'Commands' }));
+      .map((c) => ({ ...c, group: t('Commands') }));
     const hits = shell.store.project && q ? searchProject(shell.store.project, q, { limit: 12 }).map((r) => ({
-      title: r.title, sub: [r.sub, r.snippet].filter(Boolean).join(' — '), icon: KIND_ICONS[r.kind] || 'search', group: 'Search results',
-      hint: r.kind, run: () => shell.navigate(r.href),
+      title: r.title, sub: [r.sub, r.snippet].filter(Boolean).join(' — '), icon: KIND_ICONS[r.kind] || 'search', group: t('Search results'),
+      hint: t(r.kind), run: () => shell.navigate(r.href),
     })) : [];
     items = q ? [...hits, ...cmds] : cmds;
     active = Math.min(active, Math.max(0, items.length - 1));
-    if (!items.length) { resultsEl.innerHTML = `<div class="palette-empty">No results for “${esc(q)}”</div>`; return; }
+    if (!items.length) { resultsEl.innerHTML = `<div class="palette-empty">${esc(t('No results for “{q}”', { q }))}</div>`; return; }
     let lastGroup = null;
     resultsEl.innerHTML = items.map((it, i) => {
       const head = it.group !== lastGroup ? `<div class="palette-group">${esc(it.group)}</div>` : '';
