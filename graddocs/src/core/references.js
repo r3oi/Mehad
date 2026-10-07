@@ -2,7 +2,13 @@
 //   {{ref:fig:<figureId>}}  {{ref:tab:<tableId>}}  {{ref:sec:<sectionId>}}  {{ref:ch:<chapterId>}}
 // Tokens are resolved against the live numbering at render time, so
 // "Figure 3" becomes "Figure 4" automatically when a figure is inserted before it.
-import { getNumbering } from './numbering.js';
+//
+// Placement lines. A body line that contains ONLY {{figure:<id>}} or {{table:<id>}} places that figure/table
+// at exactly that spot between the paragraphs (see numbering.js and document.js). Figures and tables that are
+// assigned to a section but not placed still go at the end of the section.
+// (numbering.js imports placementsIn from here and we import getNumbering from there: the cycle is harmless
+// because both modules only call each other's functions at run time, never while loading.)
+import { getNumbering, invalidateNumbering } from './numbering.js';
 import { walkSections } from './model.js';
 import { esc } from '../ui/dom.js';
 
@@ -10,6 +16,116 @@ export const REF_RE = /\{\{ref:(fig|tab|sec|ch):([A-Za-z0-9_-]+)\}\}/g;
 export const REF_KINDS = { fig: 'Figure', tab: 'Table', sec: 'Section', ch: 'Chapter' };
 
 export const makeRef = (kind, id) => `{{ref:${kind}:${id}}}`;
+
+// ---------------------------------------------------------------------------
+// Placement lines: {{figure:<id>}} / {{table:<id>}} alone on a line.
+
+/** One whole body line that is a placement token (anchored, not global: safe with test()/exec()). */
+export const PLACE_RE = /^\s*\{\{(figure|table):([A-Za-z0-9_-]+)\}\}\s*$/;
+export const PLACE_KINDS = ['figure', 'table'];
+
+export const makePlacement = (kind, id) => `{{${kind}:${id}}}`;
+export const isPlacementLine = (line) => PLACE_RE.test(String(line ?? ''));
+
+const mayHavePlacement = (text) => text.includes('{{figure:') || text.includes('{{table:');
+
+/** Every placement line of a body → [{ kind: 'figure' | 'table', id, line }] (`line` = zero-based index among body.split('\n')). */
+export function placementsIn(body) {
+  const text = String(body ?? '');
+  if (!mayHavePlacement(text)) return [];
+  const out = [];
+  text.split('\n').forEach((line, i) => {
+    const m = PLACE_RE.exec(line);
+    if (m) out.push({ kind: m[1], id: m[2], line: i });
+  });
+  return out;
+}
+
+/** Body without its placement lines (what a reader would call "the text"). */
+export function stripPlacements(body) {
+  const text = String(body ?? '');
+  if (!mayHavePlacement(text)) return text;
+  return text.split('\n').filter((line) => !PLACE_RE.test(line)).join('\n');
+}
+
+/** Insert a placement line before line `at` (default: after the last non-blank line). Pure: returns the new body. */
+export function insertPlacement(body, kind, id, at) {
+  const lines = String(body ?? '').split('\n');
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  const index = Number.isInteger(at) ? Math.max(0, Math.min(at, lines.length)) : lines.length;
+  lines.splice(index, 0, makePlacement(kind, id));
+  return lines.join('\n');
+}
+
+/** Remove every placement line of one item. Pure: returns the new body (the same string when nothing matched). */
+export function removePlacements(body, kind, id) {
+  const text = String(body ?? '');
+  if (!text.includes(makePlacement(kind, id))) return text;
+  return text.split('\n').filter((line) => { const m = PLACE_RE.exec(line); return !(m && m[1] === kind && m[2] === id); }).join('\n');
+}
+
+/** Remove one line by index. Pure. */
+export function removeLine(body, index) {
+  const lines = String(body ?? '').split('\n');
+  if (index < 0 || index >= lines.length) return String(body ?? '');
+  lines.splice(index, 1);
+  return lines.join('\n');
+}
+
+/**
+ * Move line `index` one non-blank line up (dir < 0) or down (dir > 0). Blank lines are skipped, so a
+ * figure jumps over one paragraph at a time. Pure → { body, line } (`line` = new index), or null at the edge.
+ */
+export function moveLine(body, index, dir) {
+  const lines = String(body ?? '').split('\n');
+  if (index < 0 || index >= lines.length) return null;
+  const [moved] = lines.splice(index, 1);
+  let at;
+  if (dir < 0) {
+    let k = index - 1;
+    while (k >= 0 && !lines[k].trim()) k -= 1;
+    if (k < 0) return null;
+    at = k;
+  } else {
+    let k = index;
+    while (k < lines.length && !lines[k].trim()) k += 1;
+    if (k >= lines.length) return null;
+    at = k + 1;
+  }
+  lines.splice(at, 0, moved);
+  return { body: lines.join('\n'), line: at };
+}
+
+/** Where is this figure/table placed in the text? → { ownerId, ownerKind, line } | null (not placed, or a duplicate). */
+export function placementOf(project, kind, id) {
+  const n = getNumbering(project);
+  return (kind === 'figure' ? n.figures : n.tables).get(id)?.placement || null;
+}
+
+/**
+ * Placement lines that do not work: the figure/table was deleted ('missing') or the same item is
+ * placed again after its first placement ('duplicate').
+ * → [{ ownerId, ownerKind, ownerTitle, kind, id, line, reason }]
+ */
+export function findBrokenPlacements(project) {
+  return getNumbering(project).brokenPlacements.map((b) => ({ ...b }));
+}
+
+/**
+ * Take a figure/table out of the text: removes its placement lines from every body (it stays assigned to its section,
+ * i.e. at the end of it). Run inside store.update. Returns how many bodies changed.
+ */
+export function clearPlacement(project, kind, id) {
+  let changed = 0;
+  const strip = (node) => {
+    const next = removePlacements(node.body, kind, id);
+    if (next !== (node.body ?? '')) { node.body = next; changed += 1; }
+  };
+  project.chapters.forEach(strip);
+  walkSections(project, strip);
+  if (changed) invalidateNumbering(project);
+  return changed;
+}
 
 /** Resolve one reference → { text, ok, title }. */
 export function refInfo(project, kind, id) {
@@ -35,7 +151,7 @@ export function refInfo(project, kind, id) {
 
 /** Body text with every token replaced by its current label (plain text). */
 export function resolveText(project, body) {
-  return String(body || '').replace(REF_RE, (_, kind, id) => refInfo(project, kind, id).text);
+  return stripPlacements(body).replace(REF_RE, (_, kind, id) => refInfo(project, kind, id).text);
 }
 
 /** Escaped HTML with tokens rendered as spans (`ref-chip` for the editor, `doc-ref` for previews). */
@@ -52,12 +168,16 @@ export function resolveHTML(project, body, { chipClass = 'doc-ref', editable = f
 }
 
 /**
- * Split a body into blocks: paragraphs and bullet items (lines starting with "- " or "• ").
- * Returns [{ type: 'p' | 'li', text }] where text still contains tokens.
+ * Split a body into blocks: paragraphs, bullet items (lines starting with "- " or "• ") and placement lines.
+ * Returns [{ type: 'p' | 'li', text } | { type: 'figure' | 'table', id }]; text still contains tokens.
  */
 export function parseBlocks(body) {
   return String(body || '').split(/\n/).map((line) => line.trimEnd()).filter((line) => line.trim())
-    .map((line) => (/^\s*[-•*]\s+/.test(line) ? { type: 'li', text: line.replace(/^\s*[-•*]\s+/, '') } : { type: 'p', text: line.trim() }));
+    .map((line) => {
+      const place = PLACE_RE.exec(line);
+      if (place) return { type: place[1], id: place[2] };
+      return /^\s*[-•*]\s+/.test(line) ? { type: 'li', text: line.replace(/^\s*[-•*]\s+/, '') } : { type: 'p', text: line.trim() };
+    });
 }
 
 const PLAIN_RE = /\b(Figure|Fig\.|Table|Section|Chapter)\s+(\d+(?:\.\d+)*)\b/g;
