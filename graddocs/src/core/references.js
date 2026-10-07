@@ -1,5 +1,6 @@
 // Cross references. Section bodies store references as tokens:
 //   {{ref:fig:<figureId>}}  {{ref:tab:<tableId>}}  {{ref:sec:<sectionId>}}  {{ref:ch:<chapterId>}}
+//   {{ref:cite:<referenceId>}}  (a citation of a bibliography entry → "[3]")
 // Tokens are resolved against the live numbering at render time, so
 // "Figure 3" becomes "Figure 4" automatically when a figure is inserted before it.
 //
@@ -12,8 +13,8 @@ import { getNumbering, invalidateNumbering } from './numbering.js';
 import { walkSections } from './model.js';
 import { esc } from '../ui/dom.js';
 
-export const REF_RE = /\{\{ref:(fig|tab|sec|ch):([A-Za-z0-9_-]+)\}\}/g;
-export const REF_KINDS = { fig: 'Figure', tab: 'Table', sec: 'Section', ch: 'Chapter' };
+export const REF_RE = /\{\{ref:(fig|tab|sec|ch|cite):([A-Za-z0-9_-]+)\}\}/g;
+export const REF_KINDS = { fig: 'Figure', tab: 'Table', sec: 'Section', ch: 'Chapter', cite: 'Citation' };
 
 export const makeRef = (kind, id) => `{{ref:${kind}:${id}}}`;
 
@@ -140,11 +141,15 @@ export function refInfo(project, kind, id) {
   }
   if (kind === 'sec') {
     const info = n.sections.get(id);
-    return info ? { text: `Section ${info.number}`, ok: true, title: info.title } : { text: 'Section ??', ok: false, title: 'Missing section' };
+    return info ? { text: info.label, ok: true, title: info.title } : { text: 'Section ??', ok: false, title: 'Missing section' };
   }
   if (kind === 'ch') {
     const info = n.chapters.get(id);
     return info ? { text: info.label, ok: true, title: info.title } : { text: 'Chapter ??', ok: false, title: 'Missing chapter' };
+  }
+  if (kind === 'cite') {
+    const info = n.references.get(id); const ref = info && (project.references || []).find((r) => r.id === id);
+    return info ? { text: info.label, ok: true, title: ref?.title || ref?.custom || '' } : { text: '[?]', ok: false, title: 'Missing reference' };
   }
   return { text: '??', ok: false, title: 'Unknown reference' };
 }

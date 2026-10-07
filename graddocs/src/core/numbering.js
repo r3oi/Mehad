@@ -3,7 +3,8 @@
 // order whenever the project changes, so references never go stale.
 import { pad } from './utils.js';
 import { findNode } from './model.js';
-import { placementsIn } from './references.js';
+import { placementsIn, REF_RE } from './references.js';
+import { referenceSortKey } from './bibliography.js';
 import { t } from '../i18n/index.js';
 
 const cache = new WeakMap();
@@ -13,8 +14,9 @@ export function invalidateNumbering(project) { if (project) cache.delete(project
 
 /**
  * getNumbering(project) → {
- *   chapters: Map(id → { id, index, number, label, title }),
+ *   chapters: Map(id → { id, index, number, label, title, numbered }),
  *   sections: Map(id → { id, number, label, depth, chapterId, parentId, title }),
+ *   references: Map(id → { id, index, number, label: '[3]', cited: boolean }),  referenceOrder: Reference[],
  *   outline:  [{ kind: 'chapter'|'section', id, number, depth, title, chapterId }],
  *   figures:  Map(id → { id, index, number, label, code, chapterId, sectionId, location, placed, placement }),
  *   tables:   Map(id → … same shape),
@@ -28,6 +30,13 @@ export function invalidateNumbering(project) { if (project) cache.delete(project
  * chapterId/sectionId: chapterId, sectionId and location of a placed item are where its line is
  * (`placed: true`, `placement: { ownerId, ownerKind, line }`). If an item is placed twice only the first line
  * (in document order) counts; lines whose item does not exist are ignored. Both are listed in brokenPlacements.
+ *
+ * Unnumbered chapters (`numbered: false`, e.g. CONCLUSIONS) get number '' and label = their title; they do not
+ * consume a chapter number, and their sections have number '' too (label = title).
+ *
+ * References ([1], [2] …) follow settings.references.order: 'citation' = order of the first {{ref:cite:id}} token
+ * (front matter, then chapters/sections in document order) with never-cited references after them in list order;
+ * 'alphabetical' = first author's surname; 'manual' = list order.
  */
 export function getNumbering(project) {
   if (!project) return emptyNumbering();
@@ -39,7 +48,7 @@ export function getNumbering(project) {
 }
 
 function emptyNumbering() {
-  return { chapters: new Map(), sections: new Map(), outline: [], figures: new Map(), tables: new Map(), figureOrder: [], tableOrder: [], brokenPlacements: [] };
+  return { chapters: new Map(), sections: new Map(), outline: [], figures: new Map(), tables: new Map(), figureOrder: [], tableOrder: [], brokenPlacements: [], references: new Map(), referenceOrder: [] };
 }
 
 function computeNumbering(project) {
@@ -49,16 +58,19 @@ function computeNumbering(project) {
   const position = new Map(); // id → outline index
   const owners = []; // chapter / section bodies in document order: { id, kind, title, chapterId, sectionId, pos, body }
 
-  project.chapters.forEach((chapter, ci) => {
-    const number = String(ci + 1);
-    chapters.set(chapter.id, { id: chapter.id, index: ci + 1, number, label: `Chapter ${number}`, title: chapter.title });
+  let chapterCount = 0;
+  project.chapters.forEach((chapter) => {
+    const numbered = chapter.numbered !== false;
+    if (numbered) chapterCount += 1;
+    const number = numbered ? String(chapterCount) : '';
+    chapters.set(chapter.id, { id: chapter.id, index: numbered ? chapterCount : 0, number, label: numbered ? `Chapter ${number}` : chapter.title, title: chapter.title, numbered });
     position.set(chapter.id, outline.length);
     owners.push({ id: chapter.id, kind: 'chapter', title: chapter.title, chapterId: chapter.id, sectionId: null, pos: outline.length, body: chapter.body });
     outline.push({ kind: 'chapter', id: chapter.id, number, depth: 0, title: chapter.title, chapterId: chapter.id });
     const visit = (list, prefix, depth, parentId) => {
       list.forEach((sec, si) => {
-        const num = `${prefix}.${si + 1}`;
-        sections.set(sec.id, { id: sec.id, number: num, label: `Section ${num}`, depth, chapterId: chapter.id, parentId, title: sec.title });
+        const num = numbered ? `${prefix}.${si + 1}` : '';
+        sections.set(sec.id, { id: sec.id, number: num, label: numbered ? `Section ${num}` : sec.title, depth, chapterId: chapter.id, parentId, title: sec.title });
         position.set(sec.id, outline.length);
         owners.push({ id: sec.id, kind: 'section', title: sec.title, chapterId: chapter.id, sectionId: sec.id, pos: outline.length, body: sec.body });
         outline.push({ kind: 'section', id: sec.id, number: num, depth, title: sec.title, chapterId: chapter.id });
@@ -99,7 +111,7 @@ function computeNumbering(project) {
     keyed.forEach((k, i) => {
       const index = i + 1;
       let number = String(index);
-      if (caption?.numbering === 'chapter' && k.chapterId) {
+      if (caption?.numbering === 'chapter' && k.chapterId && chapters.get(k.chapterId).numbered) {
         const n = (perChapter.get(k.chapterId) || 0) + 1;
         perChapter.set(k.chapterId, n);
         number = `${chapters.get(k.chapterId).number}.${n}`;
@@ -107,7 +119,7 @@ function computeNumbering(project) {
       const label = `${caption?.label || codePrefix} ${number}`;
       const location = [
         k.chapterId ? chapters.get(k.chapterId).label : null,
-        k.sectionId ? `Section ${sections.get(k.sectionId).number}` : null,
+        k.sectionId ? sections.get(k.sectionId).label : null,
       ].filter(Boolean).join(' · ') || t('Unassigned');
       const placement = k.claim ? { ownerId: k.claim.ownerId, ownerKind: k.claim.ownerKind, line: k.claim.line } : null;
       map.set(k.item.id, { id: k.item.id, index, number, label, code: `${codePrefix === 'Figure' ? 'FIG' : 'TAB'}-${pad(index)}`, chapterId: k.chapterId, sectionId: k.sectionId, location, placed: !!placement, placement });
@@ -117,8 +129,35 @@ function computeNumbering(project) {
 
   const figs = placeItems(project.figures, project.settings?.captions?.figure, 'Figure', 'figure');
   const tabs = placeItems(project.tables, project.settings?.captions?.table, 'Table', 'table');
+  const refs = numberReferences(project, owners);
 
-  return { chapters, sections, outline, figures: figs.map, tables: tabs.map, figureOrder: figs.order, tableOrder: tabs.order, brokenPlacements };
+  return { chapters, sections, outline, figures: figs.map, tables: tabs.map, figureOrder: figs.order, tableOrder: tabs.order, brokenPlacements, references: refs.map, referenceOrder: refs.order };
+}
+
+function numberReferences(project, owners) {
+  const list = Array.isArray(project.references) ? project.references : [];
+  const map = new Map();
+  if (!list.length) return { map, order: [] };
+  const byId = new Map(list.map((r) => [r.id, r]));
+  const firstCite = new Map(); // id → sequence of its first citation
+  const bodies = [...(project.frontMatter || []).map((f) => f.body), ...owners.map((o) => o.body)];
+  for (const body of bodies) {
+    const text = String(body ?? '');
+    if (!text.includes('{{ref:cite:')) continue;
+    for (const m of text.matchAll(REF_RE)) if (m[1] === 'cite' && byId.has(m[2]) && !firstCite.has(m[2])) firstCite.set(m[2], firstCite.size);
+  }
+  const mode = project.settings?.references?.order || 'citation';
+  let order;
+  if (mode === 'alphabetical') {
+    order = list.map((r, i) => ({ r, i, key: referenceSortKey(r) }))
+      .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.i - b.i)).map((x) => x.r);
+  } else if (mode === 'manual') order = [...list];
+  else {
+    const cited = list.filter((r) => firstCite.has(r.id)).sort((a, b) => firstCite.get(a.id) - firstCite.get(b.id));
+    order = [...cited, ...list.filter((r) => !firstCite.has(r.id))];
+  }
+  order.forEach((r, i) => map.set(r.id, { id: r.id, index: i + 1, number: String(i + 1), label: `[${i + 1}]`, cited: firstCite.has(r.id) }));
+  return { map, order };
 }
 
 /** "Figure 3: Feature Fishbone Diagram" using the project caption settings. */
@@ -132,7 +171,7 @@ export function captionText(project, kind, item) {
 /** Chapter heading text according to settings, e.g. "CHAPTER 1: INTRODUCTION". */
 export function chapterHeading(project, chapter) {
   const n = getNumbering(project).chapters.get(chapter.id);
-  const text = `Chapter ${n?.number ?? '?'}: ${chapter.title}`;
+  const text = chapter.numbered === false ? chapter.title : `Chapter ${n?.number ?? '?'}: ${chapter.title}`;
   return project.settings.chapterTitle.style === 'upper' ? text.toUpperCase() : text;
 }
 
@@ -177,6 +216,7 @@ export function locationLabel(project, chapterId, sectionId) {
   const n = getNumbering(project);
   const sec = sectionId && n.sections.get(sectionId);
   const ch = n.chapters.get(sec ? sec.chapterId : chapterId);
-  if (!ch) return 'Unassigned';
+  if (!ch) return t('Unassigned');
+  if (!ch.numbered) return sec ? `${ch.title} · ${sec.title}` : ch.title;
   return sec ? `${ch.label} · ${sec.number} ${sec.title}` : `${ch.label} · ${ch.title}`;
 }

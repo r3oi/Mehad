@@ -36,15 +36,29 @@ export const DEFAULT_SETTINGS = {
     paragraphSpacing: 6, // pt after paragraph
     justify: true,
     headingSizes: { h1: 18, h2: 16, h3: 14 },
+    headingFontFamily: '', // '' = same font as the body text
+    firstLineIndent: 0, // cm, first line of every body paragraph
+    subheadingItalic: false, // level-3+ headings (1.2.3) in bold italic
   },
   chapterTitle: { style: 'upper', newPage: true }, // upper: "CHAPTER 1: INTRODUCTION" | title: "Chapter 1: Introduction"
   captions: {
-    figure: { label: 'Figure', separator: ':', position: 'below', numbering: 'global', align: 'center', labelBold: true, titleItalic: false },
-    table: { label: 'Table', separator: ':', position: 'above', numbering: 'global', align: 'center', labelBold: true, titleItalic: false },
+    figure: { label: 'Figure', separator: ':', position: 'below', numbering: 'global', align: 'center', labelBold: true, titleBold: false, titleItalic: false },
+    table: { label: 'Table', separator: ':', position: 'above', numbering: 'global', align: 'center', labelBold: true, titleBold: false, titleItalic: false },
   },
   figureDefaults: { fontFamily: 'Times New Roman', fontSize: 14, exportScale: 3, transparentBackground: false },
-  toc: { depth: 3 },
+  // includeFrontMatter: list the front-matter pages that come after the TOC (Abstract, List of Figures …) in it.
+  // style: 'plain' | 'academic' (chapters bold, front matter and sections in small caps, as many university templates).
+  toc: { depth: 3, includeFrontMatter: false, style: 'plain' },
+  // classic: name, rules, "Prepared by" / "Supervised by" / academic year.
+  // submission: logo, "A project submitted in partial fulfillment …", "by", students, supervisors, month and year.
+  titlePage: { layout: 'classic' },
+  // Bibliography. style: 'ieee' | 'compact' (Surname I., "Title", … as in many department templates).
+  // order: 'citation' (first citation in the text, IEEE) | 'alphabetical' (first author) | 'manual' (list order).
+  references: { include: true, title: 'References', style: 'ieee', order: 'citation' },
 };
+
+/** Default sentence of the 'submission' title page. */
+export const DEFAULT_DEGREE_STATEMENT = 'A project submitted in partial fulfillment of the requirements for the degree of Bachelor in Software Engineering';
 
 const now = () => Date.now();
 
@@ -59,8 +73,12 @@ export function createProject(fields = {}) {
     college: '',
     department: '',
     supervisor: '',
+    coSupervisor: '',
     students: '',
     academicYear: String(new Date().getFullYear()),
+    submissionDate: '', // free text for the title page, e.g. "May 2026"
+    degreeStatement: '', // '' = DEFAULT_DEGREE_STATEMENT
+    logo: '', // data: URL shown at the top of the title page ('' = none)
     createdAt: ts,
     updatedAt: ts,
     frontMatter: defaultFrontMatter(),
@@ -68,6 +86,7 @@ export function createProject(fields = {}) {
     figures: [],
     tables: [],
     acronyms: [],
+    references: [],
     settings: clone(DEFAULT_SETTINGS),
     activity: [],
     dismissedSuggestions: [],
@@ -79,12 +98,20 @@ export function defaultFrontMatter() {
   return ['declaration', 'abstract', 'toc', 'lot', 'lof', 'loa'].map((kind) => createFrontMatterItem(kind));
 }
 
+/**
+ * Front-matter page. Optional fields: wordLimit (number, 0 = none; shown as a counter, e.g. Abstract ≤ 150 words),
+ * signatures (declaration: one signature line per student), signatureNote (text under the signature lines).
+ */
 export function createFrontMatterItem(kind = 'custom', fields = {}) {
   return { id: uid('fm'), kind, title: FRONT_MATTER_KINDS[kind]?.title || 'Untitled Page', include: true, body: '', ...fields };
 }
 
+/**
+ * Chapter. `numbered: false` makes an unnumbered chapter (e.g. CONCLUSIONS): no "Chapter N", its sections have no numbers.
+ * Chapters and sections may carry a `hint` (writing guidance shown in the editor while the text is empty; never exported).
+ */
 export function createChapter(fields = {}) {
-  return { id: uid('ch'), title: 'Untitled Chapter', body: '', sections: [], ...fields };
+  return { id: uid('ch'), title: 'Untitled Chapter', body: '', numbered: true, sections: [], ...fields };
 }
 
 export function createSection(fields = {}) {
@@ -143,6 +170,19 @@ export function createAcronym(fields = {}) {
   return { id: uid('acr'), acronym: '', meaning: '', description: '', createdAt: now(), ...fields };
 }
 
+/**
+ * Bibliography entry. `authors` / `editors`: one name per line (or separated by ";" or " and "),
+ * "First Middle Last" or "Last, First". `custom`: when not blank it is used verbatim instead of the formatted text.
+ * type: journal | conference | book | chapter | web | thesis | report | other (see bibliography.js).
+ */
+export function createReference(fields = {}) {
+  return {
+    id: uid('ref'), type: 'journal', authors: '', title: '', container: '', editors: '', publisher: '', place: '',
+    year: '', month: '', volume: '', issue: '', pages: '', edition: '', doi: '', url: '', accessed: '', note: '',
+    custom: '', createdAt: now(), ...fields,
+  };
+}
+
 export function createComment(fields = {}) {
   return { id: uid('cmt'), elementId: null, text: '', author: 'You', createdAt: now(), resolved: false, ...fields };
 }
@@ -177,12 +217,12 @@ export function normalizeProject(input) {
   p.schemaVersion = SCHEMA_VERSION;
   p.id = p.id || uid('prj');
   p.name = String(p.name || 'Untitled Project');
-  for (const key of ['description', 'type', 'university', 'college', 'department', 'supervisor', 'students', 'academicYear']) p[key] = String(p[key] ?? '');
+  for (const key of ['description', 'type', 'university', 'college', 'department', 'supervisor', 'coSupervisor', 'students', 'academicYear', 'submissionDate', 'degreeStatement', 'logo']) p[key] = String(p[key] ?? '');
   p.createdAt = Number(p.createdAt) || now();
   p.updatedAt = Number(p.updatedAt) || p.createdAt;
   p.frontMatter = Array.isArray(p.frontMatter) ? p.frontMatter.map((f) => ({ ...createFrontMatterItem(f.kind || 'custom'), ...f })) : defaultFrontMatter();
   p.chapters = Array.isArray(p.chapters) ? p.chapters.map((c) => ({
-    ...createChapter(), ...c, id: c.id || uid('ch'), sections: Array.isArray(c.sections) ? c.sections.map(normalizeSection) : [],
+    ...createChapter(), ...c, id: c.id || uid('ch'), numbered: c.numbered !== false, sections: Array.isArray(c.sections) ? c.sections.map(normalizeSection) : [],
   })) : [];
   p.figures = Array.isArray(p.figures) ? p.figures.map((f) => ({
     ...createFigure(), ...f,
@@ -200,6 +240,11 @@ export function normalizeProject(input) {
     return table;
   }) : [];
   p.acronyms = Array.isArray(p.acronyms) ? p.acronyms.filter((a) => a && a.acronym).map((a) => ({ ...createAcronym(), ...a })) : [];
+  p.references = Array.isArray(p.references) ? p.references.filter((r) => r && typeof r === 'object').map((r) => {
+    const ref = { ...createReference(), ...r, id: r.id || uid('ref') };
+    for (const key of Object.keys(createReference())) if (key !== 'createdAt' && typeof ref[key] !== 'string') ref[key] = String(ref[key] ?? '');
+    return ref;
+  }) : [];
   p.settings = deepMerge(clone(DEFAULT_SETTINGS), p.settings || {});
   p.activity = Array.isArray(p.activity) ? p.activity.slice(0, 60) : [];
   p.dismissedSuggestions = Array.isArray(p.dismissedSuggestions) ? p.dismissedSuggestions : [];

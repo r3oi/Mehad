@@ -2,16 +2,24 @@
 // It decides *what* goes where; renderers decide how it looks.
 import { getNumbering, captionText, chapterHeading } from './numbering.js';
 import { parseBlocks } from './references.js';
-import { FRONT_MATTER_KINDS } from './model.js';
+import { FRONT_MATTER_KINDS, DEFAULT_DEGREE_STATEMENT } from './model.js';
 import { compareText } from './utils.js';
+import { formatReferenceRuns } from './bibliography.js';
 
 export const sortAcronyms = (list) => [...list].sort((a, b) => compareText(a.acronym, b.acronym));
 
 /**
  * buildDocument(project) → {
- *   titlePage: { name, type, description, university, college, department, supervisor, students[], academicYear },
- *   front:   [{ id, kind, title, generated, blocks: [{type:'p'|'li', text}] }]   (only included items, in order)
- *   toc:     [{ id, kind: 'chapter'|'section', level: 1..4, number, title, text }]
+ *   titlePage: { layout: 'classic'|'submission', name, type, description, university, college, department, supervisor,
+ *                coSupervisor, students[] (lines as typed, e.g. "Ahmed Ali (443001234)"), studentNames[] (IDs stripped),
+ *                academicYear, submissionDate, degreeStatement, logo (data URL or '') },
+ *   front:   [{ id, kind, title, generated, blocks: [{type:'p'|'li', text}], wordLimit, signatures, signatureNote }]
+ *            (only included items, in order; `signatures` → render one signature line per titlePage.studentNames)
+ *   toc:     [{ id, kind: 'front'|'chapter'|'section'|'references', level: 1..4, number, title, text }]
+ *            'front' entries (settings.toc.includeFrontMatter) are the included front-matter pages except the TOC itself;
+ *            number is '' for front matter, unnumbered chapters and their sections, and the References page.
+ *   references: { include, title, style, entries: [{ id, ref, number, label: '[1]', runs: [{text, italic}], text }] }
+ *            The References page comes after the last chapter (and after the unassigned items) when include && entries.length.
  *   figures: [{ id, figure, label, number, code, caption, chapterId, sectionId, placed }]   (document order)
  *   tables:  [{ id, table,  label, number, code, caption, chapterId, sectionId, placed }]
  *   acronyms:[{ id, acronym, meaning, description }]           (alphabetical)
@@ -70,15 +78,16 @@ export function buildDocument(project) {
   for (const chapter of project.chapters) {
     const info = n.chapters.get(chapter.id);
     toc.push({ id: chapter.id, kind: 'chapter', level: 1, number: info.number, title: chapter.title, text: chapterHeading(project, chapter) });
-    body.push({ type: 'chapter', id: chapter.id, number: info.number, title: chapter.title, heading: chapterHeading(project, chapter) });
+    body.push({ type: 'chapter', id: chapter.id, number: info.number, title: chapter.title, heading: chapterHeading(project, chapter), numbered: info.numbered });
     pushBody(chapter.id, chapter.body);
     pushItemsOrdered(chapter.id, null);
     const visit = (list) => {
       for (const sec of list) {
         const s = n.sections.get(sec.id);
         const level = s.depth + 1; // 2 = section, 3 = subsection, 4 = sub-subsection
-        if (level <= tocDepth) toc.push({ id: sec.id, kind: 'section', level, number: s.number, title: sec.title, text: `${s.number} ${sec.title}` });
-        body.push({ type: 'heading', id: sec.id, level, number: s.number, title: sec.title, text: `${s.number} ${sec.title}` });
+        const text = s.number ? `${s.number} ${sec.title}` : sec.title;
+        if (level <= tocDepth) toc.push({ id: sec.id, kind: 'section', level, number: s.number, title: sec.title, text });
+        body.push({ type: 'heading', id: sec.id, level, number: s.number, title: sec.title, text });
         pushBody(sec.id, sec.body);
         pushItemsOrdered(chapter.id, sec.id);
         visit(sec.sections || []);
@@ -99,15 +108,44 @@ export function buildDocument(project) {
   const front = project.frontMatter.filter((f) => f.include !== false).map((f) => ({
     // Placement lines only mean something in chapter / section text; front-matter pages show text only.
     id: f.id, kind: f.kind, title: f.title, generated: !!FRONT_MATTER_KINDS[f.kind]?.generated, blocks: parseBlocks(f.body).filter((b) => b.type === 'p' || b.type === 'li'),
+    wordLimit: Number(f.wordLimit) || 0, signatures: !!f.signatures, signatureNote: String(f.signatureNote ?? ''),
   }));
 
+  if (project.settings.toc?.includeFrontMatter) {
+    const entries = front.filter((f) => f.kind !== 'toc').map((f) => ({ id: f.id, kind: 'front', level: 1, number: '', title: f.title, text: f.title }));
+    toc.unshift(...entries);
+  }
+
+  const refSettings = project.settings.references || {};
+  const style = refSettings.style || 'ieee';
+  const entries = n.referenceOrder.map((ref) => {
+    const info = n.references.get(ref.id);
+    const runs = formatReferenceRuns(ref, style);
+    return { id: ref.id, ref, number: info.number, label: info.label, runs, text: runs.map((r) => r.text).join('') };
+  });
+  const references = { include: refSettings.include !== false, title: refSettings.title || 'References', style, entries };
+  if (references.include && entries.length) toc.push({ id: '__references', kind: 'references', level: 1, number: '', title: references.title, text: references.title });
+
+  const students = studentLines(project.students);
   return {
     titlePage: {
+      layout: project.settings.titlePage?.layout === 'submission' ? 'submission' : 'classic',
       name: project.name, type: project.type, description: project.description, university: project.university,
       college: project.college, department: project.department, supervisor: project.supervisor,
-      students: String(project.students || '').split(/\n|,/).map((s) => s.trim()).filter(Boolean),
-      academicYear: project.academicYear,
+      coSupervisor: project.coSupervisor || '',
+      students, studentNames: students.map(studentName),
+      academicYear: project.academicYear, submissionDate: project.submissionDate || '',
+      degreeStatement: project.degreeStatement || DEFAULT_DEGREE_STATEMENT, logo: project.logo || '',
     },
-    front, toc, figures, tables, acronyms: sortAcronyms(project.acronyms), body,
+    front, toc, figures, tables, acronyms: sortAcronyms(project.acronyms), body, references,
   };
 }
+
+/** Students field → one entry per line (or comma-separated when written on one line). */
+export function studentLines(text) {
+  const raw = String(text || '');
+  return (raw.includes('\n') ? raw.split('\n') : raw.split(',')).map((s) => s.trim()).filter(Boolean);
+}
+
+/** "Ahmed Ali Alharbi (443001234)" / "Ahmed Ali Alharbi - 443001234" → "Ahmed Ali Alharbi". */
+export const studentName = (line) => String(line || '').replace(/\s*[([][^)\]]*[)\]]\s*$/, '').replace(/\s*[-–—|:]\s*\d[\d\s]*$/, '').trim();
