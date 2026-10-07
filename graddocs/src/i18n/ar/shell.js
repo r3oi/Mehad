@@ -2,6 +2,7 @@
 export default {
   // Shell & navigation
   'Workspace': 'مساحة العمل',
+  'Word Sync': 'ربط ملف Word',
   'Content': 'المحتوى',
   'Output': 'المخرجات',
   'Documentation Builder': 'منشئ توثيق المشروع',

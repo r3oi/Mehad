@@ -6,5 +6,8 @@ import tables from './tables.js';
 import structure from './structure.js';
 import workspace from './workspace.js';
 import output from './output.js';
+import word from './word.js';
+import generate from './generate.js';
+import placement from './placement.js';
 
-export const AR = { ...common, ...shell, ...workspace, ...structure, ...tables, ...output, ...figures };
+export const AR = { ...common, ...shell, ...workspace, ...structure, ...tables, ...output, ...figures, ...word, ...generate, ...placement };

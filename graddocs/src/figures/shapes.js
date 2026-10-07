@@ -329,6 +329,17 @@ registerShape({
 });
 
 registerShape({
+  id: 'image', name: 'Image', aspect: true,
+  defaults: { w: 320, h: 200, text: '', style: { fill: 'none', stroke: 'none' } },
+  // el.src holds a data: URL (PNG/JPEG). The picture is drawn to fit the box.
+  draw: (el, s) => (el.src
+    ? `<image href="${xmlEscape(el.src)}" x="${r(el.x)}" y="${r(el.y)}" width="${r(el.w)}" height="${r(el.h)}" preserveAspectRatio="xMidYMid meet"/>`
+    : `<rect x="${r(el.x)}" y="${r(el.y)}" width="${r(el.w)}" height="${r(el.h)}" fill="#f2f4f7" stroke="#d0d5dd" stroke-dasharray="6 4"/>`)
+    + (s.stroke !== 'none' && s.strokeWidth > 0 ? `<rect x="${r(el.x)}" y="${r(el.y)}" width="${r(el.w)}" height="${r(el.h)}" ${paint({ ...s, fill: 'none' })}/>` : ''),
+  hit: (el) => `<rect x="${r(el.x)}" y="${r(el.y)}" width="${r(el.w)}" height="${r(el.h)}" fill="transparent"/>`,
+});
+
+registerShape({
   id: 'point', name: 'Junction', aspect: true,
   defaults: { w: 8, h: 8, text: '', style: { fill: '#1f2937', stroke: 'none' } },
   outline: 'ellipse',

@@ -7,6 +7,7 @@ export const NAV = [
   { group: 'Workspace', items: [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     { id: 'structure', label: 'Project Structure', icon: 'structure' },
+    { id: 'word', label: 'Word Sync', icon: 'word' },
   ] },
   { group: 'Content', items: [
     { id: 'figures', label: 'Figures', icon: 'figure', count: (p) => p.figures.length },
@@ -34,6 +35,7 @@ export const VIEWS = {
   preview: () => import('../preview/preview-view.js'),
   export: () => import('../export/export-view.js'),
   settings: () => import('../settings/settings-view.js'),
+  word: () => import('../word/word-view.js'),
 };
 
 /**
