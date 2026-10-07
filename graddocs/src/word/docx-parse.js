@@ -114,6 +114,13 @@ function buildNumbering(numDoc) {
 
 const EMU_PX = 9525;
 
+/** Alt text → a usable figure title: Word's auto text and file names are dropped. */
+function cleanAlt(raw) {
+  const t = tidy(String(raw).replace(/\s*Description automatically generated\.?/i, ''));
+  if (!t || t.length > 90 || /\.(png|jpe?g|gif|bmp|emf|wmf|svg)$/i.test(t) || /^(picture|image|graphic)\s*\d*$/i.test(t)) return '';
+  return t;
+}
+
 function readDrawing(drawing, ctx) {
   const blips = drawing.getElementsByTagNameNS(NS.a, 'blip');
   if (!blips.length) { ctx.unsupported += 1; return; }
@@ -126,7 +133,7 @@ function readDrawing(drawing, ctx) {
     ctx.images.push({
       rid, linked: !blip.getAttributeNS(NS.r, 'embed'),
       w: blips.length === 1 && cx ? Math.round(cx / EMU_PX) : null, h: blips.length === 1 && cy ? Math.round(cy / EMU_PX) : null,
-      descr: tidy(docPr?.getAttribute('descr') || docPr?.getAttribute('title') || ''),
+      descr: cleanAlt(docPr?.getAttribute('descr') || docPr?.getAttribute('title') || ''),
     });
   }
 }
@@ -362,7 +369,7 @@ const CHAPTER_LIKE_LIMIT = 12;
 
 function titleOfBlock(p) { return tidy(p.text.replace(/\n/g, ' ')); }
 
-function analyze(raw, pkgInfo) {
+function analyze(raw) {
   const warnings = new Map();
   const warn = (code, n = 1) => warnings.set(code, (warnings.get(code) || 0) + n);
 
@@ -556,7 +563,6 @@ function sniffTitlePage(lines) {
 
 /** Walk every node: clean titles, compute stable keys and numbers. */
 function finalize(parsed, keep) {
-  const seen = new Map();
   const visit = (nodes, parentKey, numberPrefix, chapterLevel) => {
     const used = new Map();
     nodes.forEach((node, i) => {
@@ -567,15 +573,13 @@ function finalize(parsed, keep) {
       node.key = parentKey ? `${parentKey}/${k}` : k;
       node.number = chapterLevel ? String(i + 1) : `${numberPrefix}.${i + 1}`;
       node.wordIndex = i;
-      seen.set(node.key, node);
       visit(node.children, node.key, node.number, false);
     });
   };
   visit(parsed.chapters, '', '', true);
-  return seen;
 }
 
-async function loadImages(refs, pkg, parsed) {
+async function loadImages(refs, pkg) {
   const cache = new Map();
   const unique = [];
   for (const ref of refs) {
@@ -626,7 +630,7 @@ export async function parseDocx(input, { fileName = '' } = {}) {
   const seenAcr = new Set(); const acronyms = [];
   for (const x of a.acronyms) { const k = normKey(x.acronym); if (!k || seenAcr.has(k)) continue; seenAcr.add(k); acronyms.push({ acronym: x.acronym, meaning: x.meaning }); }
   const keep = new Set(acronyms.map((x) => x.acronym.toUpperCase()));
-  const byKey = finalize({ chapters: a.chapters }, keep);
+  finalize({ chapters: a.chapters }, keep);
 
   // Flatten tables / images in reading order and turn their refs into final objects.
   const tables = []; const images = []; let smallSkipped = 0;
@@ -691,7 +695,7 @@ export async function parseDocx(input, { fileName = '' } = {}) {
 
   return {
     fileName, title: cleanTitle(title, { keep }) || title, rawTitle: title, author: tidy(pkg.core?.creator || ''), titlePage,
-    front: frontOut, acronyms, chapters: a.chapters, tables, images, byKey,
+    front: frontOut, acronyms, chapters: a.chapters, tables, images,
     warnings: [...a.warnings].map(([code, count]) => ({ code, count })),
     stats: { chapters: a.chapters.length, sections: countNodes(a.chapters) - a.chapters.length, paragraphs, tables: tables.length, images: images.length, acronyms: acronyms.length },
   };

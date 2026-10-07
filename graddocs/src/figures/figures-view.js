@@ -7,7 +7,7 @@ import { openMenu } from '../ui/menu.js';
 import { openModal, confirmDialog } from '../ui/modal.js';
 import { getNumbering, moveInDocumentOrder } from '../core/numbering.js';
 import { createFigure, findFigure, walkSections } from '../core/model.js';
-import { findUsages } from '../core/references.js';
+import { findUsages, clearPlacement } from '../core/references.js';
 import { relativeTime, clone, uid, slugify, downloadBlob, downloadText, plural } from '../core/utils.js';
 import { renderThumbnail, renderFigureSVG } from './render.js';
 import { figureTypes, getFigureType, buildTemplate } from './types.js';
@@ -286,7 +286,7 @@ export default {
       if (!ok) return;
       const index = project.figures.findIndex((x) => x.id === id);
       const backup = clone(f);
-      store.update((p) => { p.figures = p.figures.filter((x) => x.id !== id); }, { activity: { text: `Deleted figure “${f.title}”`, kind: 'delete' } });
+      store.update((p) => { p.figures = p.figures.filter((x) => x.id !== id); clearPlacement(p, 'figure', id); }, { activity: { text: `Deleted figure “${f.title}”`, kind: 'delete' } });
       toast(t('Deleted “{title}”', { title: f.title }), { type: 'success', action: { label: t('Undo'), onClick: () => store.update((p) => { p.figures.splice(index, 0, backup); }, { activity: `Restored figure “${f.title}”` }) } });
     }
 
@@ -307,7 +307,9 @@ export default {
         if (!title) { modal.$('#fd-title').classList.add('invalid'); return; }
         store.update((p) => {
           const x = findFigure(p, id);
-          Object.assign(x, { title, description: modal.$('#fd-desc').value.trim(), ...parseLocation(p, modal.$('#fd-loc').value), updatedAt: Date.now() });
+          const loc = parseLocation(p, modal.$('#fd-loc').value);
+          if (loc.chapterId !== x.chapterId || loc.sectionId !== x.sectionId) clearPlacement(p, 'figure', id);
+          Object.assign(x, { title, description: modal.$('#fd-desc').value.trim(), ...loc, updatedAt: Date.now() });
         }, { activity: { text: `Updated details of “${title}”`, targetId: id } });
         modal.close();
       });

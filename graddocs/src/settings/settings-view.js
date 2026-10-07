@@ -19,6 +19,7 @@ const TABS = [
   { id: 'document', label: t('Document'), icon: 'file' },
   { id: 'captions', label: t('Captions'), icon: 'figure' },
   { id: 'figures', label: t('Figures'), icon: 'diagram' },
+  { id: 'ai', label: t('AI'), icon: 'sparkles' },
   { id: 'project', label: t('Project'), icon: 'folder' },
   { id: 'storage', label: t('Storage'), icon: 'database' },
 ];
@@ -273,7 +274,7 @@ export default {
             <button type="button" class="btn btn-sm" data-action="ai-clear-key" ${cfg.apiKey ? '' : 'disabled'}>${t('Remove key')}</button></div>
           <div class="ai-status" data-ai-status role="status">${esc(aiStatus(cfg))}</div>`, 'stack-sm')}
         ${row(t('Model'), t('Sonnet is the best balance. Haiku is faster and the cheapest. Opus is the strongest for large or complex diagrams.'), `
-          <select class="select input-sm" data-ai-model aria-label="${esc(t('Model'))}">${AI_MODELS.map((m) => `<option value="${m.id}" ${m.id === cfg.model ? 'selected' : ''}>${esc(modelLabel(m.id))}</option>`).join('')}</select>`)}
+          <select class="select input-sm ai-model" data-ai-model aria-label="${esc(t('Model'))}">${AI_MODELS.map((m) => `<option value="${m.id}" ${m.id === cfg.model ? 'selected' : ''}>${esc(modelLabel(m.id))}</option>`).join('')}</select>`)}
         <div class="set-row ai-note">
           <div class="set-label"><div class="t">${t('Where to get a key')}</div>
             <div class="d">${t('Create an account and a key at {site}. Each diagram is billed to your own Anthropic account.', { site: `<a class="ai-link" href="${KEYS_URL}" target="_blank" rel="noopener noreferrer"><bdi dir="ltr">console.anthropic.com</bdi></a>` })}</div></div>
@@ -289,8 +290,8 @@ export default {
           ${row(t('Resolution'), t('Higher resolution = sharper images, larger files.'), seg('figureDefaults.exportScale', s.figureDefaults.exportScale, [[1, '1×'], [2, '2×'], [3, '3×'], [4, '4×']], { numeric: true, label: t('Export resolution') }), 'stack-sm')}
           ${row(t('Output density'), '', `<span class="dpi-hint" data-dpi dir="ltr">${[96, 192, 288, 384][Math.min(4, Math.max(1, Number(s.figureDefaults.exportScale) || 3)) - 1]} DPI</span>`)}
           ${row(t('Transparent background'), t('Export PNGs without the white page background.'), toggle('figureDefaults.transparentBackground', s.figureDefaults.transparentBackground, t('Transparent')))}`)}
-        ${aiCard()}
       </div>`;
+    const aiTab = () => `<div class="set-main set-narrow">${aiCard()}</div>`;
 
     // Typed project data may be English or Arabic: once a field has text it follows that
     // text's own direction (so a trailing full stop lands on the right side).
@@ -407,6 +408,7 @@ export default {
       if (tab === 'document') panel.innerHTML = documentTab(project.settings);
       else if (tab === 'captions') panel.innerHTML = captionsTab(project.settings);
       else if (tab === 'figures') panel.innerHTML = figuresTab(project.settings);
+      else if (tab === 'ai') panel.innerHTML = aiTab();
       else if (tab === 'project') panel.innerHTML = projectTab(project);
       else { panel.innerHTML = storageSkeleton(); renderStorage(); }
       refreshPreviews();

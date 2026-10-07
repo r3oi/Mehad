@@ -21,7 +21,8 @@ const unquote = (s) => {
   return v;
 };
 const keyOf = (s) => String(s).trim().toLowerCase().replace(/\s+/g, ' ');
-const cleanLabel = (s) => unquote(s).replace(/<br\s*\/?>/gi, '\n').replace(/#quot;|&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+const BIDI_MARKS = /[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/g; // invisible direction marks that come along when text is copied from Arabic sources
+const cleanLabel = (s) => unquote(String(s).replace(BIDI_MARKS, '')).replace(/<br\s*\/?>/gi, '\n').replace(/#quot;|&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
 
 /** Strip markdown fences and a leading front-matter block. */
 function stripFences(text) {
@@ -328,7 +329,8 @@ function mermaidFlow(head, body) {
     if (sg) {
       const spec = sg[1].trim();
       const withTitle = spec.match(/^([\p{L}\p{N}_$]+)\s*\[(.*)\]$/u);
-      const id = withTitle ? withTitle[1] : `sg_${nodes.size + 1}`;
+      // "subgraph one" has the id and the title "one"; a title with spaces gets a generated id.
+      const id = withTitle ? withTitle[1] : /^[\p{L}\p{N}_$]+$/u.test(spec) ? spec : `sg_${nodes.size + 1}`;
       const label = withTitle ? cleanLabel(withTitle[2]) : cleanLabel(spec);
       const n = { id, label, explicit: true, kind: 'boundary', parent: groupStack[groupStack.length - 1] };
       nodes.set(id, n);

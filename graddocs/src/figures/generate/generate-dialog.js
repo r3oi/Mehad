@@ -9,7 +9,7 @@ import { esc } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { openModal } from '../../ui/modal.js';
 import { toast } from '../../ui/toast.js';
-import { renderThumbnail } from '../render.js';
+import { renderThumbnail, computeBounds } from '../render.js';
 import { figureTypes, figureFonts } from '../types.js';
 import { href } from '../../app/routes.js';
 import { t, isRTL, lang } from '../../i18n/index.js';
@@ -61,6 +61,14 @@ const JSON_SEQ = JSON.stringify({
   messages: [{ from: 'User', to: 'Web App', label: 'login()' }, { from: 'Web App', to: 'Database', label: 'find user' }, { from: 'Database', to: 'Web App', label: 'user record', reply: true }, { from: 'Web App', to: 'User', label: 'dashboard', reply: true }],
 }, null, 2);
 
+/** Thumbnail that is never blown up more than 1.5× (a single shape should not fill the whole preview). */
+function previewSVG(diagram) {
+  const b = computeBounds(diagram);
+  const svg = renderThumbnail(diagram);
+  if (b.empty) return svg;
+  return svg.replace('<svg ', `<svg style="max-width:${Math.round((b.w + 32) * 1.5)}px;max-height:${Math.round((b.h + 32) * 1.5)}px" `);
+}
+
 const shapesConnectors = (s, c) => (isRTL ? t('Shapes: {shapes} · Connectors: {connectors}', { shapes: s, connectors: c }) : `${s} shapes · ${c} connectors`);
 
 async function copyText(text) {
@@ -86,7 +94,7 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
   let controller = null;
   let outcome = null;
   const timers = {};
-  const settingsHref = project?.id ? href(project.id, 'settings', null, { tab: 'figures' }) : '#/projects';
+  const settingsHref = project?.id ? href(project.id, 'settings', null, { tab: 'ai' }) : '#/projects';
 
   const typeOptions = `<option value="auto">${t('Auto (let the text decide)')}</option>${figureTypes().filter((ft) => SPEC_TYPES.includes(ft.id)).map((ft) => `<option value="${ft.id}">${esc(ft.name)}</option>`).join('')}`;
   const chips = (list) => `<div class="gen-chips" role="group" aria-label="${t('Examples')}"><span class="gen-chips-label">${t('Examples')}</span>${list.map((x, i) => `<button type="button" class="gen-chip" data-example="${i}"${AUTO}>${esc(x.label)}</button>`).join('')}</div>`;
@@ -143,7 +151,7 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
 
         <div class="gen-side">
           <div class="section-title">${t('Preview')}</div>
-          <div class="gen-preview" data-preview></div>
+          <div class="gen-preview" data-gen-preview></div>
           <div class="gen-meta" data-meta></div>
           <div data-messages class="gen-messages"></div>
           <button type="button" class="gen-link" data-act="edit-json" hidden>${t('Edit as JSON')}</button>
@@ -183,8 +191,8 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
       root.querySelectorAll('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== tab; });
       root.querySelectorAll('[data-insert]').forEach((b) => { const on_ = b.dataset.insert === insertMode; b.classList.toggle('active', on_); b.setAttribute('aria-pressed', on_); });
       const r = results[tab];
-      const preview = $('[data-preview]');
-      preview.innerHTML = r?.ok ? renderThumbnail(r.diagram) : `<div class="gen-empty">${icon(tab === 'ai' ? 'sparkles' : 'diagram')}<span>${busy ? t('Asking Claude…') : t('The preview appears here.')}</span></div>`;
+      const preview = $('[data-gen-preview]');
+      preview.innerHTML = r?.ok ? previewSVG(r.diagram) : `<div class="gen-empty">${icon(tab === 'ai' ? 'sparkles' : 'diagram')}<span>${busy ? t('Asking Claude…') : t('The preview appears here.')}</span></div>`;
       preview.classList.toggle('busy', busy);
       const n = r?.ok ? r.diagram.elements : [];
       $('[data-meta]').textContent = r?.ok ? shapesConnectors(n.filter((e) => e.type === 'node').length, n.filter((e) => e.type === 'edge').length) : '';
@@ -315,7 +323,7 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
       if (area) {
         const which = area.dataset.input;
         inputs[which] = area.value;
-        if (which === 'ai') { if (results.ai) { results.ai = null; render(); } } else schedule(which);
+        if (which !== 'ai') schedule(which); // the AI result stays on screen until the next generation
         return;
       }
     });
@@ -329,7 +337,7 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
     root.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.matches('[data-input]')) {
         e.preventDefault();
-        if (tab === 'ai' && !results.ai?.ok) runAI(); else apply();
+        if (tab === 'ai') runAI(); else apply();
       }
       if (e.target.matches('[data-tab]') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
         const order = ['ai', 'text', 'json'];

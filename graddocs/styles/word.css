@@ -74,6 +74,7 @@
 .ws-kv { margin: 14px 0 6px; gap: 10px 20px; }
 .ws-status-text { margin: 6px 0 16px; font-size: 13px; }
 .ws-auto { align-items: center; padding: 12px 14px; width: 100%; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); font-weight: 550; }
+.ws-auto:has(input:disabled) { opacity: .6; cursor: not-allowed; }
 .ws-hint { margin: 8px 2px 0; font-size: 12px; color: var(--muted); }
 .ws-status-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
 .ws-unlink:hover { color: var(--danger); background: var(--danger-soft); }
@@ -106,6 +107,7 @@
 
 @media (max-width: 1100px) { .ws-import-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) {
+  .ws-cols { order: -1; } /* on small screens the status card comes before the explanation */
   .ws-hero { grid-template-columns: minmax(0, 1fr); padding: 22px; }
   .ws-flow { justify-content: flex-start; }
   .ws-cols { grid-template-columns: minmax(0, 1fr); }

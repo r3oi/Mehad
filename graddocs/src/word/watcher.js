@@ -61,15 +61,17 @@ export class WordWatcher {
     const key = project ? `${project.id}|${linked}` : '';
     if (!force && key === this.key) return;
     this.key = key;
+    const gen = (this.generation = (this.generation || 0) + 1); // a newer refresh supersedes this one
     this.#stopTimer();
     this.handle = null; this.lastSeen = undefined; this.failures = 0;
     if (!project || !linked) { this.#setMode('unlinked'); return; }
     const handle = await loadHandle(project.id);
-    if (key !== this.key) return; // switched project meanwhile
+    if (gen !== this.generation) return;
     if (!handle) { this.#setMode(supportsLiveWatch() ? 'no-handle' : 'unsupported'); return; }
     this.handle = handle;
-    if (await hasReadPermission(handle, false)) this.#begin();
-    else this.#setMode('needs-permission');
+    const granted = await hasReadPermission(handle, false);
+    if (gen !== this.generation) return;
+    if (granted) this.#begin(); else this.#setMode('needs-permission');
   }
 
   #begin() {
@@ -102,12 +104,13 @@ export class WordWatcher {
 
   /** One poll. Reads the file only when its modification time changed. */
   async tick() {
-    if (this.checking || this.mode !== 'watching' || !this.handle || !this.store.project?.wordLink) return;
+    if (this.checking || (this.mode !== 'watching' && this.mode !== 'missing') || !this.handle || !this.store.project?.wordLink) return;
     this.checking = true;
     const projectId = this.store.project.id;
     try {
       const file = await this.handle.getFile();
       this.lastCheckedAt = Date.now();
+      if (this.mode === 'missing') this.#setMode('watching'); // the file is back
       const link = this.store.project.wordLink;
       const modified = file.lastModified;
       if (this.lastSeen === undefined) {

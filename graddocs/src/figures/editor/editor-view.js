@@ -11,6 +11,7 @@ import { openModal, confirmDialog } from '../../ui/modal.js';
 import { debounce, clone, isTypingTarget, modKey, slugify, downloadBlob, downloadText, uid, formatDateTime } from '../../core/utils.js';
 import { findFigure, createComment } from '../../core/model.js';
 import { getNumbering } from '../../core/numbering.js';
+import { clearPlacement } from '../../core/references.js';
 import { renderFigureSVG, renderThumbnail, computeBounds, isNode, isEdge } from '../render.js';
 import { autoLayout, layoutUnsuitedReason } from '../layout.js';
 import { getFigureType, buildTemplate } from '../types.js';
@@ -229,6 +230,7 @@ export default {
           const [kind, id] = value.split(':');
           f.chapterId = kind === 'ch' ? id : kind === 'sec' ? (getNumbering(p).sections.get(id)?.chapterId || null) : null;
           f.sectionId = kind === 'sec' ? id : null;
+          clearPlacement(p, 'figure', figureId); // the new location replaces any spot inside the text
         } else f[field] = value;
         f.updatedAt = Date.now();
       }, { activity: { text: `Updated details of “${getFigure().title}”`, targetId: figureId }, source: 'editor-meta' });
@@ -469,7 +471,7 @@ export default {
       if (!(await confirmDialog({ title: t('Delete {label}?', { label: info?.label || t('figure') }), message: t('“{title}” and its version history will be deleted. Later figures are renumbered automatically and references to it will show as broken.', { title: esc(f.title) }), confirmText: t('Delete figure'), danger: true }))) return;
       persist.cancel();
       deleted = true;
-      store.update((p) => { p.figures = p.figures.filter((x) => x.id !== figureId); }, { activity: { text: `Deleted figure “${f.title}”`, kind: 'delete' } });
+      store.update((p) => { p.figures = p.figures.filter((x) => x.id !== figureId); clearPlacement(p, 'figure', figureId); }, { activity: { text: `Deleted figure “${f.title}”`, kind: 'delete' } });
       toast(t('Figure deleted'), { type: 'success' });
       ctx.navigate(ctx.href('figures'));
     }

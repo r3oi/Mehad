@@ -5,6 +5,7 @@ import { esc, on } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { openModal } from '../ui/modal.js';
 import { t } from '../i18n/index.js';
+import { isolate } from './text-utils.js';
 
 const GROUPS = [
   { id: 'structure', label: 'Chapters & sections', icon: 'structure' },
@@ -37,10 +38,11 @@ export const WARNING_TEXT = {
 
 /** Translated, escaped one-line description of a plan item's detail. */
 export function describeDetail(item) {
+  const say = ([key, params]) => esc(t(key, Object.fromEntries(Object.entries(params || {}).map(([k, v]) => [k, typeof v === 'string' ? isolate(v) : v]))));
   const bits = [];
-  if (item.detail) bits.push(esc(t(item.detail[0], item.detail[1])).replace(/“([^”]*)”/g, (m, s) => `“<bdi>${s}</bdi>”`));
+  if (item.detail) bits.push(say(item.detail));
   if (item.rawDetail) bits.push(`<bdi>${esc(item.rawDetail)}</bdi>`);
-  for (const extra of item.extra || []) bits.push(esc(t(extra[0], extra[1])).replace(/“([^”]*)”/g, (m, s) => `“<bdi>${s}</bdi>”`));
+  for (const extra of item.extra || []) bits.push(say(extra));
   return bits.join(' · ');
 }
 
@@ -74,8 +76,14 @@ function rowHTML(item, { checkbox = true, checked = true, disabled = false } = {
   </div>`;
 }
 
+const KIND_RANK = { add: 0, rename: 1, move: 2, update: 3, reorder: 4, remove: 5 };
+/** Groups in a fixed order; inside a group new things first, removals last (document order is kept otherwise). */
 function groupsOf(items) {
-  return GROUPS.map((g) => ({ ...g, items: items.filter((i) => i.group === g.id) })).filter((g) => g.items.length);
+  return GROUPS.map((g) => ({
+    ...g,
+    items: items.filter((i) => i.group === g.id).map((item, order) => ({ item, order }))
+      .sort((a, b) => (KIND_RANK[a.item.kind] - KIND_RANK[b.item.kind]) || (a.order - b.order)).map((x) => x.item),
+  })).filter((g) => g.items.length);
 }
 
 const countsLine = (items) => {

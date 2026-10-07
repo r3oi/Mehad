@@ -93,14 +93,14 @@ export default {
         ${pending ? `<div class="callout callout-warning ws-callout">${icon('alert')}<div class="grow">${esc(pending.removals ? t('The Word file changed and some items were removed from it. Review before applying.') : t('The Word file changed and is waiting for your review.'))}</div><button class="btn btn-sm" data-action="sync">${esc(t('Review changes'))}</button></div>` : ''}
         <dl class="kv ws-kv">
           <dt>${esc(t('Last synced'))}</dt><dd>${timeHTML(l.lastSyncedAt)}</dd>
-          <dt>${esc(t('Live watching'))}</dt><dd>${esc(t(st.label))}</dd>
+          <dt>${esc(t('Sync mode'))}</dt><dd>${esc(l.autoSync !== false && status.mode !== 'unsupported' ? t('Automatic, when you save in Word') : t('Manual, with Sync now'))}</dd>
         </dl>
         <p class="ws-status-text">${esc(t(st.text))}</p>
-        <label class="switch ws-auto"><input type="checkbox" data-toggle="auto" ${l.autoSync !== false ? 'checked' : ''} ${status.mode === 'unsupported' ? 'disabled' : ''}><span class="track"></span><span>${esc(t('Sync automatically when the Word file is saved'))}</span></label>
+        <label class="switch ws-auto"><input type="checkbox" data-toggle="auto" ${l.autoSync !== false && status.mode !== 'unsupported' ? 'checked' : ''} ${status.mode === 'unsupported' ? 'disabled' : ''}><span class="track"></span><span>${esc(t('Sync automatically when the Word file is saved'))}</span></label>
         <div class="ws-hint">${esc(status.mode === 'unsupported' ? t('Automatic sync needs Chrome or Edge on a computer.') : t('Changes that remove content are always shown to you first.'))}</div>
         <footer class="ws-status-actions">
-          <button class="btn btn-primary" data-action="sync" ${busy ? 'disabled' : ''}>${icon('refresh')}${esc(busy ? t('Reading Word file…') : t('Sync now'))}</button>
-          ${needsReconnect ? `<button class="btn" data-action="reconnect">${icon('link')}${esc(t('Reconnect'))}</button>` : ''}
+          ${needsReconnect ? `<button class="btn btn-primary" data-action="reconnect">${icon('link')}${esc(t('Reconnect'))}</button>` : ''}
+          <button class="btn ${needsReconnect ? '' : 'btn-primary'}" data-action="sync" ${busy ? 'disabled' : ''}>${icon('refresh')}${esc(busy ? t('Reading Word file…') : t('Sync now'))}</button>
           <button class="btn" data-action="link" ${busy ? 'disabled' : ''}>${icon('swap')}${esc(t('Choose another file'))}</button>
           <span class="grow"></span>
           <button class="btn btn-ghost ws-unlink" data-action="unlink">${icon('unlink')}${esc(t('Unlink'))}</button>

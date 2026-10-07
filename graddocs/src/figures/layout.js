@@ -1,6 +1,6 @@
 // Automatic diagram layout.
 //
-//   autoLayout(diagram, { mode: 'layered' | 'tree' | 'auto', direction: 'TB' | 'LR', ids?: Set<string>, routing? }) → diagram
+//   autoLayout(diagram, { mode: 'layered' | 'tree' | 'auto', direction: 'TB' | 'LR', ids?: Set<string>, routing?, frames? }) → diagram
 //
 // Mutates node positions (and, for frames that hold laid-out nodes, their size) and returns the diagram.
 //
@@ -19,13 +19,20 @@
 //
 // Stays put: points, locked nodes, nodes outside `ids` (when given) and free text labels/images that
 // are not connected to anything. Frames (shape 'frame') are containers: a frame that contains laid-out
-// nodes is shrink-wrapped around them and arranged with them; a frame that is not in `ids` keeps its
-// position and only grows when its contents no longer fit. Disconnected parts of a graph are packed
-// side by side. Afterwards connectors between laid-out nodes are floated (anchors removed) and routed
-// orthogonally (routing: 'keep' | 'straight' | 'orthogonal').
+// nodes is shrink-wrapped around them and arranged with them (it is laid out as one block); a frame that
+// is not in `ids` keeps its position and only grows when its contents no longer fit (`frames: 'keep'` applies
+// that to every frame: none is moved or shrunk, only their contents are arranged inside). Disconnected parts of
+// a graph are packed side by side; loose single nodes form one grid.
+//
+// Connectors between laid-out nodes lose their stale anchors and are routed orthogonally
+// (routing: 'keep' | 'straight' | 'orthogonal'; lines touching an actor keep their straight routing). Each
+// connector then gets floating ends when the router leaves along the flow and avoids other shapes; otherwise it
+// is anchored bottom→top (TB) / right→left (LR), and connectors that run against the flow loop around the
+// outer side. Labels and arrow styles are never touched.
 import { isNode, isEdge, resolveEdgeStyle, resolveNodeStyle } from './render.js';
 import { getShape } from './shapes.js';
 import { layoutText } from './text-layout.js';
+import { edgeGeometry, PORTS } from './geometry.js';
 
 /** Figure types whose elements are placed by their own rules, not by a graph layout. */
 export const LAYOUT_UNSUITED_TYPES = new Set(['fishbone', 'sequence', 'timeline']);
@@ -78,7 +85,7 @@ export function measureLabel(text, font, maxWidth = Infinity) {
 // Public entry point
 
 export function autoLayout(diagram, options = {}) {
-  const { mode = 'auto', direction = 'TB', ids = null, routing = 'orthogonal' } = options;
+  const { mode = 'auto', direction = 'TB', ids = null, routing = 'orthogonal', frames: frameMode = 'wrap' } = options;
   const dir = direction === 'LR' ? 'LR' : 'TB';
   const nodes = (diagram.elements || []).filter(isNode);
   const edges = (diagram.elements || []).filter(isEdge);
@@ -114,7 +121,7 @@ export function autoLayout(diagram, options = {}) {
   const frameMemo = new Map();
   const hasMovableDesc = (f) => (kids.get(f.id) || []).some((k) => (isContainer(k) ? movableFrame(k) : movableLeaf(k)) || (isContainer(k) && hasMovableDesc(k)));
   const movableFrame = (f) => {
-    if (!frameMemo.has(f.id)) frameMemo.set(f.id, !f.locked && inScope(f) && hasMovableDesc(f));
+    if (!frameMemo.has(f.id)) frameMemo.set(f.id, frameMode !== 'keep' && !f.locked && inScope(f) && hasMovableDesc(f));
     return frameMemo.get(f.id);
   };
   const isItem = (n) => (isContainer(n) ? movableFrame(n) : movableLeaf(n));
@@ -232,15 +239,16 @@ export function autoLayout(diagram, options = {}) {
       const o = orig.get(n.id);
       let best = null;
       for (const f of movedFrames) {
-        const of = orig.get(f.id);
-        if (o.x >= of.x - 1 && o.y >= of.y - 1 && o.x + o.w <= of.x + of.w + 1 && o.y + o.h <= of.y + of.h + 1 && (!best || of.w * of.h < orig.get(best.id).w * orig.get(best.id).h)) best = f;
+        const fo = orig.get(f.id);
+        if (o.x >= fo.x - 1 && o.y >= fo.y - 1 && o.x + o.w <= fo.x + fo.w + 1 && o.y + o.h <= fo.y + fo.h + 1 && (!best || fo.w * fo.h < orig.get(best.id).w * orig.get(best.id).h)) best = f;
       }
       if (best) { n.x += best.x - orig.get(best.id).x; n.y += best.y - orig.get(best.id).y; }
     }
   }
 
-  // Connectors between laid-out nodes: floating ends, flow-friendly routing.
+  // Connectors between laid-out nodes: stale anchors are dropped (floating ends) and the route is orthogonal.
   if (routing !== 'keep') {
+    const routed = [];
     for (const e of edges) {
       if (!laidOut.has(e.source?.id) || !laidOut.has(e.target?.id)) continue;
       e.source = { id: e.source.id };
@@ -248,14 +256,81 @@ export function autoLayout(diagram, options = {}) {
       // Use-case style lines (anything touching an actor) stay as straight/curved lines.
       const keepLine = routing === 'orthogonal' && e.routing && e.routing !== 'orthogonal' && (byId.get(e.source.id)?.shape === 'actor' || byId.get(e.target.id)?.shape === 'actor');
       if (!keepLine) e.routing = routing === 'straight' ? 'straight' : 'orthogonal';
-      // A connector that runs against the flow loops around the outer side instead of cutting through the diagram.
-      if (backEdges.has(e) && e.routing === 'orthogonal' && e.source.id !== e.target.id) {
-        const side = dir === 'TB' ? { x: 1, y: 0.5 } : { x: 0.5, y: 1 };
-        e.source.anchor = { ...side }; e.target.anchor = { ...side };
-      }
+      if (e.routing === 'orthogonal' && e.source.id !== e.target.id) routed.push(e);
     }
+    routeConnectors(routed, byId, dir, backEdges);
   }
   return diagram;
+}
+
+// ---------------------------------------------------------------------------
+// Connector routing after a layout
+
+/** Does the segment p→q touch the rectangle r (inflated by `pad`)? Liang–Barsky clipping. */
+function segmentHitsRect(p, q, r, pad = 2) {
+  const x0 = r.x - pad; const x1 = r.x + r.w + pad; const y0 = r.y - pad; const y1 = r.y + r.h + pad;
+  let t0 = 0; let t1 = 1;
+  const dx = q.x - p.x; const dy = q.y - p.y;
+  for (const [pp, qq] of [[-dx, p.x - x0], [dx, x1 - p.x], [-dy, p.y - y0], [dy, y1 - p.y]]) {
+    if (pp === 0) { if (qq < 0) return false; continue; }
+    const t = qq / pp;
+    if (pp < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+  }
+  return true;
+}
+
+/**
+ * Pick the end anchors of every connector so that its orthogonal route follows the flow and stays clear of other shapes:
+ *   forward   floating ends when the router leaves along the flow, else bottom→top (TB) / right→left (LR), else around the side
+ *   backward  around the outer side (right for TB, bottom for LR)
+ * Candidates are tried in that order; the first route that crosses no other shape wins (otherwise the one crossing fewest).
+ */
+function routeConnectors(edges, byId, dir, backEdges) {
+  const tb = dir === 'TB';
+  const obstacles = [...byId.values()].filter((n) => !isContainer(n) && n.shape !== 'point' && n.shape !== 'text' && n.shape !== 'image');
+  const out = tb ? 's' : 'e'; const into = tb ? 'n' : 'w';
+  const sides = tb ? ['e', 'w'] : ['s', 'n'];
+  for (const e of edges) {
+    const a = byId.get(e.source.id); const b = byId.get(e.target.id);
+    if (!a || !b) continue;
+    // Inheritance-style connectors are laid out general-class-first, so their natural direction is "against" the arrow.
+    const reversed = e.style?.endArrow === 'triangleOpen';
+    const [first, second] = reversed ? [b, a] : [a, b];
+    const forward = tb ? second.y >= first.y + first.h - 1 : second.x >= first.x + first.w - 1;
+    const backward = tb ? second.y + second.h <= first.y + 1 : second.x + second.w <= first.x + 1;
+    const loop = (side) => ({ source: { id: a.id, anchor: { ...PORTS[side] } }, target: { id: b.id, anchor: { ...PORTS[side] } } });
+    const flow = {
+      source: { id: a.id, anchor: { ...PORTS[reversed ? into : out] } },
+      target: { id: b.id, anchor: { ...PORTS[reversed ? out : into] } },
+    };
+    const floating = { source: { id: a.id }, target: { id: b.id } };
+    const isBack = backEdges.has(e) || backward;
+    let candidates;
+    if (isBack) candidates = [loop(sides[0]), loop(sides[1]), floating];
+    else if (forward) candidates = [floating, flow, loop(sides[0]), loop(sides[1])];
+    else candidates = [floating];
+    let best = null;
+    for (const cand of candidates) {
+      let geom;
+      try { geom = edgeGeometry({ ...e, ...cand, routing: 'orthogonal' }, byId); } catch { continue; }
+      const pts = geom.points;
+      // A floating route must leave along the flow, otherwise a wide layout would exit sideways.
+      if (forward && !isBack && cand === floating) {
+        const sign = reversed ? -1 : 1;
+        const dx = (pts[1].x - pts[0].x) * sign; const dy = (pts[1].y - pts[0].y) * sign;
+        const along = tb ? Math.abs(dx) < 0.5 && dy > 0.5 : Math.abs(dy) < 0.5 && dx > 0.5;
+        if (!along) continue;
+      }
+      let hits = 0;
+      for (const o of obstacles) {
+        if (o === a || o === b) continue;
+        for (let k = 1; k < pts.length; k += 1) if (segmentHitsRect(pts[k - 1], pts[k], o)) { hits += 1; break; }
+      }
+      if (!best || hits < best.hits) best = { cand, hits };
+      if (hits === 0) break;
+    }
+    if (best) { e.source = best.cand.source; e.target = best.cand.target; }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -562,6 +637,23 @@ function layeredLayout(nodes, edges, cfg) {
     for (let l = L - 1; l >= 0; l -= 1) relax(l, 'both');
   }
   for (let l = L - 2; l >= 0; l -= 1) relax(l, 'down'); // parents end up centred over their children
+
+  // A node whose only (real) parent has no other child is moved under it when there is room, so chains run straight.
+  const room = (v) => {
+    const lay = layers[v.layer]; const i = lay.indexOf(v);
+    return [i > 0 ? lay[i - 1].x + sepOf(lay[i - 1], v) : -Infinity, i < lay.length - 1 ? lay[i + 1].x - sepOf(v, lay[i + 1]) : Infinity];
+  };
+  for (let pass = 0; pass < 2; pass += 1) {
+    for (let l = 1; l < L; l += 1) {
+      for (const v of layers[l]) {
+        if (v.dummy) continue;
+        const parents = v.up.filter((u) => !u.dummy);
+        if (parents.length !== 1 || parents[0].down.filter((k) => !k.dummy).length !== 1) continue;
+        const [lo, hi] = room(v);
+        if (parents[0].x >= lo - 0.01 && parents[0].x <= hi + 0.01) v.x = parents[0].x;
+      }
+    }
+  }
 
   // --- 6. main-axis positions
   const band = layers.map((lay) => Math.max(0, ...lay.filter((v) => !v.dummy).map((v) => v.ms)));

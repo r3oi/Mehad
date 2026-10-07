@@ -139,7 +139,9 @@ export function buildPlan(project, parsed) {
       if (cand) { r.p = cand; claimed.add(cand); }
     }
     // Renamed headings: unmatched Word headings vs. imported-but-missing project headings between the same neighbours.
-    const leftover = projNodes.filter((p) => !claimed.has(p) && mappedIds.has(p.id));
+    // On the very first link nothing is "imported" yet, so near-identical titles are paired too (never duplicated).
+    const isMapped = (p) => mappedIds.has(p.id);
+    const leftover = projNodes.filter((p) => !claimed.has(p) && (isMapped(p) || plan.firstSync));
     rows.forEach((r, i) => {
       if (r.p || !leftover.length) return;
       let prevIdx = -1; let nextIdx = projNodes.length;
@@ -154,7 +156,8 @@ export function buildPlan(project, parsed) {
         const bodySim = bodySimilarity(wLines, pLines);
         const titleSim = similarity(r.w.title, p.title);
         const bothEmpty = !wLines.length && !pLines.length;
-        const ok = bodySim >= 0.6 || titleSim >= 0.7 || (between && (titleSim >= 0.34 || bodySim >= 0.3 || bothEmpty));
+        const ok = bodySim >= 0.6 || titleSim >= 0.7 || (between && (isMapped(p)
+          ? (titleSim >= 0.34 || bodySim >= 0.3 || bothEmpty) : (titleSim >= 0.5 || bodySim >= 0.5)));
         const score = bodySim * 0.6 + titleSim * 0.3 + (between ? 0.1 : 0);
         if (ok && score > bestScore) { best = p; bestScore = score; }
       }
@@ -175,7 +178,7 @@ export function buildPlan(project, parsed) {
       const sub = matchLevel(pn.word.children, pn.proj ? (pn.proj.sections || []) : [], pn, pn.chapterPN);
       pn.children = sub.list; pn.removed = sub.removed;
     });
-    const removed = projNodes.filter((p) => !claimed.has(p) && mappedIds.has(p.id));
+    const removed = projNodes.filter((p) => !claimed.has(p) && isMapped(p));
 
     const matchedIds = new Set(rows.filter((r) => r.p).map((r) => r.p.id));
     const projOrder = projNodes.filter((p) => matchedIds.has(p.id)).map((p) => p.id);
@@ -226,15 +229,16 @@ export function buildPlan(project, parsed) {
         && (isTable ? projectTableSig(project, x) === e.sig : link.hashes.figures[x.id] === e.hash));
       if (cand) claim(e, cand);
     }
-    // Renamed captions: same content, or the only unmatched imported item in that place.
-    const leftover = projList.filter((x) => !claimed.has(x.id) && mapped.has(x.id));
+    // Renamed captions: same content, a near-identical caption, or the only unmatched imported item in that place.
+    const leftover = projList.filter((x) => !claimed.has(x.id) && (mapped.has(x.id) || plan.firstSync));
     for (const e of entries) {
       if (e.proj || !leftover.length) continue;
       let cand = isTable
         ? leftover.find((x) => projectTableSig(project, x) === e.sig)
         : leftover.find((x) => link.hashes.figures[x.id] === e.hash);
+      if (!cand && e.word.title) cand = leftover.find((x) => similarity(x.title, e.word.title) >= 0.7);
       if (!cand && !e.pn.isNew) {
-        const here = leftover.filter((x) => atLocation(x, e.pn));
+        const here = leftover.filter((x) => mapped.has(x.id) && atLocation(x, e.pn));
         const wordHere = entries.filter((o) => !o.proj && o.pn === e.pn).length;
         if (here.length === 1 && wordHere === 1) [cand] = here;
       }
@@ -245,7 +249,7 @@ export function buildPlan(project, parsed) {
       e.id = e.proj ? e.proj.id : uid(isTable ? 'tbl' : 'fig');
       e.blk.entry = e;
     }
-    return { entries, removed: leftover.filter((x) => !claimed.has(x.id)) };
+    return { entries, removed: projList.filter((x) => !claimed.has(x.id) && mapped.has(x.id)) };
   };
   const tableMatch = matchItems('table');
   const figureMatch = matchItems('figure');
@@ -317,7 +321,7 @@ export function buildPlan(project, parsed) {
     if (pn.isNew) {
       const n = paragraphCount(pn);
       pn.addItemId = add({
-        group: 'structure', kind: 'add', unit, title: word.title, context, detail: n ? ['{n} paragraphs', { n }] : null,
+        group: 'structure', kind: 'add', unit, title: word.title, context, detail: n ? (n === 1 ? ['1 paragraph', {}] : ['{n} paragraphs', { n }]) : null,
         requires: pn.parent ? pn.parent.addItemId || null : null, run: (ctx) => ctx.addNode(pn),
       }).id;
     } else {
@@ -400,7 +404,7 @@ export function buildPlan(project, parsed) {
     const e = { word: wf, index, proj, id: proj ? proj.id : uid('fm'), lines, hash: hashOf(lines.join('\n')), changed: false };
     plan.front.push(e);
     if (!proj) {
-      if (lines.length) add({ group: 'front', kind: 'add', title: wf.title, context: '', detail: ['{n} paragraphs', { n: lines.length }], run: (ctx) => ctx.addFront(e) });
+      if (lines.length) add({ group: 'front', kind: 'add', title: wf.title, context: '', detail: lines.length === 1 ? ['1 paragraph', {}] : ['{n} paragraphs', { n: lines.length }], run: (ctx) => ctx.addFront(e) });
       return;
     }
     const old = bodyLines(project, proj.body);
@@ -674,11 +678,12 @@ function recordLink(ctx, fileInfo) {
     front: (id) => project.frontMatter.some((f) => f.id === id),
     acronym: (id) => project.acronyms.some((a) => a.id === id),
   };
-  const prune = (obj, test) => { for (const [k, id] of Object.entries(obj)) if (!test(id)) delete obj[k]; };
+  const prune = (obj, test) => { for (const [k, id] of Object.entries(obj)) if (!test(id)) delete obj[k]; }; // key → id maps
+  const pruneKeys = (obj, test) => { for (const id of Object.keys(obj)) if (!test(id)) delete obj[id]; }; // id → hash maps
   const dropValue = (obj, id) => { for (const [k, v] of Object.entries(obj)) if (v === id) delete obj[k]; };
   prune(map.chapters, exists.node); prune(map.sections, exists.node); prune(map.tables, exists.table);
   prune(map.figures, exists.figure); prune(map.front, exists.front); prune(map.acronyms, exists.acronym);
-  prune(hashes.containers, exists.node); prune(hashes.tables, exists.table); prune(hashes.figures, exists.figure); prune(hashes.front, exists.front);
+  pruneKeys(hashes.containers, exists.node); pruneKeys(hashes.tables, exists.table); pruneKeys(hashes.figures, exists.figure); pruneKeys(hashes.front, exists.front);
 
   for (const pn of plan.pns) {
     if (!exists.node(pn.id)) continue;
@@ -718,9 +723,14 @@ async function preparePictures(store, plan, selected) {
   for (const e of plan.fps) {
     const itemId = e.isNew ? e.addItemId : e.updateItemId;
     if (!itemId || !selected.has(itemId) || !(e.isNew || e.changed)) continue;
-    const prep = await prepareImage(e.word);
-    prepared.set(e.word, prep);
-    total += prep.dataUrl.length;
+    try {
+      const prep = await prepareImage(e.word);
+      prepared.set(e.word, prep);
+      total += prep.dataUrl.length;
+    } catch (err) { // a picture the browser cannot decode must not stop the whole sync
+      console.warn('[word] could not read a picture', err);
+      plan.failedImages = (plan.failedImages || 0) + 1;
+    }
   }
   if (total && store.repo.engine === 'localStorage' && typeof indexedDB !== 'undefined') {
     let used = 0; let quota = 10 * 1024 * 1024;
@@ -764,5 +774,5 @@ export async function applyPlan(store, plan, selectedIds, { fileInfo = {}, backu
   }, { activity: activity ? log : undefined, source: 'word-sync' });
   try { await store.flush(); } catch (err) { console.warn('[word] flush failed', err); }
   const counts = countKinds(applied);
-  return { count: applied.length, counts, summary: summarizeCounts(counts), backup: backupRecord, applied, switchedStorage: !!plan.switchedStorage };
+  return { count: applied.length, counts, summary: summarizeCounts(counts), backup: backupRecord, applied, switchedStorage: !!plan.switchedStorage, failedImages: plan.failedImages || 0 };
 }

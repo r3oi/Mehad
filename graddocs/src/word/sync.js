@@ -10,6 +10,7 @@ import { parseDocx } from './docx-parse.js';
 import { buildPlan, applyPlan, normalizeLink } from './plan.js';
 import { saveHandle, loadHandle, deleteHandle } from './link-store.js';
 import { openReviewDialog, openAppliedDialog } from './review-dialog.js';
+import { isolate } from './text-utils.js';
 import { wordEvents, wordState, withLock, setPending, supportsLiveWatch, hasReadPermission } from './state.js';
 
 export { wordEvents, wordState, supportsLiveWatch, withLock, setPending, hasReadPermission };
@@ -64,6 +65,7 @@ export async function parseSource(source) {
 export function notifySynced(store, shell, res, { fileName, auto = false } = {}) {
   wordState.lastApplied = { at: Date.now(), items: res.applied, fileName, backup: res.backup, auto };
   wordEvents.emit('synced', wordState.lastApplied);
+  if (res.failedImages) toast(t('{n} pictures could not be read and were skipped.', { n: res.failedImages }), { type: 'warning', duration: 7000 });
   if (!res.count) return;
   const message = res.count === 1 ? t('Synced with Word: 1 change') : t('Synced with Word: {n} changes', { n: res.count });
   toast(message, {
@@ -108,7 +110,7 @@ async function runReviewed(store, shell, { source, handle }) {
   if (!plan.items.length) {
     await applyPlan(store, plan, [], { fileInfo: info, backup: false, activity: false });
     setPending(null);
-    toast(plan.firstSync ? t('Linked to {file}. Everything already matches.', { file: info.name }) : t('Everything is up to date.'), { type: 'success' });
+    toast(plan.firstSync ? t('Linked to {file}. Everything already matches.', { file: isolate(info.name) }) : t('Everything is up to date.'), { type: 'success' });
     wordEvents.emit('synced', null); wordEvents.emit('relink');
     return { count: 0 };
   }
@@ -147,7 +149,7 @@ export function syncNow({ store, shell }) {
       if (link?.fileName && picked.file.name !== link.fileName) {
         const ok = await confirmDialog({
           title: t('Different file'),
-          message: t('This project is linked to “{linked}”, but you chose “{chosen}”. Sync from the new file anyway?', { linked: escapeHtml(link.fileName), chosen: escapeHtml(picked.file.name) }),
+          message: t('This project is linked to “{linked}”, but you chose “{chosen}”. Sync from the new file anyway?', { linked: escapeHtml(isolate(link.fileName)), chosen: escapeHtml(isolate(picked.file.name)) }),
           confirmText: t('Sync anyway'),
         });
         if (!ok) return null;
@@ -180,7 +182,7 @@ export function createProjectFromWord({ store, shell }) {
       if (picked.handle) await saveHandle(project.id, picked.handle);
       wordEvents.emit('relink');
       const s = parsed.stats;
-      toast(t('Created “{name}” from Word: {chapters} chapters, {tables} tables, {figures} figures.', { name: store.project.name, chapters: s.chapters, tables: s.tables, figures: s.images }), { type: 'success', duration: 6000 });
+      toast(t('Created “{name}” from Word: {chapters} chapters, {tables} tables, {figures} figures.', { name: isolate(store.project.name), chapters: s.chapters, tables: s.tables, figures: s.images }), { type: 'success', duration: 6000 });
       shell.navigate(href(project.id, 'structure'));
       return project;
     } catch (err) { toastError(err, t('Could not create the project')); return null; }

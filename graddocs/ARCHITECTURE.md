@@ -119,6 +119,12 @@ are reported by `findBrokenPlacements`). Helpers in references.js: `makePlacemen
 `buildDocument(project)` → `{ titlePage, front[], toc[], figures[], tables[], acronyms[], body[] }` — the single
 source for Document Preview and the Word export. Body blocks: chapter, heading, paragraph, bullet, figure, table.
 
+## Diagram generation & auto-layout
+
+- `figures/layout.js`: `autoLayout(diagram, { mode: 'layered'|'tree'|'auto', direction: 'TB'|'LR', ids })` — layered (Sugiyama-style) or tidy-tree layout, undoable when called through `editor.mutate`.
+- `figures/generate/`: `spec.js` (JSON diagram spec, validation, AI prompt), `to-diagram.js` (`specToDiagram`), `text-parse.js` (arrow lists, indented outlines, Mermaid subset), `ai.js` (Claude Messages API, browser-direct; key in `prefs.get('ai')`, never stored in projects), `generate-dialog.js`.
+- `types.js` also exports `figureFonts(project)`.
+
 ## Rendering APIs
 
 - `figures/render.js`: `renderFigureSVG(figureOrDiagram, { padding, background }) → { svg, width, height }` (standalone SVG string),

@@ -10,6 +10,9 @@ const INVISIBLE = new RegExp(`[${cc(0x200b, 0xad, 0x200e, 0x200f, 0xfeff)}]`, 'g
 const SPACES = new RegExp(`[${cc(0xa0, 0x2007, 0x202f)}]`, 'g');
 const MARKS = new RegExp(`[${cc(0x300)}-${cc(0x36f)}${cc(0x64b)}-${cc(0x65f)}${cc(0x670)}${cc(0x6d6)}-${cc(0x6ed)}]`, 'g');
 
+/** Wrap report text (file and project names, titles) so it keeps its own direction inside translated UI text. */
+export const isolate = (text) => `${cc(0x2068)}${text}${cc(0x2069)}`;
+
 /** Collapse whitespace (incl. NBSP / zero-width) into single spaces. */
 export function tidy(s) {
   return String(s ?? '').replace(INVISIBLE, '').replace(SPACES, ' ').replace(/\s+/g, ' ').trim();
@@ -38,7 +41,7 @@ export function hashOf(input) {
   const feed = (c) => {
     h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
     h2 = Math.imul(h2 ^ c, 0x85ebca6b) >>> 0;
-    h2 ^= h2 >>> 13;
+    h2 = (h2 ^ (h2 >>> 13)) >>> 0;
   };
   if (typeof input === 'string') {
     for (let i = 0; i < input.length; i += 1) feed(input.charCodeAt(i));
@@ -79,6 +82,8 @@ export function stripNumbering(s) {
   return out || t;
 }
 
+// Short all-caps words that are ordinary English (so ALL-CAPS titles read "Top Ten", not "TOP Ten"); other short ones stay (AI, API, SQL).
+const COMMON_SHORT = new Set(['one', 'two', 'six', 'ten', 'the', 'and', 'for', 'not', 'but', 'all', 'new', 'top', 'use', 'our', 'out', 'off', 'any', 'can', 'may', 'way', 'day', 'big', 'low', 'how', 'why', 'who', 'set', 'end', 'add', 'get', 'run', 'map', 'log', 'web', 'its', 'you', 'are', 'was', 'has', 'had', 'see', 'yes', 'non', 'pre', 'no', 'go', 'up', 'do', 'so', 'we', 'my', 'me', 'be', 'is', 'if', 'he']);
 const SMALL_WORDS = new Set(['a', 'an', 'the', 'and', 'or', 'but', 'nor', 'for', 'of', 'in', 'on', 'at', 'to', 'by', 'with', 'from', 'as', 'vs', 'via', 'per']);
 const KNOWN_UPPER = new Set(['HTTP', 'HTTPS', 'HTML', 'JSON', 'REST', 'RESTFUL', 'MVC', 'NOSQL', 'MYSQL', 'OAUTH', 'CRUD', 'AJAX', 'GRPC', 'IEEE', 'WIFI', 'LORA', 'LORAWAN', 'MQTT', 'BLE', 'IOT', 'UML', 'SRS', 'GUI', 'NASA']);
 
@@ -103,7 +108,7 @@ export function toTitleCase(s, keep = new Set()) {
     const isFirst = first; first = false;
     if (keep.has(upper) || KNOWN_UPPER.has(upper)) return pre + upper + post;
     if (!isFirst && SMALL_WORDS.has(lower)) return pre + lower + post;
-    if (core.length <= 3 && /^[A-Z0-9&]+$/.test(core)) return tok; // AI, API, 5G
+    if (core.length <= 3 && /^[A-Z0-9&]+$/.test(core) && !COMMON_SHORT.has(lower)) return tok; // AI, API, 5G
     return pre + lower.charAt(0).toUpperCase() + lower.slice(1) + post;
   }).join('');
 }
@@ -124,8 +129,9 @@ export function cleanTitle(raw, { chapter = false, keep } = {}) {
 
 /** Word-overlap similarity of two strings, 0..1. */
 export function similarity(a, b) {
-  const wa = new Set(normKey(a).split(' ').filter(Boolean));
-  const wb = new Set(normKey(b).split(' ').filter(Boolean));
+  const stem = (w) => (w.length > 3 && /s$/.test(w) && !/ss$/.test(w) ? w.slice(0, -1) : w);
+  const wa = new Set(normKey(a).split(' ').filter(Boolean).map(stem));
+  const wb = new Set(normKey(b).split(' ').filter(Boolean).map(stem));
   if (!wa.size || !wb.size) return 0;
   let common = 0;
   for (const w of wa) if (wb.has(w)) common += 1;

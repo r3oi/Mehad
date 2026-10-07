@@ -107,10 +107,10 @@ function nodeDef(node, kind, spec, ctx) {
     }
     case 'class': case 'interface': {
       const head = kind === 'interface' ? ['«interface»', label] : [label];
-      const fields = node.fields.length ? node.fields : [ZWSP];
-      const methods = node.methods.length ? node.methods : [ZWSP];
-      const text = [head.join('\n'), fields.join('\n'), methods.join('\n')].join('\n--\n');
-      return { shape: 'class', text, ...fitCompartments([head, node.fields, node.methods], head.length, font, { minW: 170 }), style: {} };
+      // An interface without attributes has just the operations compartment.
+      const parts = kind === 'interface' && !node.fields.length ? [node.methods] : [node.fields, node.methods];
+      const text = [head.join('\n'), ...parts.map((p) => (p.length ? p : [ZWSP]).join('\n'))].join('\n--\n');
+      return { shape: 'class', text, ...fitCompartments([head, ...parts], head.length, font, { minW: 170 }), style: {} };
     }
     case 'entity': {
       const fields = node.fields.length ? node.fields.map(erdField) : [ZWSP];
@@ -269,6 +269,8 @@ function buildSequence(spec, ctx) {
   const gaps = widths.slice(0, -1).map((w, i) => (w + widths[i + 1]) / 2 + 70);
   for (const m of spec.messages) {
     const i = index.get(m.from); const j = index.get(m.to);
+    // A message to itself draws a loop and a label to the right of the lifeline: keep the next lifeline clear of it.
+    if (i === j && m.label && i < gaps.length) gaps[i] = Math.max(gaps[i], 44 + 16 + measureLabel(m.label, edgeFont, 220).w + 30);
     if (i === j || !m.label) continue;
     const [lo, hi] = i < j ? [i, j] : [j, i];
     const need = measureLabel(m.label, edgeFont, 220).w + 44;
@@ -288,8 +290,8 @@ function buildSequence(spec, ctx) {
     if (a === c) {
       // Message to itself: a small loop to the right of the lifeline, label beside it.
       const lx = a.x + a.w / 2 + 44;
-      const p1 = b.node('point', lx - 4, y - 4, 8, 8, '', { fill: 'none', stroke: 'none' });
-      const p2 = b.node('point', lx - 4, y + 22 - 4, 8, 8, '', { fill: 'none', stroke: 'none' });
+      const p1 = b.node('point', lx - 1, y - 1, 2, 2, '', { fill: 'none', stroke: 'none' });
+      const p2 = b.node('point', lx - 1, y + 22 - 1, 2, 2, '', { fill: 'none', stroke: 'none' });
       b.edge(a, p1, { routing: 'straight', from: frac(y), style: { endArrow: 'none', dash: m.reply ? 'dashed' : 'solid' } });
       b.edge(p1, p2, { routing: 'straight', style: { endArrow: 'none', dash: m.reply ? 'dashed' : 'solid' } });
       b.edge(p2, a, { routing: 'straight', to: frac(y + 22), style });
