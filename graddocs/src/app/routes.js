@@ -14,6 +14,7 @@ export const NAV = [
     { id: 'tables', label: 'Tables', icon: 'table', count: (p) => p.tables.length },
     { id: 'chapters', label: 'Chapters', icon: 'chapters', count: (p) => p.chapters.length },
     { id: 'acronyms', label: 'Acronyms', icon: 'acronym', count: (p) => p.acronyms.length },
+    { id: 'references', label: 'References', icon: 'book', count: (p) => (p.references || []).length },
   ] },
   { group: 'Output', items: [
     { id: 'preview', label: 'Document Preview', icon: 'preview' },
@@ -32,6 +33,7 @@ export const VIEWS = {
   tables: () => import('../tables/tables-view.js'),
   'table-editor': () => import('../tables/table-editor-view.js'),
   acronyms: () => import('../acronyms/acronyms-view.js'),
+  references: () => import('../bibliography/references-view.js'),
   preview: () => import('../preview/preview-view.js'),
   export: () => import('../export/export-view.js'),
   settings: () => import('../settings/settings-view.js'),
@@ -41,7 +43,7 @@ export const VIEWS = {
 /**
  * Parse location.hash → { view, projectId, params }.
  *   #/projects
- *   #/p/<projectId>/<section>[/<itemId>]   e.g. #/p/prj_x/figures/fig_y
+ *   #/p/<projectId>/<section>[/<itemId>]   e.g. #/p/prj_x/figures/fig_y, #/p/prj_x/references/ref_z
  *   Query string after "?" is exposed as params.query (e.g. ?focus=<id>).
  */
 export function parseHash(hash = location.hash) {

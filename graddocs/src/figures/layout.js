@@ -35,7 +35,7 @@ import { layoutText } from './text-layout.js';
 import { edgeGeometry, PORTS } from './geometry.js';
 
 /** Figure types whose elements are placed by their own rules, not by a graph layout. */
-export const LAYOUT_UNSUITED_TYPES = new Set(['fishbone', 'sequence', 'timeline']);
+export const LAYOUT_UNSUITED_TYPES = new Set(['fishbone', 'sequence', 'timeline', 'context', 'screenshot']);
 
 /** → null when auto layout makes sense, otherwise the reason ('fishbone' | 'sequence' | 'timeline'). */
 export function layoutUnsuitedReason(diagram, figureType = null) {

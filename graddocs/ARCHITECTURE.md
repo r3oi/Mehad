@@ -8,7 +8,8 @@ Zero-dependency, ES-module web app (HTML/CSS/JS). No build step. Run with `node 
 index.html → src/main.js
   app/      shell (sidebar, topbar, router), routes, command palette (Ctrl+K), search, shortcuts, prefs
   core/     store (state + autosave), model (factories/normalisation), numbering (derived numbers),
-            references (cross-reference tokens), document (linear doc model), utils, events
+            references (cross-reference tokens), document (linear doc model), bibliography (reference
+            formatting + BibTeX), presets (university report templates), utils, events
   storage/  adapters (localStorage, IndexedDB) + ProjectRepository (the only persistence API)
   ui/       dom helpers, icons, modal/confirm/prompt/form dialogs, toast, menu, tooltip
   figures/  diagram engine (shapes, geometry, text layout, render), templates, types registry,
@@ -16,6 +17,7 @@ index.html → src/main.js
   tables/   tables list, table editor, templates, table renderers (HTML/SVG)
   structure/ project structure (outline) view, chapters (writing) view
   acronyms/ acronyms manager + automatic detection
+  bibliography/ References page (#/p/<id>/references), reference dialog, BibTeX import
   preview/  Word-like paginated preview
   export/   zip/png/pdf (vector: pdf-vector.js + pdf-fonts.js)/docx writers + export view
   projects/ dashboard/ settings/  — remaining views
@@ -37,7 +39,7 @@ export default {
 ```
 
 Routes: `#/projects`, `#/p/<projectId>/<section>[/<itemId>][?query]` where section ∈
-dashboard, structure, chapters, figures, tables, acronyms, preview, export, settings.
+dashboard, structure, word, chapters, figures, tables, acronyms, references, preview, export, settings.
 `figures/<id>` opens the figure editor, `tables/<id>` the table editor. Build links with `ctx.href('tables', id)`.
 `ctx.shell.setBreadcrumbs([{ label, href? }])` sets the crumbs after the project name.
 
@@ -64,20 +66,29 @@ Never write to storage directly. Always mutate through `store.update` so numberi
 ## Data model (core/model.js)
 
 ```js
-Project { id, name, description, type, university, college, department, supervisor, students, academicYear,
-          createdAt, updatedAt, frontMatter[], chapters[], figures[], tables[], acronyms[], settings, activity[], dismissedSuggestions[] }
-FrontMatter { id, kind: declaration|acknowledgements|abstract|toc|lot|lof|loa|custom, title, include, body }
-Chapter  { id, title, body, sections: Section[] }
-Section  { id, title, body, status: todo|draft|review|done, sections: Section[] }   // nested (1.4 → 1.4.2 → 1.4.2.1)
-Figure   { id, title, type, chapterId, sectionId, description, diagram, versions[], comments[], createdAt, updatedAt }
+Project { id, name, description, type, university, college, department, supervisor, coSupervisor, students, academicYear,
+          submissionDate, degreeStatement, logo (data URL), preset?, createdAt, updatedAt, frontMatter[], chapters[], figures[],
+          tables[], acronyms[], references[], settings, activity[], dismissedSuggestions[] }
+FrontMatter { id, kind: declaration|acknowledgements|abstract|toc|lot|lof|loa|custom, title, include, body,
+              hint?, wordLimit? (abstract: 150), signatures? + signatureNote? (declaration signature lines) }
+Chapter  { id, title, body, numbered (false = CONCLUSIONS-style unnumbered chapter), hint?, sections: Section[] }
+Section  { id, title, body, status: todo|draft|review|done, hint?, sections: Section[] }   // nested (1.4 → 1.4.2 → 1.4.2.1)
+Figure   { id, title, type, chapterId, sectionId, description, diagram, versions[], comments[], imagePool?, createdAt, updatedAt }
 Table    { id, title, chapterId, sectionId, description, template, columns: [{ id, width(%) }],
            rows: Cell[][] (rows[0..headerRows-1] are header rows), headerRows,
            style: { headerFill, headerTextColor, fontSize, zebra, borders: 'all'|'horizontal' }, versions[], createdAt, updatedAt }
 Cell     { text, align?: left|center|right, bold?, italic?, colspan?, rowspan?, hidden? (covered by a merge) }
 Acronym  { id, acronym, meaning, description, createdAt }
+Reference { id, type: journal|conference|book|chapter|web|thesis|report|other, authors (one per line), title, container,
+            editors, publisher, place, year, month, volume, issue, pages, edition, doi, url, accessed, note,
+            custom (verbatim text that replaces the formatted entry), source? ('word' = imported by Word Sync) }
 ```
 
-Factories: `createProject, createChapter, createSection, createFigure, createTable, createCell, createAcronym, createComment, createFrontMatterItem`.
+`hint` is writing guidance from a report template, shown while a body is empty and never exported.
+Version snapshots keep image data once per figure: their image `src` is `pool:<key>` into `figure.imagePool`;
+read them with `versionSnapshot(figure, version)` (figures/versions.js).
+
+Factories: `createProject, createChapter, createSection, createFigure, createTable, createCell, createAcronym, createReference, createComment, createFrontMatterItem`.
 Tree helpers: `walkSections(project, cb)`, `findNode(project, id)`, `findFigure`, `findTable`, `chapterOfSection`.
 Constants: `DEFAULT_SETTINGS`, `SECTION_STATUSES`, `FRONT_MATTER_KINDS`.
 
@@ -91,8 +102,13 @@ Numbers are **never stored**. `getNumbering(project)` (cached per change) return
   outline: [{ kind, id, number, depth, title, chapterId }],
   figures: Map(id → { index, number: '3', label: 'Figure 3', code: 'FIG-003', chapterId, sectionId, location }),
   tables:  Map(id → { … 'Table 2', 'TAB-002' … }),
-  figureOrder: Figure[], tableOrder: Table[] }       // document order
+  figureOrder: Figure[], tableOrder: Table[],      // document order
+  references: Map(id → { index, number, label: '[3]', cited }), referenceOrder: Reference[] }
 ```
+
+Unnumbered chapters get number '' and label = their title, don't use up a chapter number, and their sections are
+unnumbered too. Reference numbers follow `settings.references.order`: 'citation' (first citation in the text, then
+never-cited ones), 'alphabetical' (first author) or 'manual' (list order).
 
 Document order = chapter order → section order (depth-first) → array order within a section. Unassigned items come last.
 Helpers: `captionText(project, 'figure'|'table', item)`, `chapterHeading(project, chapter)`,
@@ -101,6 +117,7 @@ Helpers: `captionText(project, 'figure'|'table', item)`, `chapterHeading(project
 ## Cross references (core/references.js)
 
 Bodies store `{{ref:fig:<id>}}`, `{{ref:tab:<id>}}`, `{{ref:sec:<id>}}`, `{{ref:ch:<id>}}` tokens, resolved at render time.
+Citations are the same kind of token: `{{ref:cite:<referenceId>}}` → "[3]" (a deleted reference shows "[?]").
 `makeRef(kind, id)`, `refInfo(project, kind, id) → { text, ok, title }`, `resolveText`, `resolveHTML(project, body, { chipClass, editable })`,
 `parseBlocks(body) → [{ type: 'p'|'li', text }]` (one paragraph per line; lines starting with "- " are bullets),
 `findPlainReferences`, `linkPlainReferences(project, body) → { body, count }`, `findBrokenReferences`, `findUsages`.
@@ -116,8 +133,20 @@ are reported by `findBrokenPlacements`). Helpers in references.js: `makePlacemen
 
 ## Document model (core/document.js)
 
-`buildDocument(project)` → `{ titlePage, front[], toc[], figures[], tables[], acronyms[], body[] }` — the single
+`buildDocument(project)` → `{ titlePage, front[], toc[], figures[], tables[], acronyms[], body[], references }` — the single
 source for Document Preview and the Word export. Body blocks: chapter, heading, paragraph, bullet, figure, table.
+TOC entries have kind front|chapter|section|references; `references.entries` are formatted runs ([{ text, italic }])
+for the References page after the last chapter. `titlePage.layout` is 'classic' or 'submission' (university cover).
+
+## Bibliography & report templates
+
+`core/bibliography.js`: `REFERENCE_TYPES`, `formatReference(ref, 'ieee'|'compact')`, `formatReferenceRuns`,
+`parseNames`, `parseBibTeX`, `findDuplicateReference`, `referenceShortLabel`. Pure functions.
+
+`core/presets.js`: `PRESETS` (currently `uqu-swe-gp1`: Umm Al-Qura University, SWE Graduation Project 1 — front matter,
+4 chapters with hints, unnumbered Conclusions, References, and the measured formatting), `presetProjectFields(id, fields)`
+for `store.createProject`, and for existing projects (inside `store.update`) `applyPresetFormatting(project, id)` and
+`mergePresetStructure(project, id)` — both add and rename but never delete or reorder the user's chapters.
 
 ## Word Sync (src/word/)
 

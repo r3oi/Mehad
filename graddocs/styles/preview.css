@@ -2,6 +2,7 @@
    Page geometry / typography come from CSS variables set by preview-view.js on .pv-root:
    --pw --ph (page px)  --ml --mr --mt --mb (margins px)  --cw --ch (content box px)
    --pv-font --pv-size --pv-lh --pv-para --pv-h1..3 --pv-align --pv-align-last
+   --pv-hfont (heading font; unset = the body font) --pv-indent (first-line indent of paragraphs) --pv-sub-style (italic | normal, level 3+ headings)
    Pages are always white paper with black text, even in dark mode, and always left-to-right paper:
    the app may be RTL (Arabic) but the report is the user's document, so .pv-canvas / .preview-page /
    the measuring host force direction: ltr. Paragraphs carry dir="auto" so Arabic text still reads RTL. */
@@ -113,7 +114,9 @@
 .pv-p {
   margin: 0 0 var(--pv-para);
   text-align: var(--pv-align); overflow-wrap: break-word;
+  text-indent: var(--pv-indent, 0);
 }
+.pv-p.pv-split-tail { text-indent: 0; } /* the rest of a paragraph that continues on the next page is not indented */
 .pv-li {
   position: relative; margin: 0 0 calc(var(--pv-para) * .5);
   padding-inline-start: 1.75em; text-align: var(--pv-align); overflow-wrap: break-word;
@@ -125,12 +128,12 @@
 .pv-note { margin: 0; text-align: center; font-style: italic; color: #555; }
 
 .pv-h1, .pv-h2, .pv-h3, .pv-h4 {
-  font-family: inherit; font-weight: 700; font-style: normal; letter-spacing: normal; color: #000;
+  font-family: var(--pv-hfont, inherit); font-weight: 700; font-style: normal; letter-spacing: normal; color: #000;
   line-height: 1.25; overflow-wrap: break-word;
 }
 .pv-h1 { margin: 24pt 0 18pt; font-size: var(--pv-h1); text-align: center; }
 .pv-h2 { margin: 14pt 0 6pt; font-size: var(--pv-h2); text-align: start; }
-.pv-h3, .pv-h4 { margin: 12pt 0 4pt; font-size: var(--pv-h3); text-align: start; }
+.pv-h3, .pv-h4 { margin: 12pt 0 4pt; font-size: var(--pv-h3); text-align: start; font-style: var(--pv-sub-style, normal); }
 
 .pv-content .doc-ref, .pv-measure .doc-ref { color: inherit; border-radius: 2px; cursor: pointer; transition: background .12s; }
 .pv-content .doc-ref:hover { background: rgba(79, 70, 229, .13); box-shadow: 0 0 0 1px rgba(79, 70, 229, .13); }
@@ -144,7 +147,7 @@
 .pv-caption { font-size: calc(var(--pv-size) * .92); line-height: 1.3; overflow-wrap: break-word; }
 .pv-caption[data-pos="below"] { margin: 6pt 0 0; }
 .pv-caption[data-pos="above"] { margin: 0 0 6pt; }
-.pv-cap-label.is-bold { font-weight: 700; }
+.pv-cap-label.is-bold, .pv-cap-title.is-bold { font-weight: 700; }
 .pv-cap-title.is-italic { font-style: italic; }
 .pv-caption.pv-cont { font-style: italic; }
 .pv-tblock { margin: 12pt 0; border-radius: 3px; }
@@ -168,11 +171,33 @@
 }
 .pv-toc .n { flex: none; min-width: 2.2em; padding-inline-start: .35em; text-align: end; font-variant-numeric: tabular-nums; }
 .pv-toc[data-goto] { cursor: pointer; }
+/* Academic style (settings.toc.style): chapters bold capitals, front matter and level-2 entries in small caps,
+   level-3 entries plain; no indentation and tighter lines so the whole contents fit on one page. */
+.pv-toc.acad { margin: 0 0 1.5pt; font-size: .92em; line-height: 1.2; }
+.pv-toc.acad.is-ch { margin-top: 5pt; font-size: 1em; font-weight: 700; text-transform: uppercase; }
+.pv-toc.acad.is-ch:first-child { margin-top: 0; }
+.pv-toc.acad.is-list { margin-bottom: 5pt; }
+.pv-toc.acad.is-front, .pv-toc.acad.is-l2, .pv-toc.acad.is-list { font-variant-caps: small-caps; }
 .pv-toc[data-goto]:hover .t { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 
 /* List of acronyms: acronym (bold) | meaning */
 .pv-acr { display: grid; grid-template-columns: minmax(5.5em, 28%) 1fr; column-gap: 1em; margin: 0 0 5pt; line-height: 1.35; }
 .pv-acr .a { font-weight: 700; overflow-wrap: anywhere; }
+
+/* References: "[1]" in the margin column, text aligned and hanging, single-spaced inside an entry */
+.pv-ref {
+  position: relative; margin: 0 0 9pt; padding-inline-start: 1.17cm;
+  line-height: 1.15; text-align: var(--pv-align); overflow-wrap: break-word;
+}
+.pv-ref::before { content: attr(data-n); position: absolute; inset-inline-start: 0; }
+.pv-ref.pv-split-tail::before { content: none; }
+.pv-ref em { font-style: italic; }
+
+/* Declaration: one signature line per student, then the note */
+.pv-sig { display: flex; align-items: flex-end; margin: 2.2em 0 0; line-height: 1.3; }
+.pv-sig .n { flex: none; padding-inline-end: .6em; }
+.pv-sig .line { flex: 0 1 55%; height: 0; border-bottom: 1px solid #000; }
+.pv-sig-note { margin: 2.8em 0 0; text-align: center; }
 
 /* Page number, centred in the bottom margin */
 .pv-footer {
@@ -200,6 +225,24 @@
 .pv-credit .pv-name { font-weight: 700; }
 .pv-credit > .pv-label + .pv-name { margin-top: .15em; }
 .pv-year { margin-top: .5em; font-size: 1.15em; }
+
+/* Submission layout (settings.titlePage.layout): logo, university / college / department, title, degree statement,
+   "by" + students, "Supervised by" + supervisors and the month at the bottom (as many university templates). */
+.pv-ts { height: var(--ch); display: flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.4; }
+.pv-ts > * { flex: none; max-width: 100%; }
+.pv-ts-logo { display: block; height: 1in; width: auto; max-width: 100%; margin-bottom: 8pt; object-fit: contain; }
+.pv-ts-uni { font-weight: 700; font-size: 1.1em; overflow-wrap: break-word; }
+.pv-ts-org { font-weight: 700; overflow-wrap: break-word; }
+.pv-ts-gap { flex: 1 1 0; min-height: .8em; }
+.pv-ts-gap.g1 { flex-grow: 3; }
+.pv-ts-gap.g2 { flex-grow: 1; max-height: 4.5em; }
+.pv-ts-gap.g3 { flex-grow: 1; max-height: 4.5em; }
+.pv-ts-gap.g4 { flex-grow: 1; }
+.pv-ts-name { font-weight: 700; font-size: 1.5em; line-height: 1.25; overflow-wrap: anywhere; }
+.pv-ts-degree { margin-top: 1.4em; max-width: 92%; font-style: italic; overflow-wrap: break-word; }
+.pv-ts-by { font-weight: 700; margin-bottom: .2em; }
+.pv-ts-line { overflow-wrap: break-word; }
+.pv-ts-date { font-weight: 700; padding-bottom: .4em; }
 
 /* ---------- Arabic UI: no letter-spacing / capitals on Arabic labels (it would break the joined letters) ---------- */
 :root[lang="ar"] .pv-nav-head, :root[lang="ar"] .pv-nav-group { letter-spacing: 0; text-transform: none; }

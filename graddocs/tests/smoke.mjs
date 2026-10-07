@@ -44,7 +44,7 @@ const figId = await evalStore(() => window.graddocs.store.project.figures[0].id)
 const go = async (section, extra = '') => { await page.goto(`${BASE}#/p/${pid}/${section}${extra}`); await page.waitForTimeout(500); };
 
 console.log('pages');
-for (const section of ['dashboard', 'structure', 'word', 'chapters', 'figures', 'tables', 'acronyms', 'preview', 'export', 'settings']) {
+for (const section of ['dashboard', 'structure', 'word', 'chapters', 'figures', 'tables', 'acronyms', 'references', 'preview', 'export', 'settings']) {
   await check(`${section} renders`, async () => {
     await go(section);
     const text = await page.locator('#main').innerText();

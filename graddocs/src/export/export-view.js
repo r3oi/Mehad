@@ -1,4 +1,4 @@
-// Export page (#/p/<id>/export): documentation package, Word, figures, tables, printable lists, backup.
+// Export page (#/p/<id>/export): documentation package, Word, figures, tables, references, printable lists, backup.
 import { esc, on, Disposer } from '../ui/dom.js';
 import { t, isRTL } from '../i18n/index.js';
 import { icon } from '../ui/icons.js';
@@ -17,10 +17,10 @@ import { svgToPdfBlob } from './pdf.js';
 import { buildDocx } from './docx.js';
 import {
   buildPackage, buildFiguresZip, figureImagesForDocx, figureFileBase, tableFileBase, exportScale,
-  figureSVG, tableSVG, tableHTMLDocument,
+  figureSVG, tableSVG, tableHTMLDocument, referencesText,
 } from './package.js';
 import {
-  printHTML, wrapHTMLDocument, tocHTML, listOfFiguresHTML, listOfTablesHTML, acronymsHTML, structureHTML,
+  printHTML, wrapHTMLDocument, tocHTML, listOfFiguresHTML, listOfTablesHTML, acronymsHTML, referencesHTML, structureHTML,
 } from './print.js';
 
 // `title` / `file` are the report's own names (print window title, .html files): they stay English.
@@ -94,6 +94,21 @@ async function copyTableForWord(project, table) {
   selection.removeAllRanges(); selection.addRange(range);
   const ok = document.execCommand('copy');
   selection.removeAllRanges(); holder.remove();
+  if (!ok) throw new Error(t('This browser blocked copying. Download the HTML file instead.'));
+}
+
+/** Plain text to the clipboard (falls back to a hidden textarea where the async API is blocked). */
+async function copyPlainText(text) {
+  if (navigator.clipboard?.writeText) {
+    try { await navigator.clipboard.writeText(text); return; } catch { /* use the fallback below */ }
+  }
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+  document.body.append(area);
+  area.select();
+  const ok = document.execCommand('copy');
+  area.remove();
   if (!ok) throw new Error(t('This browser blocked copying. Download the HTML file instead.'));
 }
 
@@ -171,6 +186,17 @@ export default {
       }).join('');
     }
 
+    function referenceRows(doc) {
+      const entries = doc.references.entries;
+      if (!entries.length) {
+        return `<div class="exp-empty"><div class="exp-empty-icon">${icon('book')}</div><div><b>${esc(t('No references yet'))}</b><p>${esc(t('Add the books, papers and websites you cite and they will appear here, ready to copy or save as text.'))}</p></div><a class="btn btn-sm" href="${esc(ctx.href('references'))}">${esc(t('Go to References'))}</a></div>`;
+      }
+      return entries.map((e) => `<div class="list-item exp-row exp-ref">
+          <span class="badge badge-primary exp-ref-n">${esc(e.label)}</span>
+          <div class="exp-row-main"><div class="exp-ref-text" dir="auto">${e.runs.map((r) => (r.italic ? `<em>${esc(r.text)}</em>` : esc(r.text))).join('')}</div></div>
+        </div>`).join('');
+    }
+
     function listRows(doc, p) {
       return LISTS.map((l) => `<div class="list-item exp-row">
           ${tile(l.icon, 'exp-tile-lg')}
@@ -201,6 +227,7 @@ export default {
         ['figure', ltr(`figures/ <span class="exp-count">${doc.figures.length}</span>`), t('Every figure as SVG and {scale} PNG', { scale })],
         ['table', ltr(`tables/ <span class="exp-count">${doc.tables.length}</span>`), t('Every table as SVG, PNG, HTML (paste into Word) and CSV')],
         ['fileText', ltr('lists/'), t('Contents, figures, tables, acronyms and structure as printable HTML')],
+        ...(doc.references.entries.length ? [['book', ltr('references.txt'), t('The references as plain text, one line per entry')]] : []),
         ['database', ltr('project.json'), t('A full backup you can import again')],
         ['info', ltr('README.txt'), t('How to insert everything into Word')],
       ];
@@ -276,6 +303,14 @@ export default {
         <section class="card exp-section" data-section="tables">
           ${cardHead('table', esc(t('Tables')), t('{count} in document order. {copy} keeps the table formatting when you paste.', { count: esc(count(doc.tables.length, '1 table', '{n} tables')), copy: `<b>${esc(t('Copy for Word'))}</b>` }))}
           <div class="exp-rows">${tableRows(doc, numbering)}</div>
+        </section>
+
+        <section class="card exp-section" data-section="references">
+          ${cardHead('book', esc(t('References')), t('{count} in the order of the References page. Copy the list or save it as a text file.', { count: esc(count(doc.references.entries.length, '1 reference', '{n} references')) }),
+            `<button class="btn btn-sm" data-action="refs-copy" ${doc.references.entries.length ? '' : 'disabled'}>${icon('copy', 'icon-sm')}${esc(t('Copy list'))}</button>
+             <button class="btn btn-sm" data-action="refs-txt" ${doc.references.entries.length ? '' : 'disabled'}>${icon('export', 'icon-sm')}${downloadLabel('.txt')}</button>
+             <button class="btn btn-sm btn-soft" data-action="refs-print" ${doc.references.entries.length ? '' : 'disabled'}>${icon('printer', 'icon-sm')}${esc(t('Open printable PDF'))}</button>`)}
+          <div class="exp-rows">${referenceRows(doc)}</div>
         </section>
 
         <section class="card exp-section" data-section="lists">
@@ -450,6 +485,23 @@ export default {
       async 'tab-copy'(btn) {
         const table = findTable(btn.dataset.id); if (!table) return;
         await run(btn, () => copyTableForWord(project(), table), { success: t('Table copied. Paste it into Word with {keys}.', { keys: ltrText('Ctrl+V') }), failure: t('Could not copy the table') });
+      },
+
+      // ----- references -----
+      async 'refs-copy'(btn) {
+        await run(btn, () => copyPlainText(referencesText(project())), { success: t('References copied. Paste them with {keys}.', { keys: ltrText('Ctrl+V') }), failure: t('Could not copy the references') });
+      },
+      async 'refs-txt'(btn) {
+        await run(btn, async () => {
+          const name = `${slug()}-references.txt`;
+          downloadText(`\uFEFF${referencesText(project())}\n`, name, 'text/plain;charset=utf-8'); // BOM keeps Arabic names intact in Notepad
+          return name;
+        }, { success: (n) => t('Saved {name}', { name: ltrText(n) }) });
+      },
+      async 'refs-print'() {
+        try {
+          printHTML('References', referencesHTML(project()), { settings: project().settings });
+        } catch (err) { toastError(err, t('Could not open the print view')); }
       },
 
       // ----- lists -----

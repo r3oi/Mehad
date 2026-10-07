@@ -38,7 +38,7 @@ export default {
     const shapeOf = (project, chapterId) => {
       const walk = (list) => list.map((s) => `${s.id}(${walk(s.sections || [])})`).join(',');
       const ch = project.chapters.find((c) => c.id === chapterId);
-      return `${chapterId}|${project.chapters.map((c) => c.id).join(',')}|${ch ? walk(ch.sections || []) : ''}`;
+      return `${chapterId}|${project.chapters.map((c) => `${c.id}${c.numbered === false ? 'u' : ''}`).join(',')}|${ch ? walk(ch.sections || []) : ''}`;
     };
 
     const chapterPrefix = (project, chapter) => chapterHeading(project, { ...chapter, title: '' }).trim();
@@ -46,17 +46,16 @@ export default {
     function navSectionsHTML(sections, num) {
       return (sections || []).map((s) => {
         const info = num.sections.get(s.id);
-        return `<li style="--d:${info.depth}"><button type="button" class="chn-link chn-sec" data-nav-sec="${esc(s.id)}"><i class="dot s-${esc(s.status)}" aria-hidden="true"></i><span class="chn-num" dir="ltr">${info.number}</span><span class="chn-title" dir="auto" data-nav-title="${esc(s.id)}">${esc(s.title)}</span></button></li>${navSectionsHTML(s.sections, num)}`;
+        return `<li style="--d:${info.depth}"><button type="button" class="chn-link chn-sec" data-nav-sec="${esc(s.id)}"><i class="dot s-${esc(s.status)}" aria-hidden="true"></i>${info.number ? `<span class="chn-num" dir="ltr">${info.number}</span>` : ''}<span class="chn-title" dir="auto" data-nav-title="${esc(s.id)}">${esc(s.title)}</span></button></li>${navSectionsHTML(s.sections, num)}`;
       }).join('');
     }
 
     function navHTML(project, chapter, num) {
-      const info = num.chapters.get(chapter.id);
       return `
         <aside class="ch-nav card" aria-label="${t('Chapter outline')}">
           <button type="button" class="ch-nav-head" data-action="nav-toggle" aria-expanded="false">
             <span class="ch-nav-label">${t('Outline')}</span>
-            <span class="ch-nav-current truncate" dir="auto">${esc(info.label)}: ${esc(chapter.title)}</span>
+            <span class="ch-nav-current truncate" dir="auto">${esc(ops.chapterName(num, chapter))}</span>
             ${icon('chevronDown', 'ch-nav-chev')}
           </button>
           <nav class="ch-nav-list" aria-label="${t('Chapters')}">
@@ -66,7 +65,7 @@ export default {
                 const current = ch.id === chapter.id;
                 return `<li class="chn-ch ${current ? 'current' : ''}">
                   <button type="button" class="chn-link chn-chapter" data-nav-ch="${esc(ch.id)}" ${current ? 'aria-current="true"' : ''}>
-                    <span class="chn-num" dir="ltr">${ci.number}</span><span class="chn-title" dir="auto" data-nav-title="${esc(ch.id)}">${esc(ch.title)}</span>
+                    ${ci.number ? `<span class="chn-num" dir="ltr">${ci.number}</span>` : ''}<span class="chn-title" dir="auto" data-nav-title="${esc(ch.id)}">${esc(ch.title)}</span>
                   </button>
                   ${current ? `<ul class="chn-secs">${navSectionsHTML(ch.sections, num) || `<li class="chn-none">${t('No sections yet')}</li>`}</ul>` : ''}
                 </li>`;
@@ -119,12 +118,12 @@ export default {
       return `
         <section class="sec-card d${s.depth}" id="sec-${esc(sec.id)}" data-id="${esc(sec.id)}" data-depth="${s.depth}" style="--depth:${s.depth}">
           <header class="sec-head">
-            <span class="sec-num" data-sec-num dir="ltr">${s.number}</span>
-            <input class="sec-title" data-title="${esc(sec.id)}" data-orig="${esc(sec.title)}" value="${esc(sec.title)}" maxlength="200" dir="auto" aria-label="${t('Title of section {number}', { number: s.number })}" placeholder="${t('Section title')}">
-            <select class="select select-sm sec-status s-${esc(sec.status)}" data-status="${esc(sec.id)}" aria-label="${t('Status of section {number}', { number: s.number })}">
+            ${s.number ? `<span class="sec-num" data-sec-num dir="ltr">${s.number}</span>` : ''}
+            <input class="sec-title" data-title="${esc(sec.id)}" data-orig="${esc(sec.title)}" value="${esc(sec.title)}" maxlength="200" dir="auto" aria-label="${s.number ? t('Title of section {number}', { number: s.number }) : t('Section title')}" placeholder="${t('Section title')}">
+            <select class="select select-sm sec-status s-${esc(sec.status)}" data-status="${esc(sec.id)}" aria-label="${s.number ? t('Status of section {number}', { number: s.number }) : t('Section status')}">
               ${SECTION_STATUSES.map((st) => `<option value="${st.value}" ${st.value === sec.status ? 'selected' : ''}>${esc(st.label)}</option>`).join('')}
             </select>
-            <button class="btn btn-ghost btn-icon btn-sm" data-action="sec-menu" data-id="${esc(sec.id)}" aria-label="${t('More actions for section {number}', { number: s.number })}" aria-haspopup="menu">${icon('more')}</button>
+            <button class="btn btn-ghost btn-icon btn-sm" data-action="sec-menu" data-id="${esc(sec.id)}" aria-label="${s.number ? t('More actions for section {number}', { number: s.number }) : t('More actions')}" aria-haspopup="menu">${icon('more')}</button>
           </header>
           <div class="sec-body" data-editor="${esc(sec.id)}"></div>
           <div class="sec-items" data-items="${esc(sec.id)}"></div>
@@ -140,10 +139,9 @@ export default {
       const upper = project.settings.chapterTitle?.style === 'upper';
       const pager = (c, dir) => {
         if (!c) return '<span></span>';
-        const ci = num.chapters.get(c.id);
         return `<button type="button" class="ch-page ${dir}" data-chapter="${esc(c.id)}">
           ${dir === 'prev' ? icon('arrowLeft') : ''}
-          <span class="ch-page-text"><small>${dir === 'prev' ? t('Previous chapter') : t('Next chapter')}</small><strong dir="auto">${esc(ci.label)}: ${esc(c.title)}</strong></span>
+          <span class="ch-page-text"><small>${dir === 'prev' ? t('Previous chapter') : t('Next chapter')}</small><strong dir="auto">${esc(ops.chapterName(num, c))}</strong></span>
           ${dir === 'next' ? icon('arrowRight') : ''}
         </button>`;
       };
@@ -153,7 +151,7 @@ export default {
             <div class="ch-select-wrap">
               <label class="sr-only" for="ch-select">${t('Chapter')}</label>
               <select id="ch-select" class="select" data-chapter-select>
-                ${project.chapters.map((c) => `<option value="${esc(c.id)}" ${c.id === chapter.id ? 'selected' : ''}>${esc(num.chapters.get(c.id).label)}: ${esc(c.title)}</option>`).join('')}
+                ${project.chapters.map((c) => `<option value="${esc(c.id)}" ${c.id === chapter.id ? 'selected' : ''}>${esc(ops.chapterName(num, c))}</option>`).join('')}
               </select>
             </div>
             <div class="ch-progress" data-ch-progress>
@@ -166,9 +164,13 @@ export default {
           <article class="ch-article">
             <header class="ch-head card" id="ch-head" data-id="${esc(chapter.id)}">
               <h1 class="ch-heading ${upper ? 'upper' : ''}" aria-label="${esc(chapterHeading(project, chapter))}">
-                <span class="ch-heading-prefix" data-ch-prefix dir="ltr">${esc(chapterPrefix(project, chapter))}</span>
+                <span class="ch-heading-prefix" data-ch-prefix dir="ltr" ${chapterPrefix(project, chapter) ? '' : 'hidden'}>${esc(chapterPrefix(project, chapter))}</span>
                 <input class="ch-title" data-title="${esc(chapter.id)}" data-orig="${esc(chapter.title)}" value="${esc(chapter.title)}" maxlength="200" dir="auto" aria-label="${t('Chapter title')}" placeholder="${t('Chapter title')}">
               </h1>
+              <label class="checkbox ch-numbering" data-tip="${esc(t('Unnumbered chapters have no “Chapter N” heading and their sections have no numbers.'))}">
+                <input type="checkbox" data-numbering="${esc(chapter.id)}" ${chapter.numbered === false ? 'checked' : ''}>
+                <span>${t('Unnumbered chapter (e.g. Conclusions)')}</span>
+              </label>
               <div class="ch-lead">
                 <div class="ch-label">${t('Chapter introduction')} <span>${t('(optional text before the first section)')}</span></div>
                 <div data-editor="${esc(chapter.id)}"></div>
@@ -213,6 +215,7 @@ export default {
           label: isChapter ? t('Chapter introduction') : t('Text of {title}', { title: info.node.title }),
           placeholder: isChapter ? t('Write a short introduction for this chapter…') : t('Write the content of this section…'),
           minHeight: isChapter ? 72 : 96,
+          hint: info.node.hint || '', // template guidance, shown while the text is empty
           onChange: (body) => commitBody(id, body),
         });
         host.append(editor.el);
@@ -310,12 +313,12 @@ export default {
       const select = container.querySelector('[data-chapter-select]');
       if (select) [...select.options].forEach((opt) => {
         const c = project.chapters.find((x) => x.id === opt.value);
-        if (c) { const text = `${num.chapters.get(c.id).label}: ${c.title}`; if (opt.textContent !== text) opt.textContent = text; }
+        if (c) { const text = ops.chapterName(num, c); if (opt.textContent !== text) opt.textContent = text; }
       });
       const current = container.querySelector('.ch-nav-current');
-      if (current) current.textContent = `${num.chapters.get(chapter.id).label}: ${chapter.title}`;
+      if (current) current.textContent = ops.chapterName(num, chapter);
       const prefix = container.querySelector('[data-ch-prefix]');
-      if (prefix) prefix.textContent = chapterPrefix(project, chapter);
+      if (prefix) { prefix.textContent = chapterPrefix(project, chapter); prefix.hidden = !prefix.textContent; }
       container.querySelector('.ch-heading')?.classList.toggle('upper', project.settings.chapterTitle?.style === 'upper');
       const prog = ops.progressOf(chapter.sections);
       const progEl = container.querySelector('[data-ch-progress]');
@@ -325,7 +328,7 @@ export default {
       }
       container.querySelectorAll('.ch-page strong').forEach((strong) => {
         const c = project.chapters.find((x) => x.id === strong.closest('.ch-page').dataset.chapter);
-        if (c) strong.textContent = `${num.chapters.get(c.id).label}: ${c.title}`;
+        if (c) strong.textContent = ops.chapterName(num, c);
       });
       fillItems(project);
       // A body can change without this editor knowing (a figure moved here from another section, a broken line removed).
@@ -446,6 +449,13 @@ export default {
     }));
 
     disposer.add(on(container, 'change', 'select[data-chapter-select]', (e, el) => selectChapter(el.value)));
+    disposer.add(on(container, 'change', 'input[data-numbering]', (e, el) => {
+      const id = el.dataset.numbering;
+      const info = ops.locate(store.project, id);
+      if (!info || info.kind !== 'chapter') return;
+      const numbered = !el.checked;
+      store.update((p) => { ops.setChapterNumbered(p, id, numbered); }, { activity: { text: ops.numberingActivity(info.node.title, numbered), kind: 'edit', targetId: id } });
+    }));
     disposer.add(on(container, 'change', 'select[data-status]', (e, el) => {
       const id = el.dataset.status; const status = el.value;
       const info = ops.locate(store.project, id);

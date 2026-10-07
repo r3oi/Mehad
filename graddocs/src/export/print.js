@@ -1,4 +1,4 @@
-// Printable lists (TOC, list of figures / tables / acronyms, document structure).
+// Printable lists (TOC, list of figures / tables / acronyms, references, document structure).
 // The HTML builders are shared by "Open printable PDF" (a print window, use "Save as PDF" in the
 // print dialog) and by the documentation package, which ships them as standalone .html files.
 // Page numbers are shown as an em dash: real page numbers come from Word's field update.
@@ -15,6 +15,7 @@ const PAGE_HOLDER = '\u2014';
 const STATUS_LABELS = { todo: 'Not started', draft: 'Draft', review: 'In review', done: 'Done' };
 
 const cfgOf = (settings) => ({
+  toc: { ...DEFAULT_SETTINGS.toc, ...(settings?.toc || {}) },
   page: { ...DEFAULT_SETTINGS.page, ...(settings?.page || {}), margins: { ...DEFAULT_SETTINGS.page.margins, ...(settings?.page?.margins || {}) } },
   typography: { ...DEFAULT_SETTINGS.typography, ...(settings?.typography || {}), headingSizes: { ...DEFAULT_SETTINGS.typography.headingSizes, ...(settings?.typography?.headingSizes || {}) } },
   chapterTitle: { ...DEFAULT_SETTINGS.chapterTitle, ...(settings?.chapterTitle || {}) },
@@ -32,6 +33,7 @@ export function printCSS(settings) {
   const { page, typography: typo } = cfgOf(settings);
   const m = page.margins;
   const font = String(typo.fontFamily || 'Times New Roman').replace(/["\\]/g, '');
+  const headingFont = String(typo.headingFontFamily || '').trim().replace(/["\\]/g, ''); // '' = the body font
   const size = page.size === 'Letter' ? 'Letter' : 'A4';
   const [w, h] = size === 'Letter' ? [21.59, 27.94] : [21, 29.7];
   const sheetW = page.orientation === 'landscape' ? h : w;
@@ -40,7 +42,7 @@ export function printCSS(settings) {
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 body { margin: 0; font-family: "${font}", "Times New Roman", Times, "Liberation Serif", serif; font-size: ${typo.fontSize}pt; line-height: ${typo.lineSpacing > 1.3 ? 1.35 : typo.lineSpacing}; color: #000; background: #fff; }
-h1, h2, h3 { font-weight: 700; margin: 0; line-height: 1.25; }
+h1, h2, h3 { font-weight: 700; margin: 0; line-height: 1.25; ${headingFont ? `font-family: "${headingFont}", Arial, Helvetica, "Liberation Sans", sans-serif;` : ''} }
 .doc-title { text-align: center; font-size: ${typo.headingSizes.h1}pt; margin: 0 0 1.1em; text-transform: none; }
 .doc-subtitle { text-align: center; font-size: ${Math.max(10, typo.fontSize - 1)}pt; color: #555; margin: -0.7em 0 1.4em; }
 .doc-note { color: #555; font-style: italic; margin: 0; }
@@ -58,6 +60,14 @@ h1, h2, h3 { font-weight: 700; margin: 0; line-height: 1.25; }
 .toc-l2 { padding-left: 1.5em; }
 .toc-l3 { padding-left: 3em; }
 .toc-l4 { padding-left: 4.5em; }
+/* Academic contents (settings.toc.style): chapters and References bold capitals, front matter and level 2 in small caps, level 3 plain */
+.toc-ac { margin-bottom: 0.18em; font-size: 0.92em; line-height: 1.2; }
+.toc-ac1 { margin-top: 0.6em; font-size: 1em; font-weight: 700; text-transform: uppercase; }
+.toc-front, .toc-ac2, .toc-flat.toc-ac { font-variant-caps: small-caps; }
+
+/* References: "[n]" in the margin column, hanging text, single-spaced entries */
+.ref-line { position: relative; margin: 0 0 0.65em; padding-left: 1.17cm; line-height: 1.2; text-align: justify; break-inside: avoid; }
+.ref-line .n { position: absolute; left: 0; }
 
 /* Acronyms */
 table.acr { width: 100%; border-collapse: collapse; }
@@ -143,18 +153,33 @@ export function printHTML(title, bodyHTML, { settings, autoPrint = true } = {}) 
 
 const line = (cls, text) => `<div class="toc-line ${cls}"><span class="t">${esc(text)}</span><span class="dots"></span><span class="pg">${PAGE_HOLDER}</span></div>`;
 
+/** Heading text of the References page (capitals like the chapter headings when that setting is on). */
+function referencesTitle(project, title) {
+  return cfgOf(project.settings).chapterTitle.style === 'upper' ? String(title ?? '').toUpperCase() : String(title ?? '');
+}
+
+/** Contents line class: plain = by level; academic = see .toc-ac above. */
+function tocClass(entry, academic) {
+  if (!academic) return entry.kind === 'front' ? 'toc-l1' : `toc-l${Math.min(4, entry.level)}`;
+  return entry.kind === 'front' ? 'toc-ac toc-front' : `toc-ac toc-ac${Math.min(3, entry.level)}`;
+}
+
 export function tocHTML(project) {
   const doc = buildDocument(project);
+  const academic = cfgOf(project.settings).toc.style === 'academic';
   const body = doc.toc.length
-    ? doc.toc.map((e) => line(`toc-l${Math.min(4, e.level)}`, e.text)).join('\n')
+    ? doc.toc.map((e) => line(tocClass(e, academic), e.kind === 'references' ? referencesTitle(project, e.text) : e.text)).join('\n')
     : '<p class="doc-note">The document has no chapters yet.</p>';
   return `<h1 class="doc-title">${esc(listTitle(project, 'toc'))}</h1>\n${body}`;
 }
 
+/** Lists of figures / tables: small caps in the academic style. */
+const flatClass = (project) => (cfgOf(project.settings).toc.style === 'academic' ? 'toc-flat toc-ac' : 'toc-flat');
+
 export function listOfFiguresHTML(project) {
   const doc = buildDocument(project);
   const body = doc.figures.length
-    ? doc.figures.map((f) => line('toc-flat', f.caption)).join('\n')
+    ? doc.figures.map((f) => line(flatClass(project), f.caption)).join('\n')
     : '<p class="doc-note">The document has no figures yet.</p>';
   return `<h1 class="doc-title">${esc(listTitle(project, 'lof'))}</h1>\n${body}`;
 }
@@ -162,7 +187,7 @@ export function listOfFiguresHTML(project) {
 export function listOfTablesHTML(project) {
   const doc = buildDocument(project);
   const body = doc.tables.length
-    ? doc.tables.map((tb) => line('toc-flat', tb.caption)).join('\n')
+    ? doc.tables.map((tb) => line(flatClass(project), tb.caption)).join('\n')
     : '<p class="doc-note">The document has no tables yet.</p>';
   return `<h1 class="doc-title">${esc(listTitle(project, 'lot'))}</h1>\n${body}`;
 }
@@ -173,6 +198,15 @@ export function acronymsHTML(project) {
     ? `<table class="acr"><tbody>\n${doc.acronyms.map((a) => `<tr><td class="a">${esc(a.acronym)}</td><td>${esc(a.meaning)}</td></tr>`).join('\n')}\n</tbody></table>`
     : '<p class="doc-note">No acronyms or abbreviations have been defined yet.</p>';
   return `<h1 class="doc-title">${esc(listTitle(project, 'loa'))}</h1>\n${body}`;
+}
+
+/** The bibliography: "[1]" + text with a hanging indent (the References page of the report). */
+export function referencesHTML(project) {
+  const { title, entries } = buildDocument(project).references;
+  const body = entries.length
+    ? entries.map((e) => `<div class="ref-line"><span class="n">${esc(e.label)}</span>${e.runs.map((r) => (r.italic ? `<em>${esc(r.text)}</em>` : esc(r.text))).join('')}</div>`).join('\n')
+    : '<p class="doc-note">No references have been added yet.</p>';
+  return `<h1 class="doc-title">${esc(referencesTitle(project, title))}</h1>\n${body}`;
 }
 
 /** The outline with numbers and writing status, plus the figures and tables placed in each part. */

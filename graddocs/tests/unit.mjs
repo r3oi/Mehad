@@ -374,6 +374,9 @@ test('BibTeX import and duplicate detection', () => {
   assert.equal(refs[0].type, 'conference');
   assert.equal(refs[0].authors, 'Babineau, W.\nBarry, P.');
   assert.equal(refs[1].container, '');
+  const web = parseBibTeX('@misc{w, title={OWASP}, howpublished={\\url{https://owasp.org/top10}}, url={https://x.org/a--b\\_c}}')[0];
+  assert.equal(web.container, 'https://owasp.org/top10');
+  assert.equal(web.url, 'https://x.org/a--b_c');
   const list = refs.map((r) => createReference(r));
   assert.ok(findDuplicateReference(list, createReference({ title: 'software  engineering!', year: '2016' })));
   assert.equal(findDuplicateReference(list, createReference({ title: 'Software Engineering', year: '2020' })), null);

@@ -1,6 +1,7 @@
 // Word (.docx) export: builds a real Office Open XML package from the linear document model
 // (core/document.js) and the project settings, with native styles, Heading 1-4 (so Word's TOC
-// picks them up), SEQ / REF / TOC fields, native tables and inline PNG figures.
+// picks them up), SEQ / REF / TOC fields, native tables, inline PNG figures, the university title page
+// (logo), declaration signatures and the References page.
 import { buildDocument } from '../core/document.js';
 import { getNumbering } from '../core/numbering.js';
 import { REF_RE, refInfo } from '../core/references.js';
@@ -49,6 +50,7 @@ function rPr(o = {}) {
   if (o.bold) x += '<w:b/><w:bCs/>';
   if (o.italic) x += '<w:i/><w:iCs/>';
   if (o.caps) x += '<w:caps/>';
+  if (o.smallCaps) x += '<w:smallCaps/>';
   if (o.color) x += `<w:color w:val="${o.color}"/>`;
   if (o.size) x += `<w:sz w:val="${half(o.size)}"/><w:szCs w:val="${half(o.size)}"/>`;
   if (o.rtl) x += '<w:rtl/>';
@@ -105,6 +107,77 @@ const jcFor = (align, rtl) => {
 
 const emptyPara = (o = {}) => para('', o);
 
+const REFERENCES_ID = '__references'; // toc entry id of the References page (core/document.js)
+
+/** "College of X" / "Department of X" unless the text already says what it is (same rule as the preview). */
+const ORG_WORD = /\b(department|college)\b/i;
+const ORG_START = { college: /^(college|faculty|school|institute|academy)\b/i, department: /^(department|dept\b|school|faculty|division|institute|college)/i };
+function orgName(value, kind) {
+  const text = String(value || '').trim();
+  if (!text || ORG_WORD.test(text) || ORG_START[kind].test(text)) return text;
+  return `${kind === 'college' ? 'College' : 'Department'} of ${text}`;
+}
+
+// ----- Title-page logo: a data: URL (PNG / JPEG / GIF are embedded as they are; SVG, WebP … are drawn to a PNG) -----
+const LOGO_EXT = { 'image/png': 'png', 'image/jpeg': 'jpeg', 'image/jpg': 'jpeg', 'image/gif': 'gif' };
+
+function dataUrlBytes(url) {
+  const m = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(String(url || ''));
+  if (!m) return null;
+  const type = m[1].toLowerCase();
+  if (/;base64/i.test(m[2])) {
+    const bin = atob(m[3].replace(/\s+/g, ''));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    return { type, bytes };
+  }
+  return { type, bytes: new TextEncoder().encode(decodeURIComponent(m[3])) };
+}
+
+/** Pixel size read from the file header → { width, height } | null. */
+function imageSize(bytes, ext) {
+  const u16 = (i) => (bytes[i] << 8) | bytes[i + 1];
+  if (ext === 'png' && bytes.length > 24) return { width: ((u16(16) << 16) | u16(18)) >>> 0, height: ((u16(20) << 16) | u16(22)) >>> 0 };
+  if (ext === 'gif' && bytes.length > 10) return { width: bytes[6] | (bytes[7] << 8), height: bytes[8] | (bytes[9] << 8) };
+  if (ext === 'jpeg') {
+    for (let i = 2; i + 9 < bytes.length;) {
+      if (bytes[i] !== 0xff) { i += 1; continue; }
+      const marker = bytes[i + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) return { height: u16(i + 5), width: u16(i + 7) };
+      i += marker === 0xd8 || (marker >= 0xd0 && marker <= 0xd7) ? 2 : 2 + u16(i + 2);
+    }
+  }
+  return null;
+}
+
+async function rasterizeImage(url) {
+  if (typeof document === 'undefined') return null;
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const w = img.naturalWidth || 300; const h = img.naturalHeight || 150;
+    const k = Math.min(3, 1200 / Math.max(w, h));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(w * k)); canvas.height = Math.max(1, Math.round(h * k));
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    return blob ? { data: new Uint8Array(await blob.arrayBuffer()), ext: 'png', width: canvas.width, height: canvas.height } : null;
+  } catch { return null; }
+}
+
+/** The logo as an embeddable picture { data, ext, width, height }, or null (no logo, or it could not be read). */
+async function logoPicture(url) {
+  if (!url) return null;
+  try {
+    const parsed = dataUrlBytes(url);
+    const ext = parsed && LOGO_EXT[parsed.type];
+    const size = ext && imageSize(parsed.bytes, ext);
+    if (size && size.width > 0 && size.height > 0) return { data: parsed.bytes, ext, ...size };
+  } catch { /* fall through to the canvas */ }
+  return rasterizeImage(url);
+}
+
 // ---------------------------------------------------------------------------
 
 export async function buildDocx(project, { figureImages } = {}) {
@@ -116,6 +189,7 @@ export async function buildDocx(project, { figureImages } = {}) {
     table: { ...DEFAULT_SETTINGS.captions.table, ...(settings.captions?.table || {}) },
   };
   const chapterCfg = { ...DEFAULT_SETTINGS.chapterTitle, ...(settings.chapterTitle || {}) };
+  const tocCfg = { ...DEFAULT_SETTINGS.toc, ...(settings.toc || {}) };
   const doc = buildDocument(project);
   const numbering = getNumbering(project);
 
@@ -126,6 +200,9 @@ export async function buildDocx(project, { figureImages } = {}) {
   const paraAfter = num(typo.paragraphSpacing, 6);
   const sizes = { h1: num(typo.headingSizes?.h1, 18), h2: num(typo.headingSizes?.h2, 16), h3: num(typo.headingSizes?.h3, 14) };
   sizes.h4 = num(typo.headingSizes?.h4, Math.max(fontSize, sizes.h3 - 2));
+  const headingFont = String(typo.headingFontFamily || '').trim(); // '' = the body font
+  const firstLine = Math.round(Math.max(0, num(typo.firstLineIndent, 0)) * 567); // twips, first line of body paragraphs
+  const subItalic = !!typo.subheadingItalic;
 
   const pageCfg = { ...DEFAULT_SETTINGS.page, ...(settings.page || {}) };
   const landscape = pageCfg.orientation === 'landscape';
@@ -141,8 +218,21 @@ export async function buildDocx(project, { figureImages } = {}) {
   const fit = Math.max(0.4, Math.min(1.2, textH / 13900)); // vertical rhythm of the title page
   const sp = (n) => Math.round(n * fit);
 
+  const logo = doc.titlePage.layout === 'submission' ? await logoPicture(doc.titlePage.logo) : null;
+
   const upperHeadings = chapterCfg.style === 'upper';
   const frontHeading = (title) => (upperHeadings ? String(title || '').toUpperCase() : String(title || ''));
+
+  // Contents: front-matter pages listed in it (settings.toc.includeFrontMatter) keep the 'TOC Heading' style but get an outline
+  // level on the paragraph itself, so Word's TOC field (\u switch) lists them: level 2 in the academic style (small caps like
+  // the level-2 entries, no indentation there), level 1 otherwise. A title page numbered "i" (submission layout) makes the
+  // first front page "ii".
+  const tocDepth = Math.max(1, Math.min(4, Math.round(num(tocCfg.depth, 3))));
+  const listsFront = !!tocCfg.includeFrontMatter;
+  const academicToc = tocCfg.style === 'academic';
+  const frontOutline = listsFront && academicToc && tocDepth >= 2 ? 1 : 0;
+  const frontPageStart = doc.titlePage.layout === 'submission' ? 2 : 1;
+  const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'][frontPageStart - 1];
 
   // ----- State shared by the builders -------------------------------------
   let bmId = 0;
@@ -162,7 +252,7 @@ export async function buildDocx(project, { figureImages } = {}) {
   const tocBookmarks = new Map(doc.toc.map((entry, i) => [entry.id, `_Toc${100000 + i + 1}`]));
 
   // ----- Inline content ----------------------------------------------------
-  /** Text with {{ref:…}} tokens: figure/table refs become REF fields, others plain text. */
+  /** Text with {{ref:…}} tokens: figure/table refs become REF fields, the others (section, chapter, citation "[3]") plain text. */
   function refRuns(text, o = {}) {
     let out = ''; let last = 0;
     const source = String(text ?? '');
@@ -186,10 +276,21 @@ export async function buildDocx(project, { figureImages } = {}) {
     if (block.type === 'bullet') {
       return para(refRuns(block.text, o), { style: 'ListParagraph', numId: 1, bidi: rtl, ...extra });
     }
-    return para(refRuns(block.text, o), { bidi: rtl, ...extra });
+    return para(refRuns(block.text, o), { bidi: rtl, ...(firstLine ? { ind: { firstLine } } : {}), ...extra });
   }
 
   // ----- Images --------------------------------------------------------------
+  function addMedia(data, ext) {
+    const n = media.length + 1;
+    const entry = { name: `image${n}.${ext}`, rId: `rIdImg${n}`, data };
+    media.push(entry);
+    return entry;
+  }
+  function drawingRun(entry, cx, cy, altText) {
+    drawingId += 1;
+    const alt = X(altText);
+    return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${drawingId}" name="Picture ${drawingId}" descr="${alt}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${drawingId}" name="${entry.name}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${entry.rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
+  }
   function imageParagraph(figBlock, captionBelow) {
     const img = images.get(figBlock.id);
     const spacing = { before: 120, after: captionBelow ? 60 : 120, line: 240, lineRule: 'auto' };
@@ -203,13 +304,8 @@ export async function buildDocx(project, { figureImages } = {}) {
     const maxH = Math.max(1800, textH - 1800) * emuPerTwip;
     const scale = Math.min(1, maxW / cx, maxH / cy);
     cx = Math.max(1, Math.round(cx * scale)); cy = Math.max(1, Math.round(cy * scale));
-    const n = media.length + 1;
-    const entry = { name: `image${n}.png`, rId: `rIdImg${n}`, data: img.png };
-    media.push(entry);
-    drawingId += 1;
-    const alt = X(figBlock.caption || '');
-    const drawing = `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${drawingId}" name="Picture ${drawingId}" descr="${alt}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${drawingId}" name="${entry.name}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${entry.rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
-    return para(drawing, { jc: 'center', keepNext: captionBelow, spacing });
+    const entry = addMedia(img.png, 'png');
+    return para(drawingRun(entry, cx, cy, figBlock.caption || ''), { jc: 'center', keepNext: captionBelow, spacing });
   }
 
   // ----- Captions ------------------------------------------------------------
@@ -234,7 +330,7 @@ export async function buildDocx(project, { figureImages } = {}) {
     const labelXml = run(`${cfg.label} `, bold) + numberXml;
     const bm = info ? bookmark(refBookmark(kind, info.index), labelXml) : labelXml;
     const title = String(item.title || '').trim();
-    const inner = bm + run(cfg.separator || '', bold) + (title ? run(` ${title}`, { italic: !!cfg.titleItalic, rtl }) : '');
+    const inner = bm + run(cfg.separator || '', bold) + (title ? run(` ${title}`, { bold: !!cfg.titleBold, italic: !!cfg.titleItalic, rtl }) : '');
     return para(inner, {
       style: 'Caption', keepNext: position === 'above', keepLines: true, bidi: rtl,
       jc: jcFor(cfg.align, rtl) || 'center',
@@ -324,17 +420,21 @@ export async function buildDocx(project, { figureImages } = {}) {
   const sectionBreak = (props) => para('', { spacing: { before: 0, after: 0, line: 240, lineRule: 'auto' }, sectPr: sectPr(props) });
 
   // ----- Title page -------------------------------------------------------------
-  function titlePage() {
+  /** One centred title-page line. */
+  function titleLine(out, text, o = {}) {
+    if (!String(text || '').trim()) return;
+    const rtl = isRtlText(text);
+    out.push(para(run(text, { size: o.size, bold: o.bold, italic: o.italic, rtl }), {
+      style: o.style, jc: 'center', bidi: rtl, keepNext: true,
+      spacing: { before: o.before ?? 0, after: o.after ?? 120, line: o.line ?? 288, lineRule: 'auto' },
+    }));
+  }
+
+  /** Classic layout: name between big gaps, "Prepared by" / "Supervised by" / academic year. */
+  function classicTitlePage() {
     const t = doc.titlePage;
     const out = [];
-    const line = (text, o = {}) => {
-      if (!String(text || '').trim()) return;
-      const rtl = isRtlText(text);
-      out.push(para(run(text, { size: o.size, bold: o.bold, italic: o.italic, rtl }), {
-        style: o.style, jc: 'center', bidi: rtl, keepNext: true,
-        spacing: { before: o.before ?? 0, after: o.after ?? 120, line: 288, lineRule: 'auto' },
-      }));
-    };
+    const line = (text, o) => titleLine(out, text, o);
     let first = true;
     const top = (text, o) => { if (!String(text || '').trim()) return; line(text, { ...o, before: first ? sp(600) : 0 }); first = false; };
     top(t.university, { size: 18, bold: true, after: 80 });
@@ -350,6 +450,55 @@ export async function buildDocx(project, { figureImages } = {}) {
     if (t.academicYear) line(t.academicYear, { size: 13, before: sp(700), after: 0 });
     return out;
   }
+
+  /**
+   * Submission layout (university template): logo (about 1 inch tall), university / college / department in bold, the
+   * project title, the degree statement in italic, "by" and the students as typed, "Supervised by" and the supervisors,
+   * the month and year at the bottom. The gaps shrink when there are many students so it stays on one page.
+   */
+  function submissionTitlePage() {
+    const t = doc.titlePage;
+    const out = [];
+    const supervisors = [t.supervisor, t.coSupervisor && `Co-Supervisor: ${t.coSupervisor}`].filter(Boolean);
+    const tight = { line: 276, after: 40 };
+    // Rough height of what is fixed (twips; a wrapped line is counted), so the gaps can shrink to keep the page to one sheet.
+    const wrapped = (text, pt) => Math.max(1, Math.ceil((String(text).length * pt * 10.4) / textW));
+    const lineH = (pt) => Math.round(pt * 26.4);
+    const block = (list, pt, extra) => list.reduce((sum, text) => sum + wrapped(text, pt) * lineH(pt) + extra, 0);
+    const fixed = (logo ? 1600 : 0) + lineH(13) + 2 * lineH(12) + 120
+      + wrapped(t.name, 18) * lineH(18) + 360 + wrapped(t.degreeStatement, 12) * lineH(12)
+      + (t.students.length ? lineH(12) + 60 + block(t.students, 12, 40) : 0)
+      + (supervisors.length ? lineH(12) + 60 + block(supervisors, 12, 40) : 0) + lineH(12);
+    const gaps = { name: 3000, by: 900, sup: 1000, date: 1100 };
+    const k = Math.min(1, Math.max(0.1, (textH - fixed - 700) / 6000));
+    const gap = (key) => Math.round(gaps[key] * k);
+    if (logo) {
+      const cy = 914400; // 1 inch
+      let cx = Math.round((cy * logo.width) / logo.height);
+      const maxW = Math.round(textW * 635 * 0.6);
+      const scale = Math.min(1, maxW / cx);
+      cx = Math.max(1, Math.round(cx * scale));
+      const entry = addMedia(logo.data, logo.ext);
+      out.push(para(drawingRun(entry, cx, Math.max(1, Math.round(cy * scale)), ''), { jc: 'center', keepNext: true, spacing: { before: 0, after: 160, line: 240, lineRule: 'auto' } }));
+    }
+    titleLine(out, t.university, { ...tight, size: 13, bold: true });
+    titleLine(out, orgName(t.college, 'college'), { ...tight, bold: true });
+    titleLine(out, orgName(t.department, 'department'), { ...tight, bold: true });
+    titleLine(out, t.name, { ...tight, style: 'Title', size: 18, bold: true, before: gap('name'), after: 0 });
+    titleLine(out, t.degreeStatement, { ...tight, italic: true, before: 360, after: 0 });
+    if (t.students.length) {
+      titleLine(out, 'by', { ...tight, bold: true, before: gap('by'), after: 60 });
+      t.students.forEach((s) => titleLine(out, s, tight));
+    }
+    if (supervisors.length) {
+      titleLine(out, 'Supervised by', { ...tight, bold: true, before: gap('sup'), after: 60 });
+      supervisors.forEach((s) => titleLine(out, s, tight));
+    }
+    titleLine(out, t.submissionDate || t.academicYear, { ...tight, bold: true, before: gap('date'), after: 0 });
+    return out;
+  }
+
+  const titlePage = () => (doc.titlePage.layout === 'submission' ? submissionTitlePage() : classicTitlePage());
 
   // ----- Front matter ------------------------------------------------------------
   const rightTab = `<w:tab w:val="right" w:leader="dot" w:pos="${textW}"/>`;
@@ -372,14 +521,21 @@ export async function buildDocx(project, { figureImages } = {}) {
     });
   }
 
+  /** Style (so TOC level) of a contents line, as Word will produce it when the field is updated. */
+  const tocLineStyle = (e) => (e.kind === 'front' ? `TOC${frontOutline + 1}` : e.kind === 'section' ? `TOC${Math.min(4, e.level)}` : 'TOC1');
+
   function frontItem(item, first) {
     const out = [];
+    // With front matter in the contents the title stays as typed (the style shows capitals) so a small-caps contents line reads
+    // like the template; otherwise it is uppercased in the text itself.
+    const listed = listsFront && item.kind !== 'toc';
+    const heading = run(listsFront ? String(item.title || '') : frontHeading(item.title), { rtl: isRtlText(item.title) });
+    const bm = listed ? tocBookmarks.get(item.id) : null;
     // The first item already starts a fresh page (section break), the others get a page break.
-    out.push(para(run(frontHeading(item.title)), { style: 'TOCHeading', pageBreakBefore: !first, bidi: isRtlText(item.title) }));
+    out.push(para(bm ? bookmark(bm, heading) : heading, { style: 'TOCHeading', outline: listed ? frontOutline : undefined, pageBreakBefore: !first, bidi: isRtlText(item.title) }));
     if (item.kind === 'toc') {
-      const depth = Math.max(1, Math.min(4, Math.round(num(settings.toc?.depth, 3))));
-      const entries = doc.toc.map((e) => ({ text: e.text, anchor: tocBookmarks.get(e.id), style: `TOC${Math.min(4, e.level)}` }));
-      out.push(...listField(`TOC \\o "1-${depth}" \\h \\z \\u`, entries, 'No table of contents entries found.', 'TOC1'));
+      const entries = doc.toc.map((e) => ({ text: e.kind === 'references' ? frontHeading(e.text) : e.text, anchor: tocBookmarks.get(e.id), style: tocLineStyle(e) }));
+      out.push(...listField(`TOC \\o "1-${tocDepth}" \\h \\z \\u`, entries, 'No table of contents entries found.', 'TOC1'));
     } else if (item.kind === 'lot') {
       const entries = doc.tables.filter((t) => placedTables.has(t.id)).map((t) => ({ text: t.caption, anchor: refBookmark('table', numbering.tables.get(t.id).index) }));
       out.push(...listField(`TOC \\h \\z \\c "${seqId('table')}"`, entries, 'No table of figures entries found.', 'TableofFigures'));
@@ -391,7 +547,19 @@ export async function buildDocx(project, { figureImages } = {}) {
       else out.push(acronymTable());
     } else {
       for (const block of item.blocks) out.push(bodyParagraph({ type: block.type === 'li' ? 'bullet' : 'paragraph', text: block.text }));
+      out.push(...signatureLines(item));
     }
+    return out;
+  }
+
+  /** Declaration: one line per student (name, then a long rule to sign on), then the note centred below. */
+  function signatureLines(item) {
+    const names = doc.titlePage.studentNames;
+    if (!item.signatures || !names.length) return [];
+    const rule = `<w:tab w:val="left" w:leader="underscore" w:pos="${Math.round(textW * 0.72)}"/>`;
+    const single = (before) => ({ before, after: 0, line: 240, lineRule: 'auto' });
+    const out = names.map((name, i) => para(run(`${name} `, { rtl: isRtlText(name) }) + tabRun(), { keepNext: true, keepLines: true, jc: 'left', tabs: rule, spacing: single(i === 0 ? 840 : 560) }));
+    if (item.signatureNote) out.push(para(run(item.signatureNote, { rtl: isRtlText(item.signatureNote) }), { jc: 'center', spacing: single(640) }));
     return out;
   }
 
@@ -437,7 +605,24 @@ export async function buildDocx(project, { figureImages } = {}) {
         else { out.push(tableXml(block.table)); out.push(captionParagraph('table', block, 'below')); }
       }
     }
+    out.push(...referencesContent(out.length > 0));
     if (!out.length) out.push(emptyPara());
+    return out;
+  }
+
+  /** The References page: chapter-style heading (Heading 1, so Word's contents lists it) and "[n]<tab>text" entries with a hanging indent. */
+  function referencesContent(pageBreak) {
+    const { include, title, entries } = doc.references;
+    if (!include || !entries.length) return [];
+    const text = frontHeading(title);
+    const rtl = isRtlText(text);
+    const heading = run(text, { rtl });
+    const bm = tocBookmarks.get(REFERENCES_ID);
+    const out = [para(bm ? bookmark(bm, heading) : heading, { style: 'Heading1', pageBreakBefore: pageBreak, bidi: rtl })];
+    for (const e of entries) {
+      const entryRtl = isRtlText(e.text);
+      out.push(para(run(e.label, { rtl: entryRtl }) + tabRun() + e.runs.map((r) => run(r.text, { italic: !!r.italic, rtl: entryRtl })).join(''), { style: 'Reference', bidi: entryRtl }));
+    }
     return out;
   }
 
@@ -449,7 +634,7 @@ export async function buildDocx(project, { figureImages } = {}) {
   bodyXml.push(sectionBreak({})); // title page: no footer / number
   if (hasFront) {
     frontItems.forEach((item, i) => bodyXml.push(...frontItem(item, i === 0)));
-    bodyXml.push(sectionBreak({ footerRId: 'rIdFooter1', fmt: 'lowerRoman', start: 1 }));
+    bodyXml.push(sectionBreak({ footerRId: 'rIdFooter1', fmt: 'lowerRoman', start: frontPageStart }));
   }
   bodyXml.push(...bodyContent());
   const finalSect = sectPr({ footerRId: 'rIdFooter2', fmt: 'decimal', start: 1 });
@@ -463,11 +648,22 @@ export async function buildDocx(project, { figureImages } = {}) {
     const pstyle = ({ id, name, based = 'Normal', next, ui, q = true, ppr = '', rpr = '', hidden = false }) => `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${name}"/>${based ? `<w:basedOn w:val="${based}"/>` : ''}${next ? `<w:next w:val="${next}"/>` : ''}${ui != null ? `<w:uiPriority w:val="${ui}"/>` : ''}${hidden ? '<w:unhideWhenUsed/>' : ''}${q ? '<w:qFormat/>' : ''}${ppr ? `<w:pPr>${ppr}</w:pPr>` : ''}${rpr ? `<w:rPr>${rpr}</w:rPr>` : ''}</w:style>`;
     const black = '<w:color w:val="000000"/>';
     const headSpacing = '<w:spacing w:before="240" w:after="120" w:line="276" w:lineRule="auto"/>';
-    const tocBase = (level, indent, extraR = '') => pstyle({
+    const tocBase = (level, indent, extraR = '', { before = level === 1 ? 120 : 0, after = 60 } = {}) => pstyle({
       id: `TOC${level}`, name: `toc ${level}`, next: 'Normal', ui: 39, q: false, hidden: true,
-      ppr: `<w:tabs>${rightTab}</w:tabs><w:spacing w:before="${level === 1 ? 120 : 0}" w:after="60" w:line="240" w:lineRule="auto"/><w:ind w:left="${indent}"/><w:jc w:val="left"/>`,
+      ppr: `<w:tabs>${rightTab}</w:tabs><w:spacing w:before="${before}" w:after="${after}" w:line="240" w:lineRule="auto"/><w:ind w:left="${indent}"/><w:jc w:val="left"/>`,
       rpr: extraR,
     });
+    // Academic contents: chapters (and References) bold capitals, front matter and level 2 in small caps, level 3 plain; no indentation.
+    const sz = (pt) => `<w:sz w:val="${half(pt)}"/><w:szCs w:val="${half(pt)}"/>`;
+    const small = Math.max(8, fontSize - 1);
+    const tocStyles = academicToc ? [
+      tocBase(1, 0, `<w:b/><w:bCs/><w:caps/>${sz(fontSize)}`, { before: 100, after: 20 }),
+      tocBase(2, 0, `<w:smallCaps/>${sz(small)}`, { after: 20 }),
+      tocBase(3, 0, sz(small), { after: 20 }),
+      tocBase(4, 0, sz(small), { after: 20 }),
+    ] : [tocBase(1, 0, '<w:b/><w:bCs/>'), tocBase(2, 220), tocBase(3, 440), tocBase(4, 660)];
+    const headRFonts = fontXml(headingFont || font);
+    const hang = 660; // twips: width of the "[n]" column of the References page
     const figAlign = captionsCfg.figure.align === 'left' || captionsCfg.figure.align === 'right' ? captionsCfg.figure.align : 'center';
     return `${XML_HEAD}<w:styles xmlns:w="${NS_W}">
 <w:docDefaults><w:rPrDefault><w:rPr>${fontXml(font)}<w:sz w:val="${half(fontSize)}"/><w:szCs w:val="${half(fontSize)}"/><w:lang w:val="en-US" w:eastAsia="en-US" w:bidi="ar-SA"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="${Math.round(paraAfter * 20)}" w:line="${lineVal}" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
@@ -475,18 +671,16 @@ export async function buildDocx(project, { figureImages } = {}) {
 <w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont"><w:name w:val="Default Paragraph Font"/><w:uiPriority w:val="1"/><w:semiHidden/><w:unhideWhenUsed/></w:style>
 <w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:uiPriority w:val="99"/><w:semiHidden/><w:unhideWhenUsed/><w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>
 <w:style w:type="numbering" w:default="1" w:styleId="NoList"><w:name w:val="No List"/><w:uiPriority w:val="99"/><w:semiHidden/><w:unhideWhenUsed/></w:style>
-${pstyle({ id: 'Heading1', name: 'heading 1', next: 'Normal', ui: 9, ppr: `<w:keepNext/><w:keepLines/><w:spacing w:before="0" w:after="240" w:line="276" w:lineRule="auto"/><w:jc w:val="center"/><w:outlineLvl w:val="0"/>`, rpr: `${fontXml(font)}<w:b/><w:bCs/>${black}<w:sz w:val="${half(sizes.h1)}"/><w:szCs w:val="${half(sizes.h1)}"/>` })}
-${pstyle({ id: 'Heading2', name: 'heading 2', next: 'Normal', ui: 9, ppr: `<w:keepNext/><w:keepLines/>${headSpacing}<w:jc w:val="left"/><w:outlineLvl w:val="1"/>`, rpr: `${fontXml(font)}<w:b/><w:bCs/>${black}<w:sz w:val="${half(sizes.h2)}"/><w:szCs w:val="${half(sizes.h2)}"/>` })}
-${pstyle({ id: 'Heading3', name: 'heading 3', next: 'Normal', ui: 9, ppr: `<w:keepNext/><w:keepLines/>${headSpacing}<w:jc w:val="left"/><w:outlineLvl w:val="2"/>`, rpr: `${fontXml(font)}<w:b/><w:bCs/>${black}<w:sz w:val="${half(sizes.h3)}"/><w:szCs w:val="${half(sizes.h3)}"/>` })}
-${pstyle({ id: 'Heading4', name: 'heading 4', next: 'Normal', ui: 9, ppr: `<w:keepNext/><w:keepLines/>${headSpacing}<w:jc w:val="left"/><w:outlineLvl w:val="3"/>`, rpr: `${fontXml(font)}<w:b/><w:bCs/><w:i/><w:iCs/>${black}<w:sz w:val="${half(sizes.h4)}"/><w:szCs w:val="${half(sizes.h4)}"/>` })}
+${pstyle({ id: 'Heading1', name: 'heading 1', next: 'Normal', ui: 9, ppr: `<w:keepNext/><w:keepLines/><w:spacing w:before="0" w:after="240" w:line="276" w:lineRule="auto"/><w:jc w:val="center"/><w:outlineLvl w:val="0"/>`, rpr: `${headRFonts}<w:b/><w:bCs/>${black}<w:sz w:val="${half(sizes.h1)}"/><w:szCs w:val="${half(sizes.h1)}"/>` })}
+${pstyle({ id: 'Heading2', name: 'heading 2', next: 'Normal', ui: 9, ppr: `<w:keepNext/><w:keepLines/>${headSpacing}<w:jc w:val="left"/><w:outlineLvl w:val="1"/>`, rpr: `${headRFonts}<w:b/><w:bCs/>${black}<w:sz w:val="${half(sizes.h2)}"/><w:szCs w:val="${half(sizes.h2)}"/>` })}
+${pstyle({ id: 'Heading3', name: 'heading 3', next: 'Normal', ui: 9, ppr: `<w:keepNext/><w:keepLines/>${headSpacing}<w:jc w:val="left"/><w:outlineLvl w:val="2"/>`, rpr: `${headRFonts}<w:b/><w:bCs/>${subItalic ? '<w:i/><w:iCs/>' : ''}${black}<w:sz w:val="${half(sizes.h3)}"/><w:szCs w:val="${half(sizes.h3)}"/>` })}
+${pstyle({ id: 'Heading4', name: 'heading 4', next: 'Normal', ui: 9, ppr: `<w:keepNext/><w:keepLines/>${headSpacing}<w:jc w:val="left"/><w:outlineLvl w:val="3"/>`, rpr: `${headRFonts}<w:b/><w:bCs/><w:i/><w:iCs/>${black}<w:sz w:val="${half(sizes.h4)}"/><w:szCs w:val="${half(sizes.h4)}"/>` })}
 ${pstyle({ id: 'Title', name: 'Title', next: 'Normal', ui: 10, ppr: '<w:spacing w:before="0" w:after="240" w:line="288" w:lineRule="auto"/><w:jc w:val="center"/>', rpr: `<w:b/><w:bCs/>${black}<w:sz w:val="56"/><w:szCs w:val="56"/>` })}
 ${pstyle({ id: 'Caption', name: 'caption', next: 'Normal', ui: 35, ppr: `<w:spacing w:before="120" w:after="160" w:line="240" w:lineRule="auto"/><w:jc w:val="${figAlign}"/>`, rpr: `<w:sz w:val="${half(fontSize)}"/><w:szCs w:val="${half(fontSize)}"/>` })}
-${pstyle({ id: 'TOCHeading', name: 'TOC Heading', next: 'Normal', ui: 39, ppr: `<w:keepNext/><w:keepLines/><w:spacing w:before="0" w:after="240" w:line="276" w:lineRule="auto"/><w:jc w:val="center"/><w:outlineLvl w:val="9"/>`, rpr: `<w:b/><w:bCs/>${black}<w:sz w:val="${half(sizes.h1)}"/><w:szCs w:val="${half(sizes.h1)}"/>` })}
-${tocBase(1, 0, '<w:b/><w:bCs/>')}
-${tocBase(2, 220)}
-${tocBase(3, 440)}
-${tocBase(4, 660)}
-${pstyle({ id: 'TableofFigures', name: 'table of figures', next: 'Normal', ui: 99, q: false, hidden: true, ppr: `<w:tabs>${rightTab}</w:tabs><w:spacing w:before="0" w:after="80" w:line="240" w:lineRule="auto"/><w:jc w:val="left"/>` })}
+${pstyle({ id: 'TOCHeading', name: 'TOC Heading', next: 'Normal', ui: 39, ppr: `<w:keepNext/><w:keepLines/><w:spacing w:before="0" w:after="240" w:line="276" w:lineRule="auto"/><w:jc w:val="center"/><w:outlineLvl w:val="9"/>`, rpr: `${headingFont ? headRFonts : ''}<w:b/><w:bCs/>${listsFront && upperHeadings ? '<w:caps/>' : ''}${black}<w:sz w:val="${half(sizes.h1)}"/><w:szCs w:val="${half(sizes.h1)}"/>` })}
+${tocStyles.join('\n')}
+${pstyle({ id: 'TableofFigures', name: 'table of figures', next: 'Normal', ui: 99, q: false, hidden: true, ppr: `<w:tabs>${rightTab}</w:tabs><w:spacing w:before="0" w:after="${academicToc ? 60 : 80}" w:line="240" w:lineRule="auto"/><w:jc w:val="left"/>`, rpr: academicToc ? `<w:smallCaps/>${sz(small)}` : '' })}
+${pstyle({ id: 'Reference', name: 'Reference Entry', ui: 36, ppr: `<w:tabs><w:tab w:val="left" w:pos="${hang}"/></w:tabs><w:spacing w:before="0" w:after="160" w:line="240" w:lineRule="auto"/><w:ind w:left="${hang}" w:hanging="${hang}"/><w:jc w:val="${typo.justify ? 'both' : 'left'}"/>` })}
 ${pstyle({ id: 'ListParagraph', name: 'List Paragraph', ui: 34, ppr: '<w:ind w:left="720"/><w:contextualSpacing/>' })}
 ${pstyle({ id: 'Footer', name: 'footer', ui: 99, q: false, hidden: true, ppr: `<w:tabs><w:tab w:val="center" w:pos="${Math.round(textW / 2)}"/><w:tab w:val="right" w:pos="${textW}"/></w:tabs><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/>` })}
 <w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:basedOn w:val="TableNormal"/><w:uiPriority w:val="39"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/></w:tblBorders></w:tblPr></w:style>
@@ -506,7 +700,7 @@ ${pstyle({ id: 'Footer', name: 'footer', ui: 99, q: false, hidden: true, ppr: `<
   const coreXml = `${XML_HEAD}<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${X(project.name)}</dc:title><dc:subject>${X(project.type)}</dc:subject><dc:creator>${X(creator)}</dc:creator><cp:keywords></cp:keywords><dc:description>${X(project.description)}</dc:description><cp:lastModifiedBy>GradDocs</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`;
   const appXml = `${XML_HEAD}<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>GradDocs</Application><DocSecurity>0</DocSecurity><Company>${X(project.university)}</Company><AppVersion>16.0000</AppVersion></Properties>`;
 
-  const contentTypes = `${XML_HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="${CT}.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="${CT}.styles+xml"/><Override PartName="/word/settings.xml" ContentType="${CT}.settings+xml"/><Override PartName="/word/numbering.xml" ContentType="${CT}.numbering+xml"/><Override PartName="/word/footer1.xml" ContentType="${CT}.footer+xml"/><Override PartName="/word/footer2.xml" ContentType="${CT}.footer+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
+  const contentTypes = `${XML_HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/><Override PartName="/word/document.xml" ContentType="${CT}.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="${CT}.styles+xml"/><Override PartName="/word/settings.xml" ContentType="${CT}.settings+xml"/><Override PartName="/word/numbering.xml" ContentType="${CT}.numbering+xml"/><Override PartName="/word/footer1.xml" ContentType="${CT}.footer+xml"/><Override PartName="/word/footer2.xml" ContentType="${CT}.footer+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
 
   const rootRels = `${XML_HEAD}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="${REL}/extended-properties" Target="docProps/app.xml"/></Relationships>`;
 
@@ -521,7 +715,7 @@ ${pstyle({ id: 'Footer', name: 'footer', ui: 99, q: false, hidden: true, ppr: `<
     { path: 'word/styles.xml', data: styles },
     { path: 'word/settings.xml', data: settingsXml },
     { path: 'word/numbering.xml', data: numberingXml },
-    { path: 'word/footer1.xml', data: footerXml('i') },
+    { path: 'word/footer1.xml', data: footerXml(roman) },
     { path: 'word/footer2.xml', data: footerXml('1') },
     { path: 'word/_rels/document.xml.rels', data: docRels },
     ...media.map((m) => ({ path: `word/media/${m.name}`, data: m.data })),

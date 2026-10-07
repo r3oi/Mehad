@@ -12,7 +12,9 @@ export function elementLabel(el) {
 const geomKey = (el) => (el.type === 'node' ? `${Math.round(el.x)},${Math.round(el.y)}` : '');
 const sizeKey = (el) => (el.type === 'node' ? `${Math.round(el.w)}x${Math.round(el.h)}` : '');
 const wireKey = (el) => (el.type === 'edge' ? JSON.stringify([el.source, el.target, el.routing]) : '');
-const styleKey = (el) => JSON.stringify(el.style || {}) + (el.type === 'node' ? el.shape : '');
+// An image's data URL can be ~1 MB: its length and tail are enough to notice a replaced picture.
+const srcKey = (el) => (el.src ? `|${el.src.length}:${el.src.slice(-48)}` : '');
+const styleKey = (el) => JSON.stringify(el.style || {}) + (el.type === 'node' ? el.shape : '') + srcKey(el);
 
 /**
  * diffDiagrams(before, after) → {

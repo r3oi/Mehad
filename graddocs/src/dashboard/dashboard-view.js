@@ -6,13 +6,15 @@ import { formDialog } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { walkSections, SECTION_STATUSES } from '../core/model.js';
 import { getNumbering } from '../core/numbering.js';
-import { findBrokenReferences } from '../core/references.js';
+import { findBrokenReferences, resolveText } from '../core/references.js';
+import { referenceShortLabel } from '../core/bibliography.js';
 import { relativeTime, formatDate, escapeRegExp } from '../core/utils.js';
 import { t, isRTL } from '../i18n/index.js';
 import { detectAcronymSuggestions } from '../acronyms/detection.js';
 import { isDirty } from '../figures/versions.js';
 import { renderThumbnail } from '../figures/render.js';
 import { projectDetailFields, iso, count } from '../projects/projects-view.js';
+import { countWords } from '../structure/outline-ops.js';
 
 const WEIGHT = Object.fromEntries(SECTION_STATUSES.map((s) => [s.value, s.weight]));
 const hueOf = (text) => { let h = 0; for (const ch of String(text)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
@@ -24,11 +26,15 @@ const ACTIVITY_ICONS = { create: 'plus', revision: 'history', edit: 'edit', dele
 // re-rendered in the interface language. Specific templates come before generic ones.
 export const ACTIVITY_TEMPLATES = [
   'Synced with Word: 1 change', 'Synced with Word: {n} changes', 'Linked to a Word file', 'Unlinked the Word file', 'Undid a Word sync',
-  'Created project', 'Updated project details', 'Updated {tab} settings', 'Reordered front matter', 'Reordered figures',
+  'Created project', 'Updated project details', 'Updated {tab} settings', 'Applied {template} formatting', 'Added missing template chapters and sections', 'Reordered front matter', 'Reordered figures',
   'Added a table row', 'Deleted a table row', 'Added a table column', 'Deleted a table column', 'Merged table cells', 'Unmerged table cells', 'Duplicated a table',
   'Imported 1 acronym', 'Imported {n} acronyms', 'Added 1 detected acronym', 'Added {n} detected acronyms',
   'Added acronym {acronym}', 'Updated acronym {acronym}', 'Deleted acronym {acronym}', 'Restored acronym {acronym}',
   'Dismissed suggestion {acronym}', 'Restored suggestion {acronym}',
+  'Added reference “{title}”', 'Updated reference “{title}”', 'Deleted reference “{title}”', 'Restored reference “{title}”', 'Moved reference “{title}”',
+  'Imported 1 reference', 'Imported {n} references', 'Changed reference style', 'Changed reference order',
+  'Made chapter “{title}” unnumbered', 'Numbered chapter “{title}”',
+  'Filled the declaration from project details', 'Turned signature lines on', 'Turned signature lines off',
   'Renamed page “{title}”', 'Renamed {kind} “{title}”', 'Added chapter “{title}”', 'Added a section under “{title}”',
   'Added front matter page “{title}”', 'Deleted front matter page “{title}”',
   'Deleted {kind} “{title}”', 'Restored {kind} “{title}”',
@@ -96,13 +102,49 @@ function healthChecks(project, ctx, suggestions) {
   };
   const itemHref = (section, list) => (list.length === 1 ? ctx.href(section, list[0].id) : ctx.href(section));
 
-  const broken = findBrokenReferences(project);
+  // Where a broken token sits: front-matter pages are edited in Project Structure, chapters and sections in Chapters.
+  const ownerHref = (b) => (b.ownerKind === 'front' ? ctx.href('structure', null, { edit: b.ownerId }) : ctx.href('chapters', null, { focus: b.ownerId }));
+  const allBroken = findBrokenReferences(project);
+  const broken = allBroken.filter((b) => b.kind !== 'cite');
   if (broken.length) {
     checks.push({
       id: 'refs', tone: 'danger', icon: 'unlink', count: broken.length,
       label: broken.length === 1 ? t('Broken cross reference') : t('Broken cross references'),
       hint: t('In {names}', { names: names(broken.map((b) => b.ownerTitle || t('Untitled'))) }),
-      href: ctx.href('chapters', null, { focus: broken[0].ownerId }),
+      href: ownerHref(broken[0]),
+    });
+  }
+  const brokenCites = allBroken.filter((b) => b.kind === 'cite');
+  if (brokenCites.length) {
+    checks.push({
+      id: 'cites', tone: 'danger', icon: 'quote', count: brokenCites.length,
+      label: brokenCites.length === 1 ? t('Citation of a missing reference') : t('Citations of missing references'),
+      hint: t('In {names}', { names: names(brokenCites.map((b) => b.ownerTitle || t('Untitled'))) }),
+      href: ownerHref(brokenCites[0]),
+    });
+  }
+
+  const uncited = n.referenceOrder.filter((r) => !n.references.get(r.id)?.cited);
+  if (uncited.length) {
+    checks.push({
+      id: 'uncited', tone: 'info', icon: 'book', count: uncited.length,
+      label: count(uncited.length, '1 reference is never cited', '{n} references are never cited'),
+      hint: names(uncited.map((r) => referenceShortLabel(r))),
+      href: ctx.href('references', uncited.length === 1 ? uncited[0].id : null),
+    });
+  }
+
+  // Front-matter pages with a word limit (the abstract: 150 words).
+  for (const fm of project.frontMatter) {
+    const limit = Number(fm.wordLimit) || 0;
+    if (!limit || fm.include === false) continue;
+    const words = countWords(resolveText(project, fm.body));
+    if (words <= limit) continue;
+    checks.push({
+      id: `limit-${fm.id}`, tone: 'warning', icon: 'fileText', count: words - limit,
+      label: t('{title} is over its word limit', { title: iso(fm.title) }),
+      hint: t('{n} / {limit} words', { n: words, limit }),
+      href: ctx.href('structure', null, { edit: fm.id }),
     });
   }
 
@@ -231,7 +273,7 @@ export default {
           ${statCard({ to: ctx.href('figures'), ico: 'figure', label: t('Total Figures'), value: project.figures.length, sub: unFigs ? t('{n} not assigned', { n: unFigs }) : (project.figures.length ? t('All assigned') : t('None yet')) })}
           ${statCard({ to: ctx.href('tables'), ico: 'table', tone: 'info', label: t('Total Tables'), value: project.tables.length, sub: unTabs ? t('{n} not assigned', { n: unTabs }) : (project.tables.length ? t('All assigned') : t('None yet')) })}
           ${statCard({ to: ctx.href('acronyms'), ico: 'acronym', tone: 'warning', label: t('Total Acronyms'), value: project.acronyms.length, sub: suggestions.length ? count(suggestions.length, '1 suggestion pending', '{n} suggestions pending') : t('Up to date') })}
-          ${statCard({ to: ctx.href('structure'), ico: 'chapters', tone: 'success', label: t('Total Chapters'), value: project.chapters.length, sub: count(sectionCount, '1 section', '{n} sections') })}
+          ${statCard({ to: ctx.href('structure'), ico: 'chapters', tone: 'success', label: t('Total Chapters'), value: project.chapters.length, sub: `${count(sectionCount, '1 section', '{n} sections')}${project.references.length ? ` · ${count(project.references.length, '1 reference', '{n} references')}` : ''}` })}
           ${statCard({ to: ctx.href('settings', null, { tab: 'storage' }), ico: 'clock', tone: 'muted', label: t('Last Modified'), value: `<span class="ds-value-sm">${esc(relativeTime(project.updatedAt))}</span>`, sub: `<bdi>${esc(formatDate(project.updatedAt))}</bdi>` })}
           ${statCard({
             to: ctx.href('chapters'), ico: 'target', tone: 'primary', label: t('Completion Status'),

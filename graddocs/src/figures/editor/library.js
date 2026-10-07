@@ -11,6 +11,12 @@ const thumbCache = new Map();
 function presetThumb(preset) {
   const key = JSON.stringify(preset);
   if (!thumbCache.has(key)) {
+    if (preset.edge) {
+      // Connector presets: a short arrow that shows the line style and arrowhead.
+      const edge = { id: 'p', type: 'edge', source: { x: 0, y: 0 }, target: { x: 96, y: 0 }, routing: 'straight', text: '', style: { ...(preset.edge.style || {}), strokeWidth: 2 } };
+      thumbCache.set(key, renderThumbnail({ elements: [edge], defaults: { fontFamily: 'Arial', fontSize: 18 } }, { padding: 14 }));
+      return thumbCache.get(key);
+    }
     const shape = getShape(preset.shape);
     const w = preset.w ?? shape.defaults.w; const h = preset.h ?? shape.defaults.h;
     const scale = Math.min(1, 120 / w, 80 / h);

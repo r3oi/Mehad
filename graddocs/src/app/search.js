@@ -1,8 +1,9 @@
 // Project-wide search across figures (including text inside diagrams),
-// tables (including cells), acronyms, chapters, sections and front matter.
+// tables (including cells), acronyms, references, chapters, sections and front matter.
 import { getNumbering } from '../core/numbering.js';
 import { resolveText } from '../core/references.js';
 import { walkSections } from '../core/model.js';
+import { formatReference, referenceShortLabel } from '../core/bibliography.js';
 import { href } from './routes.js';
 import { t } from '../i18n/index.js';
 
@@ -55,16 +56,21 @@ export function searchProject(project, query, { limit = 40 } = {}) {
     push({ kind: 'acronym', id: a.id, title: `${a.acronym} — ${a.meaning}`, sub: t('Acronym'), href: href(project.id, 'acronyms', null, { focus: a.id }) },
       [[a.acronym, 10], [a.meaning, 7], [a.description, 2]]);
   }
+  for (const ref of n.referenceOrder) {
+    const info = n.references.get(ref.id);
+    push({ kind: 'reference', id: ref.id, title: `${info.label} ${referenceShortLabel(ref)}`, sub: t('Reference'), href: href(project.id, 'references', ref.id) },
+      [[ref.title, 10], [ref.authors, 7], [ref.custom, 6], [ref.container, 3], [ref.year, 2], [ref.doi, 2], [formatReference(ref, project.settings.references?.style), 2]]);
+  }
   for (const ch of project.chapters) {
     const info = n.chapters.get(ch.id);
-    push({ kind: 'chapter', id: ch.id, title: `${info.label}: ${ch.title}`, sub: t('Chapter'), href: href(project.id, 'chapters', null, { focus: ch.id }) },
+    push({ kind: 'chapter', id: ch.id, title: info.numbered ? `${info.label}: ${ch.title}` : ch.title, sub: t('Chapter'), href: href(project.id, 'chapters', null, { focus: ch.id }) },
       [[ch.title, 9], [info.label, 5], [resolveText(project, ch.body), 2]]);
   }
   walkSections(project, (sec) => {
     const info = n.sections.get(sec.id);
     const ch = n.chapters.get(info.chapterId);
-    push({ kind: 'section', id: sec.id, title: `${info.number} ${sec.title}`, sub: ch ? `${ch.label}: ${ch.title}` : '', href: href(project.id, 'chapters', null, { focus: sec.id }) },
-      [[sec.title, 8], [info.number, 5], [`Section ${info.number}`, 4], [resolveText(project, sec.body), 2]]);
+    push({ kind: 'section', id: sec.id, title: [info.number, sec.title].filter(Boolean).join(' '), sub: ch ? (ch.numbered ? `${ch.label}: ${ch.title}` : ch.title) : '', href: href(project.id, 'chapters', null, { focus: sec.id }) },
+      [[sec.title, 8], [info.number, 5], [info.number && `Section ${info.number}`, 4], [resolveText(project, sec.body), 2]]);
   });
   for (const fm of project.frontMatter) {
     push({ kind: 'front', id: fm.id, title: fm.title, sub: t('Front matter'), href: href(project.id, 'structure', null, { focus: fm.id }) },
@@ -75,4 +81,4 @@ export function searchProject(project, query, { limit = 40 } = {}) {
   return results.slice(0, limit);
 }
 
-export const KIND_ICONS = { figure: 'figure', table: 'table', acronym: 'acronym', chapter: 'chapters', section: 'structure', front: 'fileText' };
+export const KIND_ICONS = { figure: 'figure', table: 'table', acronym: 'acronym', reference: 'book', chapter: 'chapters', section: 'structure', front: 'fileText' };

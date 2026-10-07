@@ -18,6 +18,8 @@ function commands(shell) {
       { title: 'Create Table', sub: 'Start from a table template', icon: 'plus', keywords: 'new table add', run: go('tables', null, { new: '1' }) },
       { title: 'Create Acronym', sub: 'Add to List of Acronyms', icon: 'plus', keywords: 'new acronym abbreviation add', run: go('acronyms', null, { new: '1' }) },
       { title: 'Create Chapter', sub: 'Add a chapter to the document', icon: 'plus', keywords: 'new chapter add section', run: go('structure', null, { new: 'chapter' }) },
+      { title: 'New Reference', sub: 'Add a book, paper or website to the bibliography', icon: 'plus', keywords: 'create add reference citation bibliography source paper book', run: go('references', null, { new: '1' }) },
+      { title: 'Import BibTeX', sub: 'Add references from Google Scholar or a .bib file', icon: 'upload', keywords: 'bib bibtex references google scholar zotero import citations', run: go('references', null, { import: '1' }) },
       { title: 'Go to Dashboard', icon: 'dashboard', keywords: 'home overview', run: go('dashboard') },
       { title: 'Go to Project Structure', icon: 'structure', keywords: 'outline toc sections', run: go('structure') },
       { title: 'Sync with Word', sub: 'Link your report’s .docx and pull changes when you save', icon: 'word', keywords: 'word docx link import sync ربط وورد مزامنة', run: go('word') },
@@ -25,6 +27,7 @@ function commands(shell) {
       { title: 'Go to Tables', icon: 'table', run: go('tables') },
       { title: 'Go to Chapters', icon: 'chapters', keywords: 'write content sections', run: go('chapters') },
       { title: 'Go to Acronyms', icon: 'acronym', keywords: 'abbreviations', run: go('acronyms') },
+      { title: 'Go to References', icon: 'book', keywords: 'bibliography citations sources cite', run: go('references') },
       { title: 'Document Preview', icon: 'preview', keywords: 'print word pages toc', run: go('preview') },
       { title: 'Export', sub: 'Word package, PNG, SVG, PDF', icon: 'export', keywords: 'download docx zip pdf png svg', run: go('export') },
       { title: 'Export Project (JSON backup)', icon: 'archive', keywords: 'backup download json', run: go('export', null, { action: 'json' }) },
@@ -51,7 +54,7 @@ export function openPalette(shell, initialQuery = '') {
   root.innerHTML = `
     <div class="modal-backdrop" data-close></div>
     <div class="palette" role="dialog" aria-label="${t('Command palette')}">
-      <div class="palette-input">${icon('search')}<input type="text" placeholder="${t('Search figures, tables, acronyms, sections… or type a command')}" aria-label="${t('Search')}" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></div>
+      <div class="palette-input">${icon('search')}<input type="text" placeholder="${t('Search figures, tables, acronyms, references, sections… or type a command')}" aria-label="${t('Search')}" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></div>
       <div class="palette-results" role="listbox"></div>
       <div class="palette-footer"><span><kbd>↑</kbd><kbd>↓</kbd> ${t('navigate')}</span><span><kbd>Enter</kbd> ${t('open')}</span><span><kbd>${modLabel}</kbd><kbd>K</kbd> ${t('toggle')}</span></div>
     </div>`;

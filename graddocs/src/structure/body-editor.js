@@ -1,7 +1,7 @@
 // Reusable rich body editor.
 //
 // Body format (stored as a plain string): one paragraph per line, "- " prefix = bullet,
-// cross references as {{ref:fig|tab|sec|ch:<id>}} tokens. In the editor the tokens are
+// cross references as {{ref:fig|tab|sec|ch|cite:<id>}} tokens ("cite" = a bibliography citation, shown as [3]). In the editor the tokens are
 // atomic chips whose labels follow the live numbering ("Figure 3" → "Figure 4" when a
 // figure is inserted before it).
 //
@@ -15,7 +15,10 @@
 // line. Text nodes holding only U+200B ("anchors") give the caret somewhere to go before/after a block at the ends of
 // the text; the serializer ignores them.
 //
-//   const editor = createBodyEditor({ store, getProject: () => store.project, value, onChange, placeholder, ownerId });
+// Options: `hint` = writing guidance from the template (shown above the text while it is empty; never part of the body),
+// `wordLimit` = shows "n / limit words" and turns warning-coloured when over.
+//
+//   const editor = createBodyEditor({ store, getProject: () => store.project, value, onChange, placeholder, ownerId, hint, wordLimit });
 //   container.append(editor.el);  editor.refresh();  editor.destroy();
 import { esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -30,9 +33,10 @@ import { renderThumbnail } from '../figures/render.js';
 import { scanText } from '../acronyms/detection.js';
 import { href } from '../app/routes.js';
 import { t } from '../i18n/index.js';
-import { countLabel, isolate, LIST_SEP } from './outline-ops.js';
+import { referenceShortLabel } from '../core/bibliography.js';
+import { countLabel, countWords, isolate, LIST_SEP } from './outline-ops.js';
 
-const REF_ATTR = /^(fig|tab|sec|ch):([A-Za-z0-9_-]+)$/;
+const REF_ATTR = /^(fig|tab|sec|ch|cite):([A-Za-z0-9_-]+)$/;
 const PLACE_ATTR = /^(figure|table):([A-Za-z0-9_-]+)$/;
 const ANCHOR = '\u200b';
 const BLOCK_TAGS = new Set(['DIV', 'P', 'LI', 'UL', 'OL', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE', 'TR']);
@@ -85,10 +89,11 @@ export function serializeNodes(root, spans) {
   return out;
 }
 
-const wordCount = (text) => (String(text).trim() ? String(text).trim().split(/\s+/).length : 0);
+const wordCount = countWords;
 
 export function createBodyEditor({
   store, getProject = () => store.project, value = '', onChange, placeholder = '', label = t('Text'), minHeight, ownerId = null,
+  hint = '', wordLimit = 0,
 } = {}) {
   const placementsOn = !!ownerId; // placement lines become blocks, and the toolbar can insert them
   const el = document.createElement('div');
@@ -97,18 +102,26 @@ export function createBodyEditor({
   el.innerHTML = `
     <div class="be-toolbar" role="toolbar" aria-label="${esc(t('{label} tools', { label }))}">
       <button type="button" class="be-btn" data-be="ref" aria-haspopup="dialog" data-tip="${t('Insert a live cross reference')}">${icon('link')}<span>${t('Insert reference')}</span></button>
+      <button type="button" class="be-btn be-btn-cite" data-be="cite" aria-haspopup="dialog" data-tip="${esc(t('Cite a reference from your bibliography'))}">${icon('quote')}<span>${t('Cite')}</span></button>
       <button type="button" class="be-btn" data-be="bullet" data-tip="${t('Toggle bullet list for the current line')}">${BULLET_SVG}<span>${t('Bullet')}</span></button>${placementsOn ? `
       <span class="be-sep" role="separator" aria-orientation="vertical"></span>
       <button type="button" class="be-btn be-btn-place" data-be="figure" aria-haspopup="dialog" aria-label="${esc(t('Insert figure here'))}" data-tip="${esc(t('Put a figure at the cursor position'))}">${icon('figure')}<span>${t('Insert figure here')}</span></button>
       <button type="button" class="be-btn be-btn-place" data-be="table" aria-haspopup="dialog" aria-label="${esc(t('Insert table here'))}" data-tip="${esc(t('Put a table at the cursor position'))}">${icon('table')}<span>${t('Insert table here')}</span></button>` : ''}
-      <span class="be-meta"></span>
-    </div>
+      <span class="be-meta"></span>${hint ? `
+      <button type="button" class="be-btn be-btn-guide" data-be="guide" aria-pressed="false" data-tip="${esc(t('Show or hide the writing guidance'))}">${icon('info')}<span>${t('Guidance')}</span></button>` : ''}
+    </div>${hint ? `
+    <div class="be-guide" hidden>
+      <span class="be-guide-ico">${icon('info')}</span>
+      <div class="be-guide-body"><div class="be-guide-title">${t('Template guidance')}</div><div class="be-guide-text" dir="auto">${esc(hint)}</div></div>
+    </div>` : ''}
     <div class="be-surface" role="textbox" aria-multiline="true" aria-label="${esc(label)}" spellcheck="true" data-placeholder="${esc(placeholder)}"></div>
     <div class="be-hints" hidden></div>`;
   const surface = el.querySelector('.be-surface');
   const hintsEl = el.querySelector('.be-hints');
   const metaEl = el.querySelector('.be-meta');
   const toolbar = el.querySelector('.be-toolbar');
+  const guideEl = el.querySelector('.be-guide');
+  const guideBtn = el.querySelector('[data-be="guide"]');
 
   try { surface.contentEditable = 'plaintext-only'; } catch { /* unsupported → fall back */ }
   if (surface.contentEditable !== 'plaintext-only') surface.contentEditable = 'true';
@@ -361,7 +374,25 @@ export function createBodyEditor({
   // ----- hints --------------------------------------------------------------
   function updateMeta() {
     const words = wordCount(resolveText(project(), serializeNodes(surface)));
-    metaEl.textContent = words ? countLabel(words, 'word') : '';
+    if (wordLimit) {
+      metaEl.textContent = t('{n} / {limit} words', { n: words, limit: wordLimit });
+      metaEl.classList.toggle('over', words > wordLimit);
+      metaEl.title = words > wordLimit ? t('{n} words over the limit', { n: words - wordLimit }) : '';
+    } else metaEl.textContent = words ? countLabel(words, 'word') : '';
+    updateGuide();
+  }
+
+  // Template guidance: visible while the text is empty (or when the Guidance button asks for it). Never written into the body.
+  let guideOverride = null; // null = automatic (visible while empty), true / false = chosen with the button
+  let guideWasEmpty = null;
+  function updateGuide() {
+    if (!guideEl) return;
+    const empty = !surface.querySelector('[data-ref], [data-place]') && !surface.textContent.replace(/[\u200b\s]/g, '');
+    if (empty !== guideWasEmpty) { guideWasEmpty = empty; guideOverride = null; }
+    const visible = guideOverride ?? empty;
+    guideEl.hidden = !visible;
+    guideBtn?.setAttribute('aria-pressed', String(visible));
+    guideBtn?.classList.toggle('active', visible && !empty);
   }
 
   function updateHints() {
@@ -572,6 +603,7 @@ export function createBodyEditor({
     flush();
     if (m[1] === 'fig') location.hash = href(pid, 'figures', m[2]);
     else if (m[1] === 'tab') location.hash = href(pid, 'tables', m[2]);
+    else if (m[1] === 'cite') location.hash = href(pid, 'references', m[2]);
     else location.hash = href(pid, 'chapters', null, { focus: m[2] });
   });
 
@@ -792,35 +824,52 @@ export function createBodyEditor({
     else if (act === 'open') openBlockTarget(block);
   });
 
+  /** "New reference…" in the Cite picker: add it in the dialog, then cite it where the caret was. */
+  async function newReference() {
+    saveRange();
+    try {
+      const { openReferenceDialog } = await import('../bibliography/reference-dialog.js');
+      openReferenceDialog(store, { onSaved: (ref) => { if (!destroyed) insertChip('cite', ref.id); } });
+    } catch (err) { console.error(err); }
+  }
+
   // ----- pickers ------------------------------------------------------------------
   function closePicker() { if (activePicker?.owner === api) activePicker.close(); }
 
-  /** mode: 'ref' (cross-reference chip) | 'figure' | 'table' (placement line). */
+  /** mode: 'ref' (cross-reference chip) | 'cite' (citation chip) | 'figure' | 'table' (placement line). */
   function openPicker(anchorBtn, mode = 'ref') {
     if (activePicker) activePicker.close();
     saveRange();
     const p = project();
     const n = getNumbering(p);
     const placing = mode === 'figure' || mode === 'table';
-    const where = (info) => (info.sectionId ? n.sections.get(info.sectionId)?.number : info.chapterId ? n.chapters.get(info.chapterId)?.label : t('Unassigned'));
+    const citing = mode === 'cite';
+    const where = (info) => (info.sectionId ? (n.sections.get(info.sectionId)?.number || n.sections.get(info.sectionId)?.title) : info.chapterId ? n.chapters.get(info.chapterId)?.label : t('Unassigned'));
     const placeItems = () => (mode === 'figure' ? n.figureOrder : n.tableOrder).map((x) => {
       const info = (mode === 'figure' ? n.figures : n.tables).get(x.id);
       return { id: x.id, label: info.label, title: x.title, placed: info.placed, here: info.placement?.ownerId === ownerId, where: where(info) };
     });
+    const citeItems = () => n.referenceOrder.map((ref) => {
+      const info = n.references.get(ref.id);
+      return { id: ref.id, label: info.label, title: referenceShortLabel(ref), cited: info.cited, search: `${ref.authors} ${ref.title} ${ref.custom} ${ref.container} ${ref.year}` };
+    });
     const groups = placing
       ? [{ title: '', kind: mode, items: placeItems() }]
+      : citing ? [{ title: '', kind: 'cite', items: citeItems() }]
       : [
         { title: t('Figures'), kind: 'fig', items: n.figureOrder.map((f) => ({ id: f.id, label: n.figures.get(f.id).label, title: f.title })) },
         { title: t('Tables'), kind: 'tab', items: n.tableOrder.map((tb) => ({ id: tb.id, label: n.tables.get(tb.id).label, title: tb.title })) },
-        { title: t('Sections'), kind: 'sec', items: n.outline.filter((o) => o.kind === 'section').map((o) => ({ id: o.id, label: `Section ${o.number}`, title: o.title })) },
-        { title: t('Chapters'), kind: 'ch', items: n.outline.filter((o) => o.kind === 'chapter').map((o) => ({ id: o.id, label: `Chapter ${o.number}`, title: o.title })) },
+        { title: t('Sections'), kind: 'sec', items: n.outline.filter((o) => o.kind === 'section').map((o) => { const label = n.sections.get(o.id).label; return { id: o.id, label, title: label === o.title ? null : o.title }; }) },
+        { title: t('Chapters'), kind: 'ch', items: n.outline.filter((o) => o.kind === 'chapter').map((o) => { const label = n.chapters.get(o.id).label; return { id: o.id, label, title: label === o.title ? null : o.title }; }) },
       ];
     const pop = document.createElement('div');
-    pop.className = `be-picker${placing ? ' be-picker-place' : ''}`;
+    pop.className = `be-picker${placing ? ' be-picker-place' : ''}${citing ? ' be-picker-cite' : ''}`;
     pop.setAttribute('role', 'dialog');
-    pop.setAttribute('aria-label', placing ? (mode === 'figure' ? t('Insert figure here') : t('Insert table here')) : t('Insert reference'));
-    const filterText = placing ? (mode === 'figure' ? t('Filter figures…') : t('Filter tables…')) : t('Filter figures, tables, sections…');
-    pop.innerHTML = `<div class="be-picker-search">${icon('search')}<input class="input input-sm" type="search" placeholder="${esc(filterText)}" aria-label="${esc(placing ? filterText : t('Filter references'))}" autocomplete="off"></div><div class="be-picker-list" role="listbox"></div>${placing ? `<div class="be-picker-foot"><button type="button" class="be-pick-new" data-new="${mode}">${icon('plus')}<span>${mode === 'figure' ? t('New figure…') : t('New table…')}</span></button></div>` : ''}`;
+    pop.setAttribute('aria-label', placing ? (mode === 'figure' ? t('Insert figure here') : t('Insert table here')) : citing ? t('Cite a reference') : t('Insert reference'));
+    const filterText = placing ? (mode === 'figure' ? t('Filter figures…') : t('Filter tables…')) : citing ? t('Filter references…') : t('Filter figures, tables, sections…');
+    const footer = placing ? `<div class="be-picker-foot"><button type="button" class="be-pick-new" data-new="${mode}">${icon('plus')}<span>${mode === 'figure' ? t('New figure…') : t('New table…')}</span></button></div>`
+      : citing ? `<div class="be-picker-foot"><button type="button" class="be-pick-new" data-new="cite">${icon('plus')}<span>${t('New reference…')}</span></button></div>` : '';
+    pop.innerHTML = `<div class="be-picker-search">${icon('search')}<input class="input input-sm" type="search" placeholder="${esc(filterText)}" aria-label="${esc(placing || citing ? filterText : t('Filter references'))}" autocomplete="off"></div><div class="be-picker-list" role="listbox"></div>${footer}`;
     el.append(pop);
     const input = pop.querySelector('input');
     const list = pop.querySelector('.be-picker-list');
@@ -830,15 +879,16 @@ export function createBodyEditor({
       const q = input.value.trim().toLowerCase();
       let html = '';
       for (const g of groups) {
-        const items = g.items.filter((it) => !q || `${it.label} ${it.title}`.toLowerCase().includes(q));
+        const items = g.items.filter((it) => !q || `${it.label} ${it.title} ${it.search || ''}`.toLowerCase().includes(q));
         if (!items.length) continue;
         if (g.title) html += `<div class="be-picker-group">${g.title}</div>`;
         html += items.map((it) => {
+          if (citing) return `<button type="button" class="be-pick" role="option" data-kind="${g.kind}" data-id="${esc(it.id)}"><span class="be-pick-label" dir="ltr">${esc(it.label)}</span><span class="be-pick-title" dir="auto">${esc(it.title)}</span>${it.cited ? '' : `<span class="be-pick-meta"><span class="be-pick-badge">${t('Not cited yet')}</span></span>`}</button>`;
           const meta = placing ? `<span class="be-pick-meta">${it.here ? `<span class="be-pick-badge here">${t('Placed here')}</span>` : it.placed ? `<span class="be-pick-badge">${t('In text')}</span>` : ''}<bdi>${esc(it.where || '')}</bdi></span>` : '';
-          return `<button type="button" class="be-pick" role="option" data-kind="${g.kind}" data-id="${esc(it.id)}"><span class="be-pick-label">${esc(it.label)}</span><span class="be-pick-title" dir="auto">${esc(it.title || t('Untitled'))}</span>${meta}</button>`;
+          return `<button type="button" class="be-pick" role="option" data-kind="${g.kind}" data-id="${esc(it.id)}"><span class="be-pick-label">${esc(it.label)}</span><span class="be-pick-title" dir="auto">${esc(it.title === null ? '' : it.title || t('Untitled'))}</span>${meta}</button>`;
         }).join('');
       }
-      const empty = placing ? (q ? t('Nothing matches.') : mode === 'figure' ? t('No figures yet. Create the first one below.') : t('No tables yet. Create the first one below.')) : t('Nothing matches. Add figures and tables from their pages first.');
+      const empty = citing ? (q ? t('Nothing matches.') : t('No references yet. Add the first one below.')) : placing ? (q ? t('Nothing matches.') : mode === 'figure' ? t('No figures yet. Create the first one below.') : t('No tables yet. Create the first one below.')) : t('Nothing matches. Add figures and tables from their pages first.');
       list.innerHTML = html || `<div class="be-picker-empty">${empty}</div>`;
       active = 0;
       setActive(0);
@@ -883,7 +933,7 @@ export function createBodyEditor({
       const b = e.target.closest('.be-pick');
       if (b) { const i = buttons().indexOf(b); if (i !== active) setActive(i); }
     });
-    pop.querySelector('.be-pick-new')?.addEventListener('click', () => { close(); newItem(mode); });
+    pop.querySelector('.be-pick-new')?.addEventListener('click', () => { close(); if (citing) newReference(); else newItem(mode); });
     document.addEventListener('pointerdown', onDown, true);
     window.addEventListener('keydown', onKey, true);
     anchorBtn.classList.add('active');
@@ -909,10 +959,11 @@ export function createBodyEditor({
     const btn = e.target.closest('[data-be]');
     if (!btn) return;
     const act = btn.dataset.be;
-    if (act === 'ref' || act === 'figure' || act === 'table') {
+    if (act === 'ref' || act === 'cite' || act === 'figure' || act === 'table') {
       const sameButton = activePicker?.owner === api && el.contains(activePicker.pop) && btn.classList.contains('active');
       if (sameButton) activePicker.close(); else openPicker(btn, act);
     } else if (act === 'bullet') toggleBullet();
+    else if (act === 'guide') { guideOverride = !(guideOverride ?? guideWasEmpty); updateGuide(); }
   });
 
   // ----- hint actions ---------------------------------------------------------------

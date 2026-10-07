@@ -8,9 +8,11 @@ import { openModal, confirmDialog } from '../ui/modal.js';
 import { getNumbering, moveInDocumentOrder } from '../core/numbering.js';
 import { createFigure, findFigure, walkSections } from '../core/model.js';
 import { findUsages, clearPlacement } from '../core/references.js';
-import { relativeTime, clone, uid, slugify, downloadBlob, downloadText, plural } from '../core/utils.js';
+import { relativeTime, clone, uid, slugify, downloadBlob, downloadText, plural, pickFile } from '../core/utils.js';
 import { renderThumbnail, renderFigureSVG } from './render.js';
-import { figureTypes, getFigureType, buildTemplate } from './types.js';
+import { figureTypes, getFigureType, buildTemplate, figureFonts } from './types.js';
+import { screenshotDiagram } from './templates/index.js';
+import { IMAGE_ACCEPT, isImageFile, imageFromFile, titleFromFileName, lightDiagram } from './editor/image-import.js';
 import { addVersion, latestVersion, isDirty } from './versions.js';
 import { svgToPngBlob, copyPngToClipboard } from '../export/png.js';
 import { svgToPdfBlob } from '../export/pdf.js';
@@ -48,6 +50,9 @@ export function parseLocation(project, value) {
 
 const locationValue = (f) => (f.sectionId ? `sec:${f.sectionId}` : f.chapterId ? `ch:${f.chapterId}` : '');
 
+/** Thumbnail markup of a figure (pictures are drawn from light blob: URLs, not the full data URLs). */
+const thumbOf = (figure) => renderThumbnail(lightDiagram(figure.diagram));
+
 /** Opens the New Figure dialog. Resolves with the created figure id (or null). */
 export function openNewFigureDialog(store, { sectionId = null, chapterId = null, type = 'flowchart' } = {}) {
   const project = store.project;
@@ -67,7 +72,10 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
             <span class="type-icon">${icon(ft.icon)}</span><strong>${esc(ft.name)}</strong><span class="desc">${esc(ft.description)}</span></button>`).join('')}
         </div></div>
         <div class="col" style="gap:14px">
-          <button type="button" class="btn btn-soft nf-generate" data-generate>${icon('sparkles', 'icon-sm')} ${t('Generate from description')}</button>
+          <div class="nf-sources">
+            <button type="button" class="btn btn-soft nf-generate" data-generate>${icon('sparkles', 'icon-sm')} ${t('Generate from description')}</button>
+            <button type="button" class="btn btn-soft nf-generate" data-image>${icon('image', 'icon-sm')} ${t('From image (screenshot)')}</button>
+          </div>
           <div><div class="section-title" data-preview-title>${t('Template preview')}</div><div class="new-fig-preview" data-preview></div></div>
           <div class="field"><label for="nf-title">${t('Figure title')} <span style="color:var(--danger)">*</span></label><input id="nf-title" class="input" autofocus${AUTO}></div>
           <div class="field"><label for="nf-loc">${t('Chapter / section')}</label><select id="nf-loc" class="select">${locationOptions(project, initialLoc)}</select></div>
@@ -80,11 +88,18 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
     });
     const titleEl = modal.$('#nf-title'); const locEl = modal.$('#nf-loc');
     let generated = null; // a diagram made with "Generate from description" (replaces the template)
+    let picture = null; // { diagram, title }: a screenshot / image chosen with "From image (screenshot)"
+    const previewEl = modal.$('[data-preview]');
     const refresh = () => {
       const ft = getFigureType(selectedType);
-      if (!titleTouched) titleEl.value = generated?.title || ft.defaultTitle;
-      modal.$('[data-preview-title]').textContent = generated ? t('Generated diagram — pick a type to start from a template instead') : t('Template preview');
-      modal.$('[data-preview]').innerHTML = renderThumbnail(generated ? generated.diagram : buildTemplate(selectedType, project));
+      if (!titleTouched) titleEl.value = picture?.title || generated?.title || ft.defaultTitle;
+      modal.$('[data-preview-title]').textContent = picture ? t('Your image — pick a type to start from a template instead')
+        : generated ? t('Generated diagram — pick a type to start from a template instead') : t('Template preview');
+      previewEl.innerHTML = picture ? thumbOf(picture)
+        : generated ? renderThumbnail(generated.diagram)
+          : selectedType === 'screenshot'
+            ? `<button type="button" class="nf-drop" data-image>${icon('upload')}<strong>${t('Choose an image…')}</strong><span>${t('PNG, JPG, WebP, GIF or SVG — or drop the file here')}</span></button>`
+            : renderThumbnail(buildTemplate(selectedType, project));
       const candidate = { id: '__new', title: titleEl.value || ft.defaultTitle, ...parseLocation(project, locEl.value) };
       const n = getNumbering({ ...project, figures: [...project.figures, candidate] }).figures.get('__new');
       const renumbers = project.figures.length && n.index <= project.figures.length;
@@ -97,16 +112,39 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
       const card = e.target.closest('[data-type]');
       if (!card) return;
       selectedType = card.dataset.type;
-      generated = null;
+      generated = null; picture = null;
       refresh();
     });
     modal.$('[data-generate]').addEventListener('click', async () => {
       const { openGenerateDialog } = await import('./generate/generate-dialog.js');
       const result = await openGenerateDialog({ project, mode: 'new' });
       if (!result) return;
-      generated = result;
+      generated = result; picture = null;
       selectedType = result.type;
       refresh();
+    });
+    // Screenshot / image: pick a file (or drop one on the preview) → a figure that is one picture.
+    const usePicture = async (file) => {
+      if (!file) return;
+      if (!isImageFile(file)) { toast(t('Choose an image file (PNG, JPG, WebP, GIF or SVG).'), { type: 'warning' }); return; }
+      try {
+        const img = await imageFromFile(file);
+        picture = { diagram: screenshotDiagram(figureFonts(project), img), title: titleFromFileName(file.name) || getFigureType('screenshot').defaultTitle };
+        generated = null; selectedType = 'screenshot';
+        refresh();
+      } catch (err) { toastError(err, t('Could not read the image')); }
+    };
+    modal.root.addEventListener('click', async (e) => {
+      if (!e.target.closest('[data-image]')) return;
+      e.preventDefault();
+      await usePicture(await pickFile(IMAGE_ACCEPT));
+    });
+    previewEl.addEventListener('dragover', (e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); previewEl.classList.add('dropping'); } });
+    previewEl.addEventListener('dragleave', () => previewEl.classList.remove('dropping'));
+    previewEl.addEventListener('drop', (e) => {
+      previewEl.classList.remove('dropping');
+      const file = [...(e.dataTransfer?.files || [])][0];
+      if (file) { e.preventDefault(); usePicture(file); }
     });
     titleEl.addEventListener('input', () => { titleTouched = true; refresh(); });
     locEl.addEventListener('change', refresh);
@@ -115,7 +153,7 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
       if (!title) { titleEl.classList.add('invalid'); titleEl.focus(); return; }
       const figure = createFigure({
         title, type: selectedType, description: modal.$('#nf-desc').value.trim(),
-        diagram: generated ? generated.diagram : buildTemplate(selectedType, project), ...parseLocation(project, locEl.value),
+        diagram: picture ? picture.diagram : generated ? generated.diagram : buildTemplate(selectedType, project), ...parseLocation(project, locEl.value),
       });
       addVersion(figure, { force: true });
       store.update((p) => { p.figures.push(figure); }, { activity: { text: `Created figure “${title}”`, kind: 'create', targetId: figure.id } });
@@ -201,7 +239,7 @@ export default {
           <button class="btn btn-sm btn-ghost btn-icon" data-action="more" data-id="${f.id}" aria-label="${esc(t('More actions for {title}', { title: f.title }))}">${icon('more')}</button>`;
         if (view === 'grid') {
           return `<article class="card fig-card" data-fig="${f.id}">
-            <a class="thumb" href="${ctx.href('figures', f.id)}" aria-label="${esc(t('Open {title}', { title: f.title }))}">${renderThumbnail(f)}</a>
+            <a class="thumb" href="${ctx.href('figures', f.id)}" aria-label="${esc(t('Open {title}', { title: f.title }))}">${thumbOf(f)}</a>
             <div class="fig-card-body">
               <div class="fig-card-title"><span class="fig-num">#${info.index}</span><a class="truncate" href="${ctx.href('figures', f.id)}">${esc(f.title)}</a></div>
               <div class="fig-meta"><strong style="color:var(--text-2)">${esc(info.label)}</strong><span class="sep">·</span><span class="mono">${esc(info.code)}</span></div>
@@ -212,7 +250,7 @@ export default {
           </article>`;
         }
         return `<div class="list-item fig-row" data-fig="${f.id}">
-          <a class="thumb" href="${ctx.href('figures', f.id)}" aria-label="${esc(t('Open {title}', { title: f.title }))}">${renderThumbnail(f)}</a>
+          <a class="thumb" href="${ctx.href('figures', f.id)}" aria-label="${esc(t('Open {title}', { title: f.title }))}">${thumbOf(f)}</a>
           <div class="grow" style="display:flex;flex-direction:column;gap:3px">
             <div class="title"><span class="fig-num">#${info.index}</span> <a href="${ctx.href('figures', f.id)}">${esc(f.title)}</a></div>
             <div class="fig-meta"><strong style="color:var(--text-2)">${esc(info.label)}</strong><span class="sep">·</span><span class="mono">${esc(info.code)}</span><span class="sep">·</span>${meta}</div>
@@ -265,7 +303,7 @@ export default {
     function duplicate(id) {
       const src = findFigure(store.project, id);
       const copy = clone(src);
-      copy.id = uid('fig'); copy.title = `${src.title} (copy)`; copy.versions = []; copy.comments = [];
+      copy.id = uid('fig'); copy.title = `${src.title} (copy)`; copy.versions = []; copy.comments = []; delete copy.imagePool;
       copy.createdAt = copy.updatedAt = Date.now();
       addVersion(copy, { force: true });
       store.update((p) => { const i = p.figures.findIndex((f) => f.id === id); p.figures.splice(i + 1, 0, copy); }, { activity: { text: `Duplicated figure “${src.title}”`, kind: 'create', targetId: copy.id } });

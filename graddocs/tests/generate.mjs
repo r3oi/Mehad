@@ -312,6 +312,27 @@ test('sequenceDiagram', () => {
   const d = specToDiagram(spec);
   assert.equal(nodesOf(d).filter((n) => n.shape === 'lifeline').length, 3);
 });
+test('sequenceDiagram: -) and --) are asynchronous (open arrowhead), ->> synchronous (filled)', () => {
+  const { spec } = parseMermaid('sequenceDiagram\n  A->>B: sync\n  A-)B: async\n  B-->>A: back');
+  assert.deepEqual(spec.messages.map((m) => [!!m.async, !!m.reply]), [[false, false], [true, false], [false, true]]);
+  const edges = specToDiagram(spec).elements.filter((el) => el.type === 'edge' && el.text);
+  const byText = (t) => edges.find((e) => e.text.includes(t));
+  assert.equal(byText('sync').style.endArrow, 'triangle');
+  assert.equal(byText('async').style.endArrow, 'arrow');
+  assert.equal(byText('back').style.dash, 'dashed');
+});
+test('context diagram: the system sits in the middle, every flow is attached', () => {
+  const { diagram } = buildDiagramFromSpec({ type: 'context', nodes: [{ id: 's', label: 'Meyar System', kind: 'boundary' }, { id: 'a', label: 'Student' }, { id: 'b', label: 'Supervisor' }],
+    edges: [{ from: 'a', to: 's', label: 'Project data' }, { from: 's', to: 'b', label: 'Reports' }] });
+  const nodes = nodesOf(diagram); const edges = diagram.elements.filter((el) => el.type === 'edge');
+  assert.equal(edges.length, 2);
+  for (const e of edges) assert.ok(nodes.some((n) => n.id === e.source?.id) && nodes.some((n) => n.id === e.target?.id), 'attached');
+  const sys = nodes.find((n) => n.text === 'Meyar System');
+  const others = nodes.filter((n) => n !== sys && (n.text === 'Student' || n.text === 'Supervisor'));
+  const cx = (n) => n.x + n.w / 2;
+  assert.ok(others.some((n) => cx(n) < cx(sys)) && others.some((n) => cx(n) > cx(sys)) || others.every((n) => Math.abs(cx(n) - cx(sys)) > 1), 'entities around the system');
+  assert.equal(layoutUnsuitedReason(diagram, 'context'), 'context');
+});
 test('classDiagram: members, stereotypes, relations and multiplicities', () => {
   const { spec } = parseMermaid('classDiagram\n  class Animal {\n    +String name\n    +eat() void\n  }\n  class Dog\n  Animal <|-- Dog\n  Animal "1" --> "*" Food : eats\n  Dog *-- Tail\n  Dog o-- Toy\n  Dog ..> Bone\n  Cat ..|> Pet\n  Dog : +bark()\n  <<interface>> Pet');
   const cls = (id) => spec.nodes.find((n) => n.id === id);
@@ -1009,7 +1030,7 @@ test('every interface string in the generator, layout and AI modules has an Arab
 });
 test('strings added to the editor, New Figure dialog and settings are translated', () => {
   const need = ['Auto layout', 'Generate from text…', 'Top to bottom', 'Left to right', 'Tree', 'Diagram arranged', 'Already arranged.', 'Nothing to arrange yet.', 'Arrange the whole diagram', 'Arranged {n} selected shapes',
-    'Auto layout is not suited to fishbone, sequence or timeline figures — they keep their own layout.', 'Diagram replaced', 'Diagram added to the canvas', 'Generate from description',
+    'Auto layout is not suited to this kind of figure (fishbone, sequence, timeline, context diagram or image) — it keeps its own layout.', 'Diagram replaced', 'Diagram added to the canvas', 'Generate from description',
     'Generated diagram — pick a type to start from a template instead', 'AI', 'AI diagram generation', 'Claude API key', 'Remove key', 'Model', 'Where to get a key', 'Model changed.', 'Key removed from this browser.'];
   assert.deepEqual(need.filter((k) => !(k in AR)), []);
   for (const file of ['editor/editor-view.js', 'figures-view.js']) {

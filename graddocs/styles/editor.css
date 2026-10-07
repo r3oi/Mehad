@@ -89,6 +89,8 @@
 .ed-lib-thumb { width: 100%; height: 44px; display: grid; place-items: center; background: #fff; border-radius: 4px; }
 .ed-lib-thumb svg { width: 100%; height: 100%; }
 .ed-lib-name { font-size: 11px; color: var(--text-2); max-width: 100%; }
+/* Long names ("Asynchronous message") wrap onto a second line instead of being cut off. */
+.ed-lib-item .ed-lib-name.truncate { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; text-align: center; line-height: 1.25; overflow: hidden; text-overflow: clip; overflow-wrap: anywhere; }
 
 /* Toolbar (floating over the canvas) */
 .ed-toolbar {

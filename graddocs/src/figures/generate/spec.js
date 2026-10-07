@@ -5,7 +5,7 @@
 // SPEC FORMAT
 //
 //   {
-//     "type": "flowchart | activity | hierarchy | usecase | sequence | class | erd | state | architecture | component | generic",
+//     "type": "flowchart | activity | hierarchy | usecase | context | sequence | class | erd | state | architecture | component | generic",
 //     "title": "Short figure title",                  // optional
 //     "direction": "TB | LR",                         // optional: top-to-bottom (default) or left-to-right
 //     "nodes": [
@@ -19,8 +19,8 @@
 //     ],
 //     "participants": ["User", "Web App"],            // sequence diagrams only (strings or { "id", "label" })
 //     "messages": [
-//       { "from": "User", "to": "Web App", "label": "login()", "reply": false }
-//     ]
+//       { "from": "User", "to": "Web App", "label": "login()", "reply": false, "async": false }
+//     ]                                               // reply = dashed return message; async = open arrowhead (the sender does not wait)
 //   }
 //
 //   node kinds : start, end, initial, final, process, decision, io, database, document, subprocess,
@@ -32,6 +32,8 @@
 //   optional edge ends "fromEnd" / "toEnd": none, arrow, triangle, hollow-triangle, diamond, filled-diamond,
 //                circle, one, one-only, many, one-many, zero-one, zero-many   (crow's-foot ends for ER diagrams)
 //   hierarchy  : "parent" is the parent node (edges are created from it); "edges" may be left out.
+//   context    : one "boundary" node is the system (else the node with most edges); every other node is an external
+//                entity; edges are the labelled data flows between an entity and the system (one edge per direction).
 //   other types: "parent" must point to a node that groups others (boundary, layer, composite state…).
 //
 // Labels stay in the language of the user (Arabic or English); ids are short ASCII strings.
@@ -39,7 +41,7 @@
 import { t } from '../../i18n/index.js';
 import { ARROWS } from '../geometry.js';
 
-export const SPEC_TYPES = ['flowchart', 'activity', 'hierarchy', 'usecase', 'sequence', 'class', 'erd', 'state', 'architecture', 'component', 'generic'];
+export const SPEC_TYPES = ['flowchart', 'activity', 'hierarchy', 'usecase', 'context', 'sequence', 'class', 'erd', 'state', 'architecture', 'component', 'generic'];
 export const NODE_KINDS = ['start', 'end', 'initial', 'final', 'process', 'decision', 'io', 'database', 'document', 'subprocess', 'fork', 'join', 'circle',
   'actor', 'usecase', 'class', 'interface', 'entity', 'state', 'note', 'component', 'boundary', 'service', 'browser', 'mobile', 'cloud', 'server'];
 export const EDGE_KINDS = ['arrow', 'line', 'dashed', 'inherit', 'realize', 'compose', 'aggregate', 'include', 'extend',
@@ -63,6 +65,7 @@ const TYPE_ALIASES = {
   flow: 'flowchart', 'flow chart': 'flowchart', flowchart: 'flowchart', process: 'flowchart',
   activity: 'activity', 'activity diagram': 'activity', hierarchy: 'hierarchy', org: 'hierarchy', orgchart: 'hierarchy', 'org chart': 'hierarchy', wbs: 'hierarchy', tree: 'hierarchy', organization: 'hierarchy',
   usecase: 'usecase', 'use case': 'usecase', 'use-case': 'usecase', 'use_case': 'usecase', 'use case diagram': 'usecase',
+  context: 'context', 'context diagram': 'context', 'context-diagram': 'context', 'system context': 'context', 'level 0': 'context', 'dfd level 0': 'context', 'level 0 dfd': 'context',
   sequence: 'sequence', seq: 'sequence', 'sequence diagram': 'sequence',
   class: 'class', 'class diagram': 'class', uml: 'class',
   erd: 'erd', er: 'erd', 'er diagram': 'erd', entity: 'erd', 'entity relationship': 'erd', 'entity-relationship': 'erd',
@@ -212,7 +215,7 @@ export function normalizeSpec(input, options = {}) {
     let rawMessages = Array.isArray(raw.messages) ? raw.messages : [];
     if (!rawParticipants.length && !rawMessages.length && (rawNodes.length || rawEdges.length)) {
       rawParticipants = rawNodes.map((n) => (isObject(n) ? { id: n.id, label: n.label ?? n.name ?? n.id } : n));
-      rawMessages = rawEdges.map((e) => (isObject(e) ? { from: e.from ?? e.source, to: e.to ?? e.target, label: e.label ?? e.text, reply: e.reply ?? /dash|reply|return/.test(str(e.kind)) } : e));
+      rawMessages = rawEdges.map((e) => (isObject(e) ? { from: e.from ?? e.source, to: e.to ?? e.target, label: e.label ?? e.text, reply: e.reply ?? /dash|reply|return/.test(str(e.kind)), async: e.async ?? /async/.test(str(e.kind)) } : e));
     }
     const participants = [];
     const byKey = new Map();
@@ -238,7 +241,8 @@ export function normalizeSpec(input, options = {}) {
       if (!from || !to) { errors.push(t('Message {n} needs both “from” and “to”.', { n: i + 1 })); return; }
       const a = byKey.get(keyOf(from)) || addParticipant(from, from);
       const b = byKey.get(keyOf(to)) || addParticipant(to, to);
-      messages.push({ from: a.id, to: b.id, label: clip(str(m.label ?? m.text ?? m.name ?? m.message), 120), reply: m.reply === true || m.reply === 'true' || /^(reply|return|response)$/i.test(str(m.kind)) });
+      const isAsync = m.async === true || m.async === 'true' || /^async(hronous)?$/i.test(str(m.kind));
+      messages.push({ from: a.id, to: b.id, label: clip(str(m.label ?? m.text ?? m.name ?? m.message), 120), reply: m.reply === true || m.reply === 'true' || /^(reply|return|response)$/i.test(str(m.kind)), ...(isAsync ? { async: true } : {}) });
     });
     if (!participants.length) errors.push(t('A sequence diagram needs “participants” or “messages”.'));
     if (messages.length > MAX_MESSAGES) errors.push(t('Too many messages ({n}); the limit is {max}.', { n: messages.length, max: MAX_MESSAGES }));
@@ -378,7 +382,7 @@ export const SPEC_JSON_SCHEMA = {
       type: 'array',
       items: {
         type: 'object', additionalProperties: false,
-        properties: { from: { type: 'string' }, to: { type: 'string' }, label: { type: 'string' }, reply: { type: 'boolean' } },
+        properties: { from: { type: 'string' }, to: { type: 'string' }, label: { type: 'string' }, reply: { type: 'boolean' }, async: { type: 'boolean' } },
         required: ['from', 'to'],
       },
     },
@@ -395,23 +399,24 @@ OUTPUT: exactly one JSON object and nothing else (no markdown fence, no explanat
 
 SPEC FORMAT
 {
-  "type": "flowchart | activity | hierarchy | usecase | sequence | class | erd | state | architecture | component | generic",
+  "type": "flowchart | activity | hierarchy | usecase | context | sequence | class | erd | state | architecture | component | generic",
   "title": "short figure title",
   "direction": "TB | LR",
   "nodes": [ { "id": "n1", "label": "Start", "kind": "start", "fields": [], "methods": [], "parent": "<id of a boundary/layer/group>" } ],
   "edges": [ { "from": "n1", "to": "n2", "label": "Yes", "kind": "arrow" } ],
   "participants": ["User", "Web App"],
-  "messages": [ { "from": "User", "to": "Web App", "label": "login()", "reply": false } ]
+  "messages": [ { "from": "User", "to": "Web App", "label": "login()", "reply": false, "async": false } ]
 }
 - node kinds: start, end, initial, final, process, decision, io, database, document, subprocess, fork, join, circle, actor, usecase, class, interface, entity, state, note, component, boundary, service, browser, mobile, cloud, server. Leave "kind" out for the usual symbol of the diagram type (process in a flowchart, usecase in a use-case diagram, class in a class diagram...).
 - edge kinds: arrow (default), line, dashed, inherit, realize, compose, aggregate, include, extend, one-to-many, many-to-one, many-to-many, one-to-one.
 - "fromEnd"/"toEnd" are optional line ends: none, arrow, triangle, hollow-triangle, diamond, filled-diamond, circle, one, one-only, many, one-many, zero-one, zero-many (use them only to override the kind).
-- "participants" and "messages" are used only by sequence diagrams (nodes and edges stay empty there). Messages are listed in time order; set "reply": true for return messages (dashed). Participants may be written as plain strings.
+- "participants" and "messages" are used only by sequence diagrams (nodes and edges stay empty there). Messages are listed in time order; set "reply": true for return messages (dashed line) and "async": true for asynchronous messages (open arrowhead: the sender does not wait for an answer, e.g. sending an email or writing a log). Normal calls are synchronous (filled arrowhead). Participants may be written as plain strings.
 
 RULES BY TYPE
 - flowchart / activity: one "start" (flowchart) or "initial" (activity) node, one "end" (flowchart) or "final" (activity) node. A decision is kind "decision" with a question label and one outgoing edge per answer, labelled (Yes / No ...). Use "io" for input/output, "database" for stored data. Activity diagrams may use "fork" and "join" for parallel work.
 - hierarchy (org chart, WBS, module tree): one root; give every other node a "parent" (the id of its parent node). Edges can be left out.
 - usecase: kind "actor" for people/external systems, "usecase" for functions. Put every use case in ONE "boundary" node (the system) using "parent". Connect actors to use cases with kind "line". Use "include"/"extend" edges between use cases (from the including/extending one to the other).
+- context (context diagram, DFD level 0): ONE node of kind "boundary" for the whole system (label like "Library System") and one node per external entity (kind "actor" or no kind). Every edge connects an entity with the system and is labelled with the data that flows (e.g. "Book request", "Receipt"); use two edges when data flows both ways. No other nodes.
 - sequence: type "sequence" with participants and messages only.
 - class: kind "class" (or "interface"); put attributes in "fields" and operations in "methods" with UML visibility (+ - #). Relations: inherit (from the subclass to the superclass), realize, compose / aggregate (from the whole to the part), arrow or line for associations (put multiplicities such as "1..*" in the label).
 - erd: kind "entity" with "fields" as column names; mark keys by starting the field with "PK " or "FK ". Relations use one-to-many, many-to-one, many-to-many or one-to-one, label = verb ("places", "contains").

@@ -10,7 +10,7 @@ import { svgToPngBlob } from './png.js';
 import { createZip } from './zip.js';
 import { buildDocx } from './docx.js';
 import {
-  wrapHTMLDocument, tocHTML, listOfFiguresHTML, listOfTablesHTML, acronymsHTML, structureHTML,
+  wrapHTMLDocument, tocHTML, listOfFiguresHTML, listOfTablesHTML, acronymsHTML, referencesHTML, structureHTML,
 } from './print.js';
 
 const pad2 = (n) => pad(n, 2);
@@ -50,6 +50,11 @@ export function tableSVG(project, table) {
 export function tableHTMLDocument(project, table) {
   const body = renderTableHTML(project, table, { caption: true, forWord: true });
   return wrapHTMLDocument(table.title || 'Table', body, project.settings);
+}
+
+/** The bibliography as plain text, one "[1] Author, “Title”, …" line per entry in the order of the References page ('' when empty). */
+export function referencesText(project) {
+  return buildDocument(project).references.entries.map((e) => `${e.label} ${e.text}`).join('\n');
 }
 
 /** Orderly figure list (document order) with its numbering info. */
@@ -120,9 +125,10 @@ documentation.docx      The whole report as an editable Word document: title pag
 figures/                Every figure as a vector SVG and a high-resolution PNG
                         (${exportScale(project)}x, with the DPI stored in the file so Word inserts it at the right size).
 tables/                 Every table as SVG, PNG, HTML (paste-ready for Word) and CSV (opens in Excel).
-lists/                  Table of contents, list of figures, list of tables, list of acronyms and the
-                        document structure as HTML. Open them in a browser and print / "Save as PDF".
-project.json            A complete backup of the project. Use Export > Import Project in GradDocs to restore it.
+lists/                  Table of contents, list of figures, list of tables, list of acronyms${doc.references.entries.length ? ', the references' : ''}
+                        and the document structure as HTML. Open them in a browser and print / "Save as PDF".
+${doc.references.entries.length ? `references.txt          The references as plain text, one "[1] …" line per entry (same order as in the report).
+` : ''}project.json            A complete backup of the project. Use Export > Import Project in GradDocs to restore it.
 README.txt              This file.
 
 HOW TO USE IT IN WORD
@@ -181,6 +187,7 @@ export async function buildPackage(project, { onProgress } = {}) {
     { path: 'lists/list-of-figures.html', data: wrapHTMLDocument('List of Figures', listOfFiguresHTML(project), settings) },
     { path: 'lists/list-of-tables.html', data: wrapHTMLDocument('List of Tables', listOfTablesHTML(project), settings) },
     { path: 'lists/list-of-acronyms.html', data: wrapHTMLDocument('List of Acronyms and Abbreviations', acronymsHTML(project), settings) },
+    ...(doc.references.entries.length ? [{ path: 'lists/references.html', data: wrapHTMLDocument('References', referencesHTML(project), settings) }] : []),
     { path: 'lists/document-structure.html', data: wrapHTMLDocument(`Document Structure - ${project.name}`, structureHTML(project), settings) },
   );
   tick(t('Building lists'));
@@ -189,6 +196,7 @@ export async function buildPackage(project, { onProgress } = {}) {
   files.push({ path: 'documentation.docx', data: await buildDocx(project, { figureImages: images }) });
   tick(t('Building the Word document'));
 
+  if (doc.references.entries.length) files.push({ path: 'references.txt', data: `\uFEFF${referencesText(project)}\n` });
   files.push(
     { path: 'project.json', data: JSON.stringify(project, null, 2) },
     { path: 'README.txt', data: readme(project, doc, stamp) },

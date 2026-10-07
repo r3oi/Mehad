@@ -100,6 +100,17 @@ export function addSection(project, parentId, title = 'Untitled Section') {
   return section;
 }
 
+/** Numbered chapter ("Chapter 3") or unnumbered one (e.g. CONCLUSIONS: no "Chapter N", its sections have no numbers). */
+export function setChapterNumbered(project, id, numbered) {
+  const chapter = project.chapters.find((c) => c.id === id);
+  if (!chapter) return false;
+  chapter.numbered = !!numbered;
+  return true;
+}
+
+/** Activity-log sentence (stored in English; translated for display by the dashboard). */
+export const numberingActivity = (title, numbered) => (numbered ? `Numbered chapter “${title}”` : `Made chapter “${title}” unnumbered`);
+
 export function moveBy(project, id, delta) {
   const i = locate(project, id);
   if (!i) return false;
@@ -284,6 +295,15 @@ export function countLabel(n, kind) {
     case 'reference': return one ? t('1 reference') : t('{n} references', { n });
     default: return String(n);
   }
+}
+
+/** Words in a text (tokens already resolved to their labels). */
+export const countWords = (text) => (String(text).trim() ? String(text).trim().split(/\s+/).length : 0);
+
+/** "Chapter 2: Planning Phase", or just "Conclusions" for an unnumbered chapter. */
+export function chapterName(numbering, chapter) {
+  const info = numbering.chapters.get(chapter.id);
+  return info && info.numbered ? `${info.label}: ${chapter.title}` : chapter.title;
 }
 
 /** "3 of 12 sections done" for the chapter progress line. */

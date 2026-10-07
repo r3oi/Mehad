@@ -77,19 +77,26 @@ export function designPanelHTML(editor) {
       <button class="btn btn-ghost btn-icon btn-sm" data-action="delete" data-tip="${t('Delete')}" data-kbd="Del" aria-label="${t('Delete')}">${icon('trash')}</button>
     </div></div>`);
 
-  if (single) {
+  const pictures = nodes.length > 0 && nodes.every((n) => n.shape === 'image');
+  if (single && !pictures) {
     parts.push(`<div class="ed-sec"><div class="ed-label">${isEdge(single) ? t('Label') : t('Text')}</div>
       <textarea class="textarea ed-text-field" data-field="text"${AUTO} rows="${single.shape === 'class' || single.shape === 'entity' ? 6 : 2}" placeholder="${isEdge(single) ? t('Connector label (optional)') : t('Type text…')}">${esc(single.text || '')}</textarea>
       ${single.shape === 'class' || single.shape === 'entity' ? `<div class="hint faint">${t('Separate compartments with a line containing only {code}', { code: '<span class="mono" dir="ltr">--</span>' })}</div>` : ''}
     </div>`);
   }
 
+  if (pictures && single) {
+    parts.push(`<div class="ed-sec"><div class="ed-label">${t('Image')}</div>
+      <button class="btn btn-sm btn-block" data-action="replace-image">${icon('upload', 'icon-sm')} ${t('Replace image…')}</button>
+      <div class="hint faint">${t('Resizing keeps the picture’s proportions. Draw arrows, boxes and text on top to annotate it.')}</div>
+    </div>`);
+  }
   if (nodes.length) {
     const n = nodes[0]; const s = resolveNodeStyle(n, editor.doc);
-    parts.push(`<div class="ed-sec"><div class="ed-label">${t('Style presets')}</div><div class="ed-swatches">
+    if (!pictures) parts.push(`<div class="ed-sec"><div class="ed-label">${t('Style presets')}</div><div class="ed-swatches">
       ${SWATCHES.map((sw, i) => `<button class="ed-swatch" data-action="swatch" data-value="${i}" data-tip="${esc(sw.name)}" aria-label="${esc(sw.name)}" style="background:${sw.fill};border-color:${sw.stroke};color:${sw.textColor}">A</button>`).join('')}
     </div></div>`);
-    parts.push(`<div class="ed-sec"><div class="ed-label">${t('Typography')}</div>
+    if (!pictures) parts.push(`<div class="ed-sec"><div class="ed-label">${t('Typography')}</div>
       <div class="ed-grid2"><select class="select select-sm" data-style="fontFamily" data-kind="node" aria-label="${t('Font')}">${fontOptions(s.fontFamily)}</select>
       <input class="input input-sm" type="number" min="6" max="96" step="1" data-style="fontSize" data-kind="node" data-type="number" value="${s.fontSize}" aria-label="${t('Font size')}"></div>
       <div class="ed-row">
@@ -105,8 +112,8 @@ export function designPanelHTML(editor) {
         <div class="segmented">${segBtn('valign', 'top', s.vAlign, 'alignTop', t('Top'))}${segBtn('valign', 'middle', s.vAlign, 'alignMiddle', t('Middle'))}${segBtn('valign', 'bottom', s.vAlign, 'alignBottom', t('Bottom'))}</div>
       </div></div>`);
     parts.push(`<div class="ed-sec"><div class="ed-label">${t('Fill & border')}</div>
-      <div class="ed-row">${colorInput('fill', s.fill, 'node', t('Fill colour'))}
-        <label class="checkbox"><input type="checkbox" data-action="no-fill" ${s.fill === 'none' ? 'checked' : ''}> ${t('No fill')}</label></div>
+      ${pictures ? '' : `<div class="ed-row">${colorInput('fill', s.fill, 'node', t('Fill colour'))}
+        <label class="checkbox"><input type="checkbox" data-action="no-fill" ${s.fill === 'none' ? 'checked' : ''}> ${t('No fill')}</label></div>`}
       <div class="ed-row">${colorInput('stroke', s.stroke, 'node', t('Border colour'))}
         <input class="input input-sm ed-num" type="number" min="0" max="12" step="0.5" data-style="strokeWidth" data-kind="node" data-type="number" value="${s.stroke === 'none' ? 0 : s.strokeWidth}" aria-label="${t('Border width')}" data-tip="${t('Border width')}">
         <select class="select select-sm" data-style="dash" data-kind="node" aria-label="${t('Border style')}">${['solid', 'dashed', 'dotted'].map((d) => `<option value="${d}" ${s.dash === d ? 'selected' : ''}>${DASH_LABELS[d]}</option>`).join('')}</select></div>
@@ -192,7 +199,7 @@ function canvasPanelHTML(editor) {
 }
 
 /** Wire the design panel controls (delegated; call once on the panel root). */
-export function bindDesignPanel(root, editor, { onComment }) {
+export function bindDesignPanel(root, editor, { onComment, onReplaceImage }) {
   const value = (el) => (el.dataset.type === 'number' ? Number(el.value) : el.value);
   root.addEventListener('input', (e) => {
     const el = e.target;
@@ -210,7 +217,14 @@ export function bindDesignPanel(root, editor, { onComment }) {
       const v = Number(el.value);
       if (!Number.isFinite(v)) return;
       const k = el.dataset.geom;
-      editor.updateSelected((x) => { if (isNode(x)) x[k] = (k === 'w' || k === 'h') ? Math.max(4, v) : v; }, { merge: `geom:${k}` });
+      editor.updateSelected((x) => {
+        if (!isNode(x)) return;
+        const ratio = x.h > 0 ? x.w / x.h : 1;
+        x[k] = (k === 'w' || k === 'h') ? Math.max(4, v) : v;
+        // Pictures keep their proportions when a size is typed.
+        if (x.shape === 'image' && k === 'w') x.h = Math.max(4, Math.round(x.w / ratio));
+        else if (x.shape === 'image' && k === 'h') x.w = Math.max(4, Math.round(x.h * ratio));
+      }, { merge: `geom:${k}` });
     } else if (el.dataset.docDefault) {
       const k = el.dataset.docDefault;
       const v = k === 'fontSize' ? Number(el.value) : el.value;
@@ -255,6 +269,7 @@ export function bindDesignPanel(root, editor, { onComment }) {
       case 'back': editor.sendToBack(); break;
       case 'distribute': editor.distribute(v); break;
       case 'comment': onComment?.(); break;
+      case 'replace-image': onReplaceImage?.(); break;
       case 'bg': editor.mutate((doc) => { doc.background = v; }); break;
       default: break;
     }

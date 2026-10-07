@@ -2,9 +2,10 @@
 //
 //   buildDocument(project) ──► items (HTML blocks) ──► paginate.js ──► pages ──► DOM
 //
-// Two passes: the body (chapters) is paginated first so we know on which page every heading,
-// figure and table lands (arabic numbers from 1); the TOC / List of Figures / List of Tables are
-// then built with those numbers and the front matter is paginated (lower-roman numbers).
+// Two passes: the body (chapters, then the References page) is paginated first so we know on which page every
+// heading, figure and table lands (arabic numbers from 1); the TOC / List of Figures / List of Tables are
+// then built with those numbers and the front matter is paginated (lower-roman numbers). The TOC may list the
+// front-matter pages themselves, so that pass repeats until their page numbers are stable.
 import { buildDocument } from '../core/document.js';
 import { FRONT_MATTER_KINDS } from '../core/model.js';
 import { resolveHTML } from '../core/references.js';
@@ -24,6 +25,7 @@ import { createMeasureHost, formatPageNumber, pageMetrics, paginate } from './pa
 const PREF_KEY = 'preview';
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3;
+const REFERENCES_ID = '__references'; // anchor of the References page (matches the toc entry id in core/document.js)
 const DEFAULT_STATE = { mode: 'auto', zoom: 1, navOpen: true, show: { title: true, front: true, body: true } };
 
 // ---------------------------------------------------------------------------
@@ -45,7 +47,7 @@ function captionHTML(cfg, block, pos) {
   const align = ['left', 'center', 'right', 'justify'].includes(cfg.align) ? cfg.align : 'center';
   return `<div class="pv-caption" data-pos="${pos}" data-label="${esc(block.label)}" style="text-align:${align}">`
     + `${lead ? `<span class="pv-cap-label${cfg.labelBold === false ? '' : ' is-bold'}">${esc(lead)}</span> ` : ''}`
-    + `<span class="pv-cap-title${cfg.titleItalic ? ' is-italic' : ''}">${esc(title)}</span></div>`;
+    + `<span class="pv-cap-title${cfg.titleBold ? ' is-bold' : ''}${cfg.titleItalic ? ' is-italic' : ''}">${esc(title)}</span></div>`;
 }
 
 function figureItem(project, block, m) {
@@ -101,7 +103,22 @@ function textItems(project, blocks) {
   return blocks.map((b, i) => (b.type === 'li' ? bulletItem(project, b.text, blocks[i + 1]?.type !== 'li') : paragraphItem(project, b.text)));
 }
 
-/** Pass 1: the report body → items. */
+/** Chapter-style heading text for a title the user typed (References, front matter): capitals when "chapter titles in capitals" is on. */
+const headingCase = (project, title) => (project.settings.chapterTitle?.style === 'upper' ? String(title ?? '').toUpperCase() : String(title ?? ''));
+
+/** The References page: a chapter-style heading, then "[n]  text" entries with a hanging indent. */
+function referenceItems(project, doc) {
+  const { include, title, entries } = doc.references;
+  if (!include || !entries.length) return [];
+  const items = [{ kind: 'h1', breakBefore: true, keepWithNext: true, anchors: [REFERENCES_ID], html: `<h1 class="pv-h1" dir="auto" data-a="${REFERENCES_ID}">${esc(headingCase(project, title))}</h1>` }];
+  for (const e of entries) {
+    const text = e.runs.map((r) => (r.italic ? `<em>${esc(r.text)}</em>` : esc(r.text))).join('');
+    items.push({ kind: 'ref', splitMode: 'lines', html: `<div class="pv-ref" dir="auto" data-n="${esc(e.label)}">${text}</div>` });
+  }
+  return items;
+}
+
+/** Pass 1: the report body (and the References page) → items. */
 function buildBodyItems(project, doc, m) {
   const newPage = project.settings.chapterTitle?.newPage !== false;
   const items = [];
@@ -116,6 +133,7 @@ function buildBodyItems(project, doc, m) {
     else if (b.type === 'figure') items.push(figureItem(project, b, m));
     else if (b.type === 'table') items.push(tableItem(project, b));
   });
+  items.push(...referenceItems(project, doc));
   return items;
 }
 
@@ -123,39 +141,91 @@ const tocLine = ({ id, text, page, cls = '', indent = 0 }) => `<div class="pv-to
   + `<span class="t">${esc(text)}</span><span class="lead" aria-hidden="true"></span><span class="n">${esc(page)}</span></div>`;
 const noteItem = (text) => ({ kind: 'note', html: `<p class="pv-note">${esc(text)}</p>` });
 
-/** Pass 2: front matter → items; `pageOf(id)` gives the body page number of a heading / figure / table. */
-function buildFrontItems(project, doc, pageOf) {
+/** Contents line classes: 'plain' = chapters bold, indented sub-levels; 'academic' = see .pv-toc.acad in preview.css. */
+function tocLineClass(entry, academic) {
+  if (!academic) return entry.level === 1 ? 'is-ch' : '';
+  if (entry.kind === 'front') return 'acad is-front';
+  return `acad ${entry.level === 1 ? 'is-ch' : entry.level === 2 ? 'is-l2' : 'is-l3'}`;
+}
+
+/**
+ * Pass 2: front matter → items. `pageOf(id)` gives the body page number of a heading / figure / table / References,
+ * `frontPageOf(id)` the lower-roman label of a front-matter page (for the contents).
+ */
+function buildFrontItems(project, doc, { pageOf, frontPageOf }) {
   const items = [];
+  const academic = project.settings.toc?.style === 'academic';
   for (const f of doc.front) {
     const start = items.length;
-    const title = (f.title || FRONT_MATTER_KINDS[f.kind]?.title || 'Untitled Page').toUpperCase();
+    const title = headingCase(project, f.title || FRONT_MATTER_KINDS[f.kind]?.title || 'Untitled Page');
     items.push({ kind: 'front-h', keepWithNext: true, anchors: [f.id], html: `<h1 class="pv-h1 pv-front-h" data-a="${esc(f.id)}">${esc(title)}</h1>` });
     if (f.kind === 'toc') {
       if (!doc.toc.length) items.push(noteItem('No chapters yet.'));
       for (const e of doc.toc) {
-        const page = pageOf(e.id);
-        items.push({ kind: 'toc', html: tocLine({ id: e.id, text: e.text, page: page ?? '', cls: e.level === 1 ? 'is-ch' : '', indent: (e.level - 1) * 1.6 }) });
+        const page = e.kind === 'front' ? frontPageOf(e.id) : pageOf(e.id);
+        const text = e.kind === 'references' ? headingCase(project, e.text) : e.text;
+        items.push({ kind: 'toc', html: tocLine({ id: e.id, text, page: page ?? '', cls: tocLineClass(e, academic), indent: academic ? 0 : (e.level - 1) * 1.6 }) });
       }
     } else if (f.kind === 'lof' || f.kind === 'lot') {
       const list = f.kind === 'lof' ? doc.figures : doc.tables;
       if (!list.length) items.push(noteItem(f.kind === 'lof' ? 'No figures in this document.' : 'No tables in this document.'));
-      for (const e of list) items.push({ kind: 'toc', html: tocLine({ id: e.id, text: e.caption, page: pageOf(e.id) ?? '', cls: 'is-list' }) });
+      for (const e of list) items.push({ kind: 'toc', html: tocLine({ id: e.id, text: e.caption, page: pageOf(e.id) ?? '', cls: `is-list${academic ? ' acad' : ''}` }) });
     } else if (f.kind === 'loa') {
       if (!doc.acronyms.length) items.push(noteItem('No acronyms defined.'));
       for (const a of doc.acronyms) items.push({ kind: 'acr', html: `<div class="pv-acr"><span class="a">${esc(a.acronym)}</span><span class="m">${esc(a.meaning)}</span></div>` });
     } else {
       items.push(...textItems(project, f.blocks));
+      const names = doc.titlePage.studentNames;
+      if (f.signatures && names.length) {
+        for (const name of names) items.push({ kind: 'sig', keepWithNext: true, html: `<div class="pv-sig" dir="auto"><span class="n">${esc(name)}</span><span class="line"></span></div>` });
+        if (f.signatureNote) items.push({ kind: 'note', html: `<p class="pv-sig-note">${esc(f.signatureNote)}</p>` });
+      }
     }
     items[start].breakBefore = true;
   }
   return items;
 }
 
-const withPrefix = (value, re, prefix) => (!value ? '' : re.test(value.trim()) ? value.trim() : `${prefix}${value.trim()}`);
+/** "College of X" / "Department of X" unless the text already says what it is: the word Department / College anywhere in it, or it starts like one ("Faculty of …"). */
+const ORG_WORD = /\b(department|college)\b/i;
+const ORG_START = { college: /^(college|faculty|school|institute|academy)\b/i, department: /^(department|dept\b|school|faculty|division|institute|college)/i };
+function withPrefix(value, kind) {
+  const text = String(value || '').trim();
+  if (!text || ORG_WORD.test(text) || ORG_START[kind].test(text)) return text;
+  return `${kind === 'college' ? 'College' : 'Department'} of ${text}`;
+}
+
+/** Logos are data: URLs of an image (anything else is ignored, never put into the page). */
+const safeLogo = (src) => (/^data:image\/(png|jpe?g|gif|webp|svg\+xml|bmp)[;,]/i.test(String(src || '')) ? String(src) : '');
+
+/** 'submission' layout: logo, university / college / department, title, degree statement, "by", students, supervisors, date. */
+function submissionTitleHTML(tp) {
+  const logo = safeLogo(tp.logo);
+  const college = withPrefix(tp.college, 'college');
+  const department = withPrefix(tp.department, 'department');
+  const date = tp.submissionDate || tp.academicYear;
+  const supervisors = [tp.supervisor, tp.coSupervisor && `Co-Supervisor: ${tp.coSupervisor}`].filter(Boolean);
+  return `<div class="pv-ts">
+    ${logo ? `<img class="pv-ts-logo" src="${esc(logo)}" alt="">` : ''}
+    ${tp.university ? `<div class="pv-ts-uni">${esc(tp.university)}</div>` : ''}
+    ${college ? `<div class="pv-ts-org">${esc(college)}</div>` : ''}
+    ${department ? `<div class="pv-ts-org">${esc(department)}</div>` : ''}
+    <div class="pv-ts-gap g1"></div>
+    <div class="pv-ts-name">${esc(tp.name)}</div>
+    ${tp.degreeStatement ? `<div class="pv-ts-degree">${esc(tp.degreeStatement)}</div>` : ''}
+    <div class="pv-ts-gap g2"></div>
+    ${tp.students.length ? `<div class="pv-ts-by">by</div>${tp.students.map((s) => `<div class="pv-ts-line">${esc(s)}</div>`).join('')}` : ''}
+    <div class="pv-ts-gap g3"></div>
+    ${supervisors.length ? `<div class="pv-ts-by">Supervised by</div>${supervisors.map((s) => `<div class="pv-ts-line">${esc(s)}</div>`).join('')}` : ''}
+    <div class="pv-ts-gap g4"></div>
+    ${date ? `<div class="pv-ts-date">${esc(date)}</div>` : ''}
+  </div>`;
+}
 
 function titlePageHTML(tp) {
-  const college = withPrefix(tp.college, /^(college|faculty|school|institute|academy)\b/i, 'College of ');
-  const department = withPrefix(tp.department, /^(department|dept\b|school|faculty|division|institute|college)/i, 'Department of ');
+  if (tp.layout === 'submission') return submissionTitleHTML(tp);
+  const college = withPrefix(tp.college, 'college');
+  const department = withPrefix(tp.department, 'department');
   const top = [
     tp.university && `<div class="pv-uni">${esc(tp.university)}</div>`,
     college && `<div class="pv-org">${esc(college)}</div>`,
@@ -304,18 +374,35 @@ class PreviewView {
     this.applyVars(m, project.settings);
     const doc = buildDocument(project);
     const mh = createMeasureHost(this.root, m);
+    const hosts = [mh];
     try {
-      // Pass 1: body. Page numbers start at 1 on the first chapter page.
+      // Pass 1: body (and References). Page numbers start at 1 on the first chapter page.
       const body = paginate(buildBodyItems(project, doc, m), mh, m);
       const pageOf = (id) => (body.anchors.has(id) ? String(body.anchors.get(id) + 1) : null);
-      // Pass 2: front matter, now that TOC / LoF / LoT numbers are known.
-      const front = paginate(buildFrontItems(project, doc, pageOf), mh, m);
+      // Pass 2: front matter, now that TOC / LoF / LoT numbers are known. A 'submission' title page counts as page i
+      // (it shows no number), so the first front-matter page is ii, as in the university templates.
+      const frontOffset = doc.titlePage.layout === 'submission' ? 1 : 0;
+      const frontLabel = (idx) => formatPageNumber('front', idx + frontOffset + 1);
+      // The contents may list the front-matter pages themselves: repeat until their labels stop changing.
+      const listsFront = doc.toc.some((e) => e.kind === 'front');
+      let front = null;
+      let labels = new Map();
+      for (let round = 0; round < 3; round += 1) {
+        const host = createMeasureHost(this.root, m);
+        hosts.push(host);
+        front = paginate(buildFrontItems(project, doc, { pageOf, frontPageOf: (id) => labels.get(id) || '' }), host, m);
+        if (!listsFront) break;
+        const next = new Map(doc.front.map((f) => [f.id, front.anchors.has(f.id) ? frontLabel(front.anchors.get(f.id)) : '']));
+        const stable = doc.front.every((f) => labels.get(f.id) === next.get(f.id));
+        labels = next;
+        if (stable) break;
+      }
 
       const show = this.state.show;
       const pages = [];
       if (show.title) pages.push({ kind: 'title', label: '', node: toNode(titlePageHTML(doc.titlePage)) });
       const frontBase = pages.length;
-      if (show.front) front.pages.forEach((p, i) => pages.push({ kind: 'front', label: formatPageNumber('front', i + 1), items: p.items }));
+      if (show.front) front.pages.forEach((p, i) => pages.push({ kind: 'front', label: frontLabel(i), items: p.items }));
       const bodyBase = pages.length;
       if (show.body) body.pages.forEach((p, i) => pages.push({ kind: 'body', label: formatPageNumber('body', i + 1), items: p.items }));
 
@@ -328,12 +415,13 @@ class PreviewView {
         for (const f of doc.front) {
           const idx = front.anchors.get(f.id);
           if (idx === undefined) continue;
-          nav.push({ id: f.id, label: f.title || FRONT_MATTER_KINDS[f.kind]?.title || 'Untitled Page', level: 0, page: frontBase + idx, pageLabel: formatPageNumber('front', idx + 1) });
+          nav.push({ id: f.id, label: f.title || FRONT_MATTER_KINDS[f.kind]?.title || 'Untitled Page', level: 0, page: frontBase + idx, pageLabel: frontLabel(idx) });
           refPages.set(f.id, frontBase + idx);
         }
       }
       if (show.body) {
-        if (doc.body.length) nav.push({ group: t('Report') });
+        const hasReferences = body.anchors.has(REFERENCES_ID);
+        if (doc.body.length || hasReferences) nav.push({ group: t('Report') });
         for (const b of doc.body) {
           if (b.type !== 'chapter' && b.type !== 'heading') continue;
           const idx = body.anchors.get(b.id);
@@ -342,17 +430,21 @@ class PreviewView {
           if (isCh || b.level <= 3) {
             nav.push({
               id: b.id,
-              label: isCh ? (b.unassigned ? b.title : `Chapter ${b.number}: ${b.title}`) : `${b.number} ${b.title}`,
+              label: isCh ? (b.unassigned || b.numbered === false ? b.title : `Chapter ${b.number}: ${b.title}`) : b.text,
               level: isCh ? 0 : b.level - 1, chapter: isCh, page: bodyBase + idx, pageLabel: String(idx + 1),
             });
           }
+        }
+        if (hasReferences) {
+          const idx = body.anchors.get(REFERENCES_ID);
+          nav.push({ id: REFERENCES_ID, label: doc.references.title, level: 0, chapter: true, page: bodyBase + idx, pageLabel: String(idx + 1) });
         }
         for (const [id, idx] of body.anchors) refPages.set(id, bodyBase + idx);
       }
       return { m, pages, nav, refPages };
     } finally {
-      // Nodes that were placed on pages have already been moved out of the host.
-      mh.destroy();
+      // Nodes that were placed on pages have already been moved out of the hosts.
+      for (const host of hosts) host.destroy();
     }
   }
 
@@ -377,6 +469,11 @@ class PreviewView {
     set('--pv-h3', `${Number(sizes.h3) || 14}pt`);
     set('--pv-align', typo.justify === false ? 'start' : 'justify');
     set('--pv-align-last', typo.justify === false ? 'auto' : 'justify');
+    // Headings in their own font (unset = the body font), indented first lines, bold-italic level 3+ headings.
+    if (String(typo.headingFontFamily || '').trim()) set('--pv-hfont', fontStack(String(typo.headingFontFamily).trim()));
+    else this.root.style.removeProperty('--pv-hfont');
+    set('--pv-indent', `${Math.max(0, Number(typo.firstLineIndent) || 0)}cm`);
+    set('--pv-sub-style', typo.subheadingItalic ? 'italic' : 'normal');
     this.styleEl.textContent = `@page { size: ${m.cssSize}; margin: 0; }\n`
       + `@media print { .preview-page { width: ${m.mmW}mm !important; height: ${(m.mmH - 0.4).toFixed(2)}mm !important; } }\n`;
   }

@@ -45,12 +45,15 @@ npm test                # both
 - **Project Structure:** front matter toggles, plus chapters, sections and subsections. You can add, rename, delete and reorder them by drag & drop or with indent/outdent, and see a live TOC.
 - **Chapters:** a writing workspace with cross-reference chips (Figure 3, Table 2, Section 1.4.2) that renumber automatically, a "link plain references" helper, and inline acronym suggestions.
 - **Figure editor:**
-  - 14 diagram types with fully editable templates: flowchart, use case, activity, sequence, class, state, ERD, architecture, component, deployment, fishbone, hierarchy, timeline/Gantt and generic.
+  - 16 diagram types with fully editable templates: flowchart, context diagram, use case, activity, sequence (synchronous / asynchronous / return messages), class, state, ERD, architecture, component, deployment, fishbone, hierarchy, timeline/Gantt, screenshot/image and generic.
+  - Screenshots as figures: upload, paste (Ctrl+V) or drop an image; it gets a numbered caption like any figure.
   - A 40+ shape library and smart connectors (straight, orthogonal or curved) with UML and crow's-foot arrowheads.
   - Drag, resize, smart guides and grid snap; inline text editing; fonts, borders and fills; align and distribute; z-order.
   - Undo/redo, copy/paste, zoom/pan/fit, version history (view and restore), revision mode and comments attached to elements.
 - **Table builder:** templates, add/delete rows and columns, merge cells, resize columns, bold/italic/alignment, header rows, zebra striping, undo/redo and versions.
 - **Acronyms manager:** alphabetical list, duplicate prevention, bulk paste, automatic detection, usage counts, PDF and Word-table export.
+- **References (bibliography):** add references by type or import BibTeX (Google Scholar, IEEE Xplore, Zotero), cite them in the text with the **Cite** button ([1], [2] renumber automatically), IEEE or compact style, ordered by first citation, alphabetically or manually; the References page is generated at the end of the report.
+- **University report templates:** start a project from the **Umm Al-Qura University — SWE Graduation Project 1** template (Declaration with signature lines, Abstract ≤ 150 words, Acknowledgment, CONTENT, lists, Chapters 1–4 with every required section and writing hints, unnumbered Conclusions, References, and the department's formatting), or apply it to an existing project from Settings without losing anything.
 - **Document Preview:** paginated A4/Letter pages with your fonts, margins and caption styles, and real page numbers in the TOC and lists. Print or save as PDF.
 - **Export:**
   - Figures as SVG, PNG (DPI-tagged so Word inserts them at the right size), PDF or clipboard image.
@@ -74,6 +77,7 @@ src/figures    SVG diagram engine, templates, types registry, versions/diff, edi
 src/tables     table list, editor, templates, renderers
 src/structure  outline + chapters writing view
 src/acronyms   manager + detection
+src/bibliography  references page, reference dialog, BibTeX import
 src/preview    paginated preview
 src/export     zip, png, vector pdf, docx, package
 ```

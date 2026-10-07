@@ -252,7 +252,7 @@ export function findDuplicateReference(list, ref) {
 
 const LATEX = { '\\&': '&', '\\%': '%', '\\$': '$', '\\_': '_', '\\#': '#', '~': ' ', '--': '–' };
 function delatex(s) {
-  let v = String(s ?? '');
+  let v = String(s ?? '').replace(/\\(?:url|href)\s*\{([^}]*)\}(?:\s*\{[^}]*\})?/g, '$1'); // before accents: \u of \url
   v = v.replace(/\\[`'^"~=.uvHc]\{?([A-Za-z])\}?/g, '$1'); // accents → base letter
   for (const [k, r] of Object.entries(LATEX)) v = v.split(k).join(r);
   return clean(v.replace(/[{}]/g, ''));
@@ -313,6 +313,8 @@ export function parseBibTeX(text) {
     }
     re.lastIndex = i;
     const f = (k) => delatex(fields[k]);
+    // URLs and DOIs keep "~" and "--" (only braces, \url{} and escapes are removed).
+    const raw = (k) => clean(String(fields[k] ?? '').replace(/\\url\s*\{([^}]*)\}/g, '$1').replace(/[{}]/g, '').replace(/\\([_%&#$~])/g, '$1'));
     const type = BIB_TYPES[kind] || 'other';
     const names = (k) => String(fields[k] ?? '').split(/\s+and\s+/i).map((n) => (/^\{.*\}$/.test(n.trim()) ? n.trim() : delatex(n))).filter(Boolean).join('\n');
     const container = type === 'book' ? ''
@@ -320,7 +322,7 @@ export function parseBibTeX(text) {
       : type === 'conference' || type === 'chapter' ? f('booktitle') || f('journal')
         : type === 'thesis' ? f('school') || f('institution')
           : type === 'report' ? f('institution') || f('organization') || f('publisher')
-            : f('howpublished').replace(/^\\url/, '') || f('journal') || f('organization') || f('publisher');
+            : f('howpublished') || f('journal') || f('organization') || f('publisher');
     out.push({
       type,
       authors: names('author'),
@@ -335,8 +337,8 @@ export function parseBibTeX(text) {
       issue: f('number') || f('issue'),
       pages: f('pages'),
       edition: f('edition'),
-      doi: f('doi'),
-      url: f('url'),
+      doi: raw('doi'),
+      url: raw('url'),
       accessed: f('urldate'),
       note: kind === 'phdthesis' ? 'Ph.D. dissertation' : kind === 'mastersthesis' ? 'M.S. thesis' : (type === 'report' ? f('number') && `Rep. ${f('number')}` : '') || f('note'),
     });

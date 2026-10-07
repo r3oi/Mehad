@@ -1,6 +1,7 @@
 // Starter templates for each figure type. Every template produces regular,
 // fully editable elements — nothing is a flat image.
 import { builder, A } from './builder.js';
+import { uid } from '../../core/utils.js';
 
 const SOFT = { fill: '#eef2fb', stroke: '#1f2937' };
 const NOARROW = { endArrow: 'none' };
@@ -64,21 +65,41 @@ export function activityTemplate(opts) {
   return b.diagram();
 }
 
-export function sequenceTemplate(opts, { participants = [':User', ':Web App', ':Server', ':Database'] } = {}) {
+/**
+ * Sequence diagram with the three message kinds of UML 2:
+ *   synchronous  — solid line, filled triangle head      (the sender waits for the reply)
+ *   asynchronous — solid line, open arrow head           (the sender carries on)
+ *   return       — dashed line, open arrow head
+ * messages: [{ from, to, text, kind: 'sync' | 'async' | 'return' }] (indexes into participants).
+ */
+export const MESSAGE_STYLES = {
+  sync: { endArrow: 'triangle' },
+  async: { endArrow: 'arrow' },
+  return: { dash: 'dashed', endArrow: 'arrow' },
+};
+
+export function sequenceTemplate(opts, { participants = [':User', ':Web App', ':Server', ':Database'], messages } = {}) {
   const b = builder(opts);
-  const top = 30; const h = 440; const gap = 190;
+  const top = 30; const first = 120; const step = 50;
+  const list = messages || [
+    { from: 0, to: 1, text: '1: enter credentials', kind: 'sync' },
+    { from: 1, to: 2, text: '2: POST /login', kind: 'sync' },
+    { from: 2, to: 3, text: '3: find user', kind: 'sync' },
+    { from: 3, to: 2, text: '4: user record', kind: 'return' },
+    { from: 2, to: 3, text: '5: log login event', kind: 'async' },
+    { from: 2, to: 1, text: '6: session token', kind: 'return' },
+    { from: 1, to: 0, text: '7: show dashboard', kind: 'return' },
+  ];
+  const h = first - top + list.length * step + 40; const gap = 190;
   const lines = participants.map((p, i) => b.node('lifeline', 40 + i * gap, top, 130, h, p));
-  const msg = (from, to, y, text, reply = false) => b.edge(lines[from], lines[to], {
-    routing: 'straight', text,
-    from: { x: 0.5, y: (y - top) / h }, to: { x: 0.5, y: (y - top) / h },
-    style: reply ? { dash: 'dashed', endArrow: 'arrow' } : { endArrow: 'triangle' },
+  list.forEach((m, k) => {
+    const y = (first + k * step - top) / h;
+    b.edge(lines[m.from], lines[m.to], {
+      routing: 'straight', text: m.text, from: { x: 0.5, y }, to: { x: 0.5, y }, style: { ...MESSAGE_STYLES[m.kind || 'sync'] },
+    });
   });
-  msg(0, 1, 130, '1: enter credentials');
-  msg(1, 2, 180, '2: POST /login');
-  msg(2, 3, 230, '3: find user');
-  msg(3, 2, 280, '4: user record', true);
-  msg(2, 1, 330, '5: session token', true);
-  msg(1, 0, 380, '6: show dashboard', true);
+  // Legend: what the three arrow styles mean (text layout collapses runs of spaces, hence the bars).
+  b.node('text', 40, top + h + 24, 3 * gap + 130, 34, 'Legend:  ► synchronous  |  > asynchronous  |  - - > return', { align: 'left', fontSize: 13, stroke: '#9ca3af', strokeWidth: 1, fill: '#f9fafb' });
   return b.diagram();
 }
 
@@ -270,6 +291,110 @@ export function timelineTemplate(opts, { months = ['Sep', 'Oct', 'Nov', 'Dec', '
   b.edge({ x: 20, y: top + 36 + list.length * rowH }, { x: left + width, y: top + 36 + list.length * rowH }, { routing: 'straight', style: { strokeWidth: 1, endArrow: 'none' } });
   return b.diagram();
 }
+
+// ---------------------------------------------------------------------------
+// Context diagram: one system (circle) in the middle, external entities around it and a
+// labelled data flow for every arrow. Every connector is attached to its shapes, so it follows them.
+
+/** Where a ray from `from` in direction `dir` first meets the circle (centre c, radius r). */
+function rayHitsCircle(from, dir, c, r) {
+  const fx = from.x - c.x; const fy = from.y - c.y;
+  const b = fx * dir.x + fy * dir.y;
+  const disc = b * b - (fx * fx + fy * fy - r * r);
+  if (disc < 0) return { x: c.x - dir.x * r, y: c.y - dir.y * r };
+  const k = -b - Math.sqrt(disc);
+  return { x: from.x + dir.x * k, y: from.y + dir.y * k };
+}
+
+const fraction = (n, p) => ({ x: Math.round(((p.x - n.x) / n.w) * 1000) / 1000, y: Math.round(((p.y - n.y) / n.h) * 1000) / 1000 });
+
+/**
+ * contextDiagram(opts, { system, systemId?, entities: [{ name, id?, w?, h?, flows: [{ label, dir: 'out' | 'in', style? }] }] })
+ * 'out' = the entity sends data to the system, 'in' = the system sends data to the entity.
+ * Entities alternate between the left and the right column; each gets one parallel pair of arrows per
+ * direction, spread along the side that faces the system.
+ */
+export function contextDiagram(opts, { system = 'Meyar System', systemId, entities, systemSize = 240, flowStyle = {} } = {}) {
+  const list = entities || [
+    { name: 'Student', flows: [{ label: 'Project data', dir: 'out' }, { label: 'Reports', dir: 'in' }] },
+    { name: 'Supervisor', flows: [{ label: 'Comments', dir: 'out' }, { label: 'Progress reports', dir: 'in' }] },
+    { name: 'Administrator', flows: [{ label: 'User accounts', dir: 'out' }, { label: 'Usage statistics', dir: 'in' }] },
+    { name: 'External Service', flows: [{ label: 'Delivery status', dir: 'out' }, { label: 'Notification requests', dir: 'in' }] },
+  ];
+  const b = builder(opts);
+  const left = list.filter((_, i) => i % 2 === 0); const right = list.filter((_, i) => i % 2 === 1);
+  const rows = Math.max(left.length, right.length, 1);
+  // An entity with several flows is taller, so its arrows stay ~46 px apart and their labels do not touch.
+  const heightOf = (ent) => Math.max(ent.h || 72, 30 + ((ent.flows || []).length - 1) * 46);
+  const tallest = Math.max(72, ...list.map(heightOf));
+  const edgeX = Math.max(230, ...list.map((ent) => (ent.w || 190) + 40)); // distance of the entity columns' inner edges from the sides
+  const pitch = rows <= 1 ? 0 : Math.max(tallest + 60, rows === 2 ? 280 : rows === 3 ? 230 : 190);
+  const margin = 30;
+  const R = systemSize / 2;
+  const width = Math.max(1100, 2 * (edgeX + R + 200));
+  const cx = width / 2; const cy = margin + Math.max(R, ((rows - 1) * pitch) / 2 + tallest / 2);
+  const sys = b.node('circle', cx - R, cy - R, systemSize, systemSize, system, { fill: '#eef2fb', strokeWidth: 2, fontWeight: 'bold' }, { id: systemId });
+  const C = { x: cx, y: cy };
+
+  // `edgeX` is the edge of the column that faces the system: the right edge on the left, the left edge on the right.
+  const place = (items, edgeX, facing) => {
+    items.forEach((ent, j) => {
+      const w = ent.w || 190;
+      const yc = cy + (j - (items.length - 1) / 2) * pitch;
+      const h = heightOf(ent);
+      const node = b.node('rect', facing === 'e' ? edgeX - w : edgeX, Math.round(yc - h / 2), w, h, ent.name, { fill: '#ffffff' }, { id: ent.id });
+      const flows = ent.flows || [];
+      // Arrows run in the direction of the circle's centre, side by side along the facing edge.
+      const dx = C.x - (node.x + node.w / 2); const dy = C.y - yc; const len = Math.hypot(dx, dy) || 1;
+      const dir = { x: dx / len, y: dy / len };
+      const gapPx = flows.length > 1 ? Math.min(46, (node.h - 26) / (flows.length - 1)) : 0;
+      flows.forEach((flow, i) => {
+        const off = (i - (flows.length - 1) / 2) * gapPx;
+        const A = { x: facing === 'e' ? node.x + node.w : node.x, y: yc + off };
+        const B = rayHitsCircle(A, dir, C, R);
+        const aEnd = { id: node.id, anchor: fraction(node, A) }; const bEnd = { id: sys.id, anchor: fraction(sys, B) };
+        const out = flow.dir !== 'in';
+        b.elements.push({
+          id: uid('e'), type: 'edge', source: out ? aEnd : bEnd, target: out ? bEnd : aEnd, routing: 'straight', text: flow.label || '',
+          style: { endArrow: 'triangle', ...flowStyle, ...(flow.style || {}) },
+        });
+      });
+    });
+  };
+  place(left, edgeX, 'e');
+  place(right, width - edgeX, 'w');
+  return b.diagram({ width, height: Math.round(cy * 2) });
+}
+
+/** "Meyar System" for a project called "Meyar"; a long or missing name keeps the sample. */
+export function systemNameOf(project) {
+  const name = String(project?.name || '').replace(/\s+/g, ' ').trim();
+  if (!name || name.length > 28) return undefined;
+  return /system$/i.test(name) ? name : `${name} System`;
+}
+
+export function contextTemplate(opts, { system, project } = {}) {
+  const name = system || systemNameOf(project);
+  return contextDiagram(opts, name ? { system: name } : {});
+}
+
+// ---------------------------------------------------------------------------
+// Screenshot / image figure: one picture filling the canvas (annotate it with shapes, arrows and text).
+
+/**
+ * screenshotDiagram(opts, image?) — image = { src, width, height } (a data URL from image-import.js).
+ * The canvas takes the picture's proportions, at most 1200 wide. Without an image a placeholder box is drawn.
+ */
+export function screenshotDiagram(opts, image = null) {
+  const b = builder(opts);
+  const iw = image?.width || 800; const ih = image?.height || 500;
+  const w = Math.min(1200, iw); const h = Math.max(1, Math.round((w * ih) / iw));
+  const el = b.node('image', 0, 0, w, h, '', {});
+  if (image?.src) el.src = image.src;
+  return b.diagram({ width: w, height: h });
+}
+
+export function screenshotTemplate(opts) { return screenshotDiagram(opts, null); }
 
 export function genericTemplate(opts) {
   const b = builder(opts);

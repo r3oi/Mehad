@@ -11,6 +11,7 @@ import { getShape } from '../shapes.js';
 import { edgeGeometry, pathMidpoint, PORTS, anchorPoint, dist } from '../geometry.js';
 import { fontStack } from '../text-layout.js';
 import { History } from './history.js';
+import { blobURLFor } from './image-import.js';
 import { t } from '../../i18n/index.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -23,6 +24,8 @@ const EDGE_TOOLS = {
   connector: { routing: 'orthogonal', style: { endArrow: 'arrow' } },
 };
 const CLIP_KEY = 'graddocs:clipboard';
+// Undo snapshots keep a short token instead of a picture's (huge) data URL.
+const IMG_TOKEN = '\u0001img:';
 
 export class DiagramEditor extends Emitter {
   constructor(host, diagram, { readOnly = false } = {}) {
@@ -43,6 +46,7 @@ export class DiagramEditor extends Emitter {
     this.guides = [];
     this.editing = null;
     this.spaceDown = false;
+    this.imagePool = { byToken: new Map(), bySrc: new Map() };
     this.#build();
     this.render();
   }
@@ -109,10 +113,19 @@ export class DiagramEditor extends Emitter {
   get elements() { return this.doc.elements; }
   byId(id) { return this.doc.elements.find((el) => el.id === id) || null; }
   selectedElements() { return this.doc.elements.filter((el) => this.selection.has(el.id)); }
-  snapshot() { return JSON.stringify({ elements: this.doc.elements, background: this.doc.background, defaults: this.doc.defaults }); }
+  snapshot() {
+    return JSON.stringify({ elements: this.doc.elements, background: this.doc.background, defaults: this.doc.defaults },
+      (key, value) => (key === 'src' && typeof value === 'string' && value.length > 4000 ? this.#imageToken(value) : value));
+  }
+
+  #imageToken(src) {
+    let token = this.imagePool.bySrc.get(src);
+    if (!token) { token = `${IMG_TOKEN}${this.imagePool.bySrc.size}`; this.imagePool.bySrc.set(src, token); this.imagePool.byToken.set(token, src); }
+    return token;
+  }
 
   #restore(snap) {
-    const data = JSON.parse(snap);
+    const data = JSON.parse(snap, (key, value) => (typeof value === 'string' && value.startsWith(IMG_TOKEN) ? (this.imagePool.byToken.get(value) ?? value) : value));
     this.doc.elements = data.elements;
     this.doc.background = data.background;
     this.doc.defaults = data.defaults;
@@ -186,7 +199,7 @@ export class DiagramEditor extends Emitter {
   // -------------------------------------------------------------- rendering
   render() {
     this.defsLayer.innerHTML = defsFor(this.doc);
-    this.content.innerHTML = renderElements(this.doc, { mode: 'edit', hideTextId: this.editing?.id, highlights: this.highlights });
+    this.content.innerHTML = renderElements(this.doc, { mode: 'edit', hideTextId: this.editing?.id, highlights: this.highlights, imageHref: blobURLFor });
     this.host.style.setProperty('--ed-paper', this.doc.background && this.doc.background !== 'transparent' ? this.doc.background : '#ffffff');
     this.renderOverlay();
     this.#applyView();
@@ -666,18 +679,80 @@ export class DiagramEditor extends Emitter {
     return { id: uid('n'), type: 'node', shape: preset.shape, x, y, w, h: shape.aspect && rect ? w : h, text: preset.text ?? shape.defaults.text ?? '', style: clone(preset.style || {}) };
   }
 
+  /** Centre of the visible canvas in diagram coordinates. */
+  viewportCenter() {
+    const r = this.host.getBoundingClientRect();
+    return this.screenToDiagram(r.left + r.width / 2, r.top + r.height / 2);
+  }
+
   /** Add a library preset at a diagram point (default: viewport centre). */
   addPreset(preset, at = null) {
     if (this.readOnly) return null;
     let p = at;
     if (!p) {
-      const r = this.host.getBoundingClientRect();
-      p = this.screenToDiagram(r.left + r.width / 2, r.top + r.height / 2);
+      p = this.viewportCenter();
       // Avoid stacking exactly on top of the previous insert.
       const offset = (this._insertCount = ((this._insertCount || 0) + 1) % 6) * 20;
       p = { x: p.x + offset, y: p.y + offset };
     }
+    if (preset.edge) return this.#addEdgePreset(preset, p, !at);
     const el = this.#nodeFromPreset(preset, p);
+    this.mutate((doc) => { doc.elements.push(el); });
+    this.select(el.id);
+    return el;
+  }
+
+  /**
+   * Connector presets (data flow, sequence messages). With two shapes selected the connector joins them
+   * (first selected → second selected; between lifelines it goes below the previous message).
+   * Otherwise it is a free arrow whose ends you drag onto shapes.
+   */
+  #addEdgePreset(preset, p, fromClick) {
+    const def = preset.edge;
+    const picked = fromClick ? [...this.selection].map((id) => this.byId(id)).filter((el) => el && isNode(el) && el.shape !== 'point') : [];
+    let source; let target;
+    if (picked.length === 2) {
+      const [a, b] = picked;
+      if (getShape(a.shape).outline === 'lifeline' && getShape(b.shape).outline === 'lifeline') {
+        const headA = Math.min(44, a.h);
+        let y = a.y + headA + 50;
+        for (const el of this.doc.elements) {
+          if (!isEdge(el)) continue;
+          for (const end of [el.source, el.target]) {
+            const n = end?.id && end.anchor && (end.id === a.id || end.id === b.id) ? this.byId(end.id) : null;
+            if (n) y = Math.max(y, n.y + end.anchor.y * n.h + 50);
+          }
+        }
+        y = Math.min(this.#snapValue(y), a.y + a.h - 10);
+        source = { id: a.id, anchor: { x: 0.5, y: (y - a.y) / a.h } };
+        target = { id: b.id, anchor: { x: 0.5, y: (y - b.y) / b.h } };
+      } else { source = { id: a.id }; target = { id: b.id }; }
+    } else {
+      const y = this.#snapValue(p.y);
+      source = { x: this.#snapValue(p.x - 90), y }; target = { x: this.#snapValue(p.x + 90), y };
+    }
+    const edge = { id: uid('e'), type: 'edge', source, target, routing: def.routing || 'straight', text: def.text || '', style: clone(def.style || {}) };
+    this.mutate((doc) => { doc.elements.push(edge); });
+    this.select(edge.id);
+    return edge;
+  }
+
+  /**
+   * Add a picture ({ src: data URL, width, height }) as an 'image' element, centred on `at`
+   * (default: the visible centre) and scaled down to fit the visible area. Undoable.
+   */
+  addImage({ src, width, height }, at = null) {
+    if (this.readOnly || !src) return null;
+    const host = this.host.getBoundingClientRect();
+    let c = at;
+    if (!c) {
+      c = this.viewportCenter();
+      const offset = (this._insertCount = ((this._insertCount || 0) + 1) % 6) * 20; // do not stack exactly on the previous insert
+      c = { x: c.x + offset, y: c.y + offset };
+    }
+    const k = Math.min(1, (host.width * 0.8) / (this.zoom * width), (host.height * 0.8) / (this.zoom * height)) || 1;
+    const w = Math.max(16, Math.round(width * k)); const h = Math.max(16, Math.round(height * k));
+    const el = { id: uid('n'), type: 'node', shape: 'image', x: Math.round(c.x - w / 2), y: Math.round(c.y - h / 2), w, h, text: '', style: {}, src };
     this.mutate((doc) => { doc.elements.push(el); });
     this.select(el.id);
     return el;

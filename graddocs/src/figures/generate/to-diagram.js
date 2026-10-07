@@ -1,5 +1,6 @@
 // Diagram spec → editable diagram (shapes, connectors, layout). See spec.js for the format.
 import { builder } from '../templates/builder.js';
+import { contextDiagram } from '../templates/index.js';
 import { getShape } from '../shapes.js';
 import { autoLayout, measureLabel } from '../layout.js';
 import { normalizeSpec } from './spec.js';
@@ -9,8 +10,8 @@ const ZWSP = '​'; // keeps an empty class/entity compartment alive (compartmen
 const START_RE = /^(start|begin|beginning|بداية|البداية|ابدأ|بدء|البدء)$/i;
 const END_RE = /^(end|stop|finish|finished|نهاية|النهاية|انتهاء|الانتهاء|إنهاء|انتهى)$/i;
 
-const DEFAULT_KIND = { flowchart: 'process', activity: 'process', hierarchy: 'process', usecase: 'usecase', class: 'class', erd: 'entity', state: 'state', architecture: 'service', component: 'component', generic: 'process' };
-const DEFAULT_DIRECTION = { flowchart: 'TB', activity: 'TB', hierarchy: 'TB', usecase: 'LR', class: 'TB', erd: 'LR', state: 'LR', architecture: 'TB', component: 'LR', generic: 'TB' };
+const DEFAULT_KIND = { flowchart: 'process', activity: 'process', hierarchy: 'process', usecase: 'usecase', context: 'actor', class: 'class', erd: 'entity', state: 'state', architecture: 'service', component: 'component', generic: 'process' };
+const DEFAULT_DIRECTION = { flowchart: 'TB', activity: 'TB', hierarchy: 'TB', usecase: 'LR', context: 'LR', class: 'TB', erd: 'LR', state: 'LR', architecture: 'TB', component: 'LR', generic: 'TB' };
 
 const roundUp = (v, step = 10) => Math.ceil(v / step) * step;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -254,6 +255,44 @@ function margin(diagram, x, y) {
 }
 
 // ---------------------------------------------------------------------------
+// Context diagrams: the system in the middle, external entities in two columns, one arrow per data flow
+
+function buildContext(spec, ctx) {
+  const { fontFamily, fontSize } = ctx;
+  const font = { fontFamily, fontSize, fontWeight: 'normal', fontStyle: 'normal' };
+  const view = { ...spec, nodes: spec.nodes };
+  const ids = new Set(spec.nodes.map((n) => n.id));
+  const degree = new Map(spec.nodes.map((n) => [n.id, 0]));
+  for (const e of spec.edges) { degree.set(e.from, (degree.get(e.from) || 0) + 1); degree.set(e.to, (degree.get(e.to) || 0) + 1); }
+  // The system is the boundary / circle node, else the node most flows go through.
+  const system = spec.nodes.find((n) => ['boundary', 'circle'].includes(resolveKind(n, view)))
+    || [...spec.nodes].sort((a, b) => (degree.get(b.id) || 0) - (degree.get(a.id) || 0))[0];
+  const others = spec.nodes.filter((n) => n !== system);
+  const lookOf = (e) => {
+    const look = edgeLook(e, e.kind || 'arrow');
+    const style = { ...look.style };
+    if (!e.kind && !e.toEnd) style.endArrow = 'triangle';
+    return { style, text: look.text };
+  };
+  const entities = others.map((n) => {
+    const box = fit('rect', n.label, font, { minW: 190, minH: 72, maxW: 300 });
+    const flows = spec.edges.filter((e) => (e.from === n.id && e.to === system.id) || (e.to === n.id && e.from === system.id))
+      .map((e) => { const look = lookOf(e); return { label: look.text, dir: e.from === n.id ? 'out' : 'in', style: look.style }; });
+    return { name: n.label, w: box.w, h: box.h, flows, id: n.id };
+  });
+  const size = Math.max(240, fit('circle', system.label, font, { minW: 240, minH: 240, maxW: 330, maxLines: 4 }).w);
+  const diagram = contextDiagram({ fontFamily, fontSize }, { system: system.label, systemId: system.id, entities, systemSize: size });
+  // Flows between two entities (not part of a context diagram, but kept): a plain arrow between the boxes.
+  for (const e of spec.edges) {
+    if (e.from === system.id || e.to === system.id || !ids.has(e.from) || !ids.has(e.to) || e.from === e.to) continue;
+    const look = lookOf(e);
+    diagram.elements.push({ id: `flow_${diagram.elements.length}`, type: 'edge', source: { id: e.from }, target: { id: e.to }, routing: 'straight', text: look.text, style: look.style });
+  }
+  margin(diagram, 40, 30);
+  return diagram;
+}
+
+// ---------------------------------------------------------------------------
 // Sequence diagrams
 
 function buildSequence(spec, ctx) {
@@ -286,7 +325,8 @@ function buildSequence(spec, ctx) {
     const y = top + headH + 40 + k * rowH + rowH / 2;
     const a = lifelines[index.get(m.from)]; const c = lifelines[index.get(m.to)];
     const frac = (v) => ({ x: 0.5, y: (v - top) / h });
-    const style = m.reply ? { dash: 'dashed', endArrow: 'arrow' } : { endArrow: 'triangle' };
+    // UML message kinds: synchronous = filled head, asynchronous = open head, return = dashed with an open head.
+    const style = m.reply ? { dash: 'dashed', endArrow: 'arrow' } : m.async ? { endArrow: 'arrow' } : { endArrow: 'triangle' };
     if (a === c) {
       // Message to itself: a small loop to the right of the lifeline, label beside it.
       const lx = a.x + a.w / 2 + 44;
@@ -315,7 +355,7 @@ function buildSequence(spec, ctx) {
 export function buildDiagramFromSpec(input, { fontFamily = 'Times New Roman', fontSize = 14, type } = {}) {
   const { spec, warnings } = normalizeSpec(input, { type });
   const ctx = { fontFamily, fontSize };
-  const diagram = spec.type === 'sequence' ? buildSequence(spec, ctx) : buildGraph(spec, ctx);
+  const diagram = spec.type === 'sequence' ? buildSequence(spec, ctx) : spec.type === 'context' ? buildContext(spec, ctx) : buildGraph(spec, ctx);
   return { diagram, spec, warnings };
 }
 

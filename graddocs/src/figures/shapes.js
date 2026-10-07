@@ -332,8 +332,9 @@ registerShape({
   id: 'image', name: 'Image', aspect: true,
   defaults: { w: 320, h: 200, text: '', style: { fill: 'none', stroke: 'none' } },
   // el.src holds a data: URL (PNG/JPEG). The picture is drawn to fit the box.
-  draw: (el, s) => (el.src
-    ? `<image href="${xmlEscape(el.src)}" x="${r(el.x)}" y="${r(el.y)}" width="${r(el.w)}" height="${r(el.h)}" preserveAspectRatio="xMidYMid meet"/>`
+  // The editor passes ctx.imageHref to draw a light blob: URL instead of the whole data URL while you work.
+  draw: (el, s, ctx = {}) => (el.src
+    ? `<image href="${xmlEscape(ctx.imageHref ? ctx.imageHref(el.src) : el.src)}" x="${r(el.x)}" y="${r(el.y)}" width="${r(el.w)}" height="${r(el.h)}" preserveAspectRatio="xMidYMid meet"/>`
     : `<rect x="${r(el.x)}" y="${r(el.y)}" width="${r(el.w)}" height="${r(el.h)}" fill="#f2f4f7" stroke="#d0d5dd" stroke-dasharray="6 4"/>`)
     + (s.stroke !== 'none' && s.strokeWidth > 0 ? `<rect x="${r(el.x)}" y="${r(el.y)}" width="${r(el.w)}" height="${r(el.h)}" ${paint({ ...s, fill: 'none' })}/>` : ''),
   hit: (el) => `<rect x="${r(el.x)}" y="${r(el.y)}" width="${r(el.w)}" height="${r(el.h)}" fill="transparent"/>`,
@@ -351,6 +352,7 @@ registerShape({
 // ---------------------------------------------------------------------------
 // Library presets shown in the editor's Elements panel.
 // Each preset = a shape + defaults; templates use the same shapes.
+// A preset with an `edge` field (routing, style, text) adds a connector instead of a shape.
 export const LIBRARY = [
   { group: 'Basic', items: [
     { name: 'Rectangle', shape: 'rect' },
@@ -387,6 +389,16 @@ export const LIBRARY = [
     { name: 'Fork / Join', shape: 'rect', text: '', w: 160, h: 8, style: { fill: '#111827', stroke: '#111827' } },
     { name: 'Component', shape: 'component' },
     { name: 'Node', shape: 'node3d' },
+  ] },
+  { group: 'Context', items: [
+    { name: 'External entity', shape: 'rect', text: 'External Entity', w: 190, h: 72 },
+    { name: 'Process (system)', shape: 'circle', text: 'System', w: 220, h: 220, style: { fill: '#eef2fb', strokeWidth: 2, fontWeight: 'bold' } },
+    { name: 'Data flow', edge: { routing: 'straight', style: { endArrow: 'triangle' }, text: 'Data flow' } },
+  ] },
+  { group: 'Messages', items: [
+    { name: 'Synchronous message', edge: { routing: 'straight', style: { endArrow: 'triangle' }, text: 'message()' } },
+    { name: 'Asynchronous message', edge: { routing: 'straight', style: { endArrow: 'arrow' }, text: 'message()' } },
+    { name: 'Return message', edge: { routing: 'straight', style: { dash: 'dashed', endArrow: 'arrow' }, text: 'return' } },
   ] },
   { group: 'ERD', items: [
     { name: 'Entity Table', shape: 'entity' },

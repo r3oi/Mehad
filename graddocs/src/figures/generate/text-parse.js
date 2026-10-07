@@ -411,7 +411,8 @@ function mermaidSequence(body) {
       const a = ensure(m[1]); const b = ensure(m[5]);
       counter += 1;
       const text = cleanLabel(m[6] || '');
-      messages.push({ from: a.id, to: b.id, label: numbering ? `${counter}: ${text}`.replace(/: $/, '') : text, reply: m[2] === '--' });
+      // ->> and -->> are synchronous / return messages; -) and --) (open arrow) are asynchronous.
+      messages.push({ from: a.id, to: b.id, label: numbering ? `${counter}: ${text}`.replace(/: $/, '') : text, reply: m[2] === '--', ...(m[3] === ')' ? { async: true } : {}) });
       continue;
     }
     warnings.push(t('Could not read “{text}”.', { text: st.slice(0, 40) }));

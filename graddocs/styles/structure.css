@@ -551,3 +551,59 @@
   .ch-page.next { grid-column: 1; }
   .ch-select-wrap { max-width: none; }
 }
+
+/* =====================================================================
+   University-template features: citations, writing guidance, word limits,
+   unnumbered chapters, declaration signature lines
+   ===================================================================== */
+
+/* Citation picker (Cite button): the number is the label, the author/year/title the text */
+.be-picker-cite { width: min(500px, calc(100% - 12px)); }
+.be-picker-cite .be-pick-label { min-width: 44px; font-family: var(--font-mono); font-size: 12.5px; }
+.be-picker-cite .be-pick-title { flex: 1 1 auto; }
+.be-surface .ref-chip[data-ref^="cite:"] { font-variant-numeric: tabular-nums; }
+
+/* Template guidance above an empty text (never part of the text itself) */
+.be-guide {
+  display: flex; gap: 10px; padding: 9px 14px 10px;
+  background: var(--surface-2); border-bottom: 1px solid var(--border); border-inline-start: 3px solid var(--info);
+  font-size: 12.5px; line-height: 1.55; color: var(--muted);
+}
+.be-guide[hidden] { display: none; }
+.be-guide-ico { flex: none; margin-top: 1px; color: var(--info); }
+.be-guide-ico .icon { width: 14px; height: 14px; }
+.be-guide-body { min-width: 0; }
+.be-guide-title { font-size: 11px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+.be-guide-text { margin-top: 2px; overflow-wrap: anywhere; }
+[dir="rtl"] .be-guide-title { letter-spacing: 0; text-transform: none; font-size: 12px; }
+.be-btn-guide.active { color: var(--info); }
+
+/* Word limit counter ("123 / 150 words") */
+.be-meta.over { color: var(--warning); font-weight: 650; }
+.be-meta.over::before { content: "\26A0\FE0E\00a0"; }
+.fm-sub.over { color: var(--warning); font-weight: 550; }
+
+/* Unnumbered chapters */
+.ol-unnum { flex: none; font-weight: 550; }
+.ch-numbering { display: flex; width: fit-content; max-width: 100%; margin: -4px 0 14px; font-size: 12.5px; color: var(--muted); }
+.ch-numbering:hover { color: var(--text-2); }
+.ch-heading-prefix[hidden] { display: none; }
+.sec-head:not(:has(.sec-num)) .sec-title { margin-inline-start: -8px; }
+@media (max-width: 640px) {
+  .sec-head:not(:has(.sec-num)) { grid-template-columns: minmax(0, 1fr) auto; }
+  .sec-head:not(:has(.sec-num)) .sec-status { grid-column: 1; }
+  .sec-head:not(:has(.sec-num)) > .btn { grid-column: 2; }
+}
+
+/* Live TOC: References entry and the "academic" style (front matter and sections in small caps) */
+.toc-refs { margin-top: 7px; font-weight: 700; }
+.toc-academic .toc-front, .toc-academic .toc-sec { font-variant: small-caps; }
+
+/* Declaration page tools */
+.fm-tools { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.fm-tools-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.fm-sign { font-size: 13px; color: var(--text-2); }
+.fm-note[hidden] { display: none; }
+.fm-note .input { max-width: 420px; }
+.fm-tools-hint { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 12px; color: var(--muted); }
+.fm-tools-hint .icon { flex: none; width: 14px; height: 14px; margin-top: 2px; color: var(--faint); }

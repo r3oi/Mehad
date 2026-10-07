@@ -2,13 +2,14 @@
 // status bar, autosave, versions/revision mode, comments and exports.
 import { DiagramEditor } from './canvas.js';
 import { renderLibrary } from './library.js';
+import { IMAGE_ACCEPT, isImageFile, imageFromFile } from './image-import.js';
 import { designPanelHTML, bindDesignPanel, figurePanelHTML, historyPanelHTML, commentsPanelHTML, displayLabel, shapesConnectorsText } from './panels.js';
 import { esc, on } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { toast, toastError } from '../../ui/toast.js';
 import { openMenu } from '../../ui/menu.js';
 import { openModal, confirmDialog } from '../../ui/modal.js';
-import { debounce, clone, isTypingTarget, modKey, slugify, downloadBlob, downloadText, uid, formatDateTime } from '../../core/utils.js';
+import { debounce, clone, isTypingTarget, modKey, slugify, downloadBlob, downloadText, uid, formatDateTime, pickFile } from '../../core/utils.js';
 import { findFigure, createComment } from '../../core/model.js';
 import { getNumbering } from '../../core/numbering.js';
 import { clearPlacement } from '../../core/references.js';
@@ -16,7 +17,7 @@ import { renderFigureSVG, renderThumbnail, computeBounds, isNode, isEdge } from 
 import { autoLayout, layoutUnsuitedReason } from '../layout.js';
 import { getFigureType, buildTemplate } from '../types.js';
 import { diffDiagrams, summarizeDiff, autoLabel, hasChanges } from '../diff.js';
-import { addVersion, isDirty, latestVersion, revisionCount } from '../versions.js';
+import { addVersion, isDirty, latestVersion, revisionCount, versionSnapshot } from '../versions.js';
 import { svgToPngBlob, copyPngToClipboard } from '../../export/png.js';
 import { svgToPdfBlob } from '../../export/pdf.js';
 import { t, isRTL } from '../../i18n/index.js';
@@ -83,6 +84,8 @@ export default {
           <section class="ed-center">
             <div class="ed-toolbar" role="toolbar" aria-label="${t('Drawing tools')}">
               ${TOOLS.map((tool) => (tool === '|' ? '<span class="ed-tb-sep"></span>' : `<button class="ed-tool" data-tool="${tool.id}" data-tip="${esc(tool.label)}" ${tool.key ? `data-kbd="${tool.key}"` : ''} aria-label="${esc(tool.label)}">${icon(tool.icon)}</button>`)).join('')}
+              <span class="ed-tb-sep"></span>
+              <button class="ed-tool" data-action="insert-image" data-tip="${t('Insert image')}" aria-label="${t('Insert image')}">${icon('image')}</button>
               <span class="ed-tb-sep"></span>
               <button class="ed-tool" data-action="duplicate" data-tip="${t('Duplicate')}" data-kbd="Ctrl D" aria-label="${t('Duplicate')}">${icon('duplicate')}</button>
               <button class="ed-tool" data-action="delete" data-tip="${t('Delete')}" data-kbd="Del" aria-label="${t('Delete')}">${icon('trash')}</button>
@@ -220,7 +223,10 @@ export default {
       else if (activeTab === 'history') panel.innerHTML = historyPanelHTML(project(), { ...f, diagram: editor.doc }, revisionMode);
       else panel.innerHTML = commentsPanelHTML(f, editor, commentFilter);
     }
-    bindDesignPanel(panel, editor, { onComment: () => { activeTab = 'comments'; renderPanel(true); panel.querySelector('[data-comment-input]')?.focus(); } });
+    bindDesignPanel(panel, editor, {
+      onComment: () => { activeTab = 'comments'; renderPanel(true); panel.querySelector('[data-comment-input]')?.focus(); },
+      onReplaceImage: () => replaceImage(),
+    });
 
     // Figure metadata (Figure tab)
     const updateMeta = debounce((field, value) => {
@@ -280,7 +286,7 @@ export default {
     function openSaveVersionDialog(kind = 'version') {
       const f = getFigure();
       const last = latestVersion(f);
-      const diff = diffDiagrams(last?.snapshot || { elements: [] }, editor.doc);
+      const diff = diffDiagrams(versionSnapshot(f, last) || { elements: [] }, editor.doc);
       const changes = summarizeDiff(diff);
       if (last && !hasChanges(diff)) { toast(t('No changes since the last version.'), { type: 'info' }); return; }
       const isRev = kind === 'revision';
@@ -313,12 +319,12 @@ export default {
         title: `v${v.number} — ${v.label}`,
         subtitle: `${isRTL ? formatDateTime(v.createdAt) : new Date(v.createdAt).toLocaleString('en-GB')}${v.requestedBy ? ` · ${t('Requested by {name}', { name: v.requestedBy })}` : ''}`,
         size: 'xl',
-        body: `<div class="ed-version-view"><div class="thumb ed-version-thumb">${renderThumbnail(v.snapshot)}</div>
+        body: `<div class="ed-version-view"><div class="thumb ed-version-thumb">${renderThumbnail(versionSnapshot(getFigure(), v))}</div>
           <div class="ed-version-meta">${v.note ? `<p${AUTO}>${esc(v.note)}</p>` : ''}<div class="section-title">${t('Changes in this version')}</div><ul class="ed-change-list"${AUTO}>${(v.changes || []).map((c) => `<li>${esc(c)}</li>`).join('')}</ul></div></div>`,
         footer: `<div class="left"><button class="btn" data-dl>${icon('export', 'icon-sm')} ${t('Download SVG')}</button></div><button class="btn" data-close>${t('Close')}</button><button class="btn btn-primary" data-restore>${icon('history', 'icon-sm')} ${t('Restore this version')}</button>`,
       });
       modal.$('[data-dl]').addEventListener('click', () => {
-        const { svg } = renderFigureSVG(v.snapshot);
+        const { svg } = renderFigureSVG(versionSnapshot(getFigure(), v));
         downloadText(svg, `${fileBase()}-v${v.number}.svg`, 'image/svg+xml');
       });
       modal.$('[data-restore]').addEventListener('click', () => { modal.close(); restoreVersion(versionId, true); });
@@ -328,7 +334,7 @@ export default {
       const v = getFigure().versions.find((x) => x.id === versionId);
       if (!v) return;
       if (!confirmed && !(await confirmDialog({ title: t('Restore v{n}?', { n: v.number }), message: t('The canvas will be replaced with {version}. Your current state is kept in the history, and you can undo.', { version: `<strong>v${v.number} — ${esc(v.label)}</strong>` }), confirmText: t('Restore') }))) return;
-      editor.replaceDiagram(v.snapshot);
+      editor.replaceDiagram(versionSnapshot(getFigure(), v));
       persist.cancel();
       store.update((p) => {
         const f = findFigure(p, figureId);
@@ -351,7 +357,7 @@ export default {
     // ---------------------------------------------------------- auto layout & generate
     function runAutoLayout(mode, direction) {
       if (layoutUnsuitedReason(editor.doc, getFigure()?.type)) {
-        toast(t('Auto layout is not suited to fishbone, sequence or timeline figures — they keep their own layout.'), { type: 'info' });
+        toast(t('Auto layout is not suited to this kind of figure (fishbone, sequence, timeline, context diagram or image) — it keeps its own layout.'), { type: 'info' });
         return;
       }
       if (!editor.doc.elements.some(isNode)) { toast(t('Nothing to arrange yet.'), { type: 'info' }); return; }
@@ -405,7 +411,7 @@ export default {
       if (!revisionMode) { editor.setHighlights(null); banner.hidden = true; return; }
       const f = getFigure();
       const last = latestVersion(f);
-      const diff = diffDiagrams(last?.snapshot || { elements: [] }, editor.doc);
+      const diff = diffDiagrams(versionSnapshot(f, last) || { elements: [] }, editor.doc);
       editor.setHighlights(diff.changedIds);
       const lines = summarizeDiff(diff);
       banner.hidden = false;
@@ -458,7 +464,7 @@ export default {
       flushPersist();
       const src = getFigure();
       const copy = clone(src);
-      copy.id = uid('fig'); copy.title = `${src.title} (copy)`; copy.versions = []; copy.comments = [];
+      copy.id = uid('fig'); copy.title = `${src.title} (copy)`; copy.versions = []; copy.comments = []; delete copy.imagePool;
       copy.createdAt = copy.updatedAt = Date.now();
       addVersion(copy, { force: true });
       store.update((p) => { const i = p.figures.findIndex((f) => f.id === figureId); p.figures.splice(i + 1, 0, copy); }, { activity: { text: `Duplicated figure “${src.title}”`, kind: 'create', targetId: copy.id } });
@@ -480,8 +486,46 @@ export default {
     // ---------------------------------------------------------- events
     const library = renderLibrary(q('[data-library]'), { groupsFirst: typeDef.libraryGroups, onAdd: (preset) => { editor.setTool('select'); editor.addPreset(preset); root.dataset.panels = ''; } });
     const canvasHost = q('[data-canvas]');
-    canvasHost.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('application/x-graddocs-preset')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+    // Pictures: toolbar button, Ctrl+V with an image on the clipboard, or dropping a file on the canvas.
+    async function insertImages(files, at = null) {
+      const list = files.filter(isImageFile);
+      if (!list.length) { toast(t('Choose an image file (PNG, JPG, WebP, GIF or SVG).'), { type: 'warning' }); return; }
+      let added = 0;
+      for (const [i, file] of list.entries()) {
+        try {
+          const img = await imageFromFile(file);
+          if (editor.addImage(img, at ? { x: at.x + i * 24, y: at.y + i * 24 } : null)) added += 1;
+        } catch (err) { toastError(err, t('Could not add the image')); }
+      }
+      if (added) { editor.setTool('select'); toast(added === 1 ? t('Image added') : t('{n} images added', { n: added }), { type: 'success', duration: 1600 }); }
+    }
+    /** Swap the picture of the selected image element, keeping its width and position. */
+    async function replaceImage() {
+      const target = editor.selectedElements().find((el) => el.shape === 'image');
+      if (!target) return;
+      const file = await pickFile(IMAGE_ACCEPT);
+      if (!file) return;
+      try {
+        const img = await imageFromFile(file);
+        editor.updateSelected((el) => { el.src = img.src; el.h = Math.max(8, Math.round((el.w * img.height) / img.width)); }, { kind: 'node' });
+        toast(t('Image replaced'), { type: 'success', duration: 1600 });
+      } catch (err) { toastError(err, t('Could not add the image')); }
+    }
+    async function chooseImage() {
+      const file = await pickFile(IMAGE_ACCEPT);
+      if (file) await insertImages([file]);
+    }
+
+    canvasHost.addEventListener('dragover', (e) => {
+      const types = e.dataTransfer.types;
+      if (types.includes('application/x-graddocs-preset') || types.includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }
+      canvasHost.classList.toggle('drop-target', types.includes('Files'));
+    });
+    canvasHost.addEventListener('dragleave', () => canvasHost.classList.remove('drop-target'));
     canvasHost.addEventListener('drop', (e) => {
+      canvasHost.classList.remove('drop-target');
+      const files = [...(e.dataTransfer.files || [])];
+      if (files.length) { e.preventDefault(); insertImages(files, editor.screenToDiagram(e.clientX, e.clientY)); return; }
       const idx = e.dataTransfer.getData('application/x-graddocs-preset');
       if (idx === '') return;
       e.preventDefault();
@@ -496,6 +540,7 @@ export default {
       else if (a === 'redo') editor.redo();
       else if (a === 'duplicate') editor.duplicateSelection();
       else if (a === 'delete') editor.deleteSelection();
+      else if (a === 'insert-image') chooseImage();
       else if (a === 'zoom-in') editor.zoomIn();
       else if (a === 'zoom-out') editor.zoomOut();
       else if (a === 'fit') editor.fit();
@@ -588,7 +633,7 @@ export default {
       if (mod && key === 'd') { e.preventDefault(); editor.duplicateSelection(); return; }
       if (mod && key === 'c') { if (editor.copy()) e.preventDefault(); return; }
       if (mod && key === 'x') { e.preventDefault(); editor.cut(); return; }
-      if (mod && key === 'v') { if (editor.paste()) e.preventDefault(); return; }
+      if (mod && key === 'v') { pasteSeen = false; setTimeout(() => { if (!pasteSeen) editor.paste(); }, 80); return; } // the 'paste' event below handles pictures and shapes
       if (mod && key === 'a') { e.preventDefault(); editor.selectAll(); return; }
       if (mod && (key === '=' || key === '+')) { e.preventDefault(); editor.zoomIn(); return; }
       if (mod && (key === '-' || key === '_')) { e.preventDefault(); editor.zoomOut(); return; }
@@ -606,6 +651,19 @@ export default {
       if (e.shiftKey && (e.key === '!' || e.code === 'Digit1')) { e.preventDefault(); editor.fit(); return; }
       if (!e.altKey && TOOL_KEYS[key]) { editor.setTool(TOOL_KEYS[key]); }
     };
+    // Ctrl/Cmd+V: an image on the clipboard becomes an image element, otherwise the copied shapes are pasted.
+    // (If the browser sends no paste event, the keydown timer above pastes shapes as before.)
+    let pasteSeen = false;
+    const onPaste = (e) => {
+      if (document.querySelector('.modal-root, .palette-root') || isTypingTarget(e.target)) return;
+      pasteSeen = true;
+      const data = e.clipboardData;
+      const file = [...(data?.files || [])].find(isImageFile)
+        || [...(data?.items || [])].filter((item) => item.kind === 'file' && item.type.startsWith('image/')).map((item) => item.getAsFile()).find(Boolean);
+      if (file) { e.preventDefault(); insertImages([file]); return; }
+      if (editor.paste()) e.preventDefault();
+    };
+    document.addEventListener('paste', onPaste);
     const onKeyUp = (e) => { if (e.key === ' ') { editor.spaceDown = false; canvasHost.classList.remove('space-pan'); } };
     document.addEventListener('keydown', onKeyDown, true);
     document.addEventListener('keyup', onKeyUp);
@@ -630,6 +688,7 @@ export default {
       unmount() {
         document.removeEventListener('keydown', onKeyDown, true);
         document.removeEventListener('keyup', onKeyUp);
+        document.removeEventListener('paste', onPaste);
         offChange(); offStatus();
         cleanups.forEach((fn) => fn());
         editor.commitTextEdit();

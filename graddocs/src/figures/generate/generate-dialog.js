@@ -26,6 +26,7 @@ const EXAMPLES = {
     ai: [
       { label: 'Login flowchart', text: 'Login flowchart: the user enters a username and password. If the credentials are valid, show the dashboard; otherwise show an error message and ask for the credentials again.' },
       { label: 'Library use cases', text: 'Use case diagram of a library system: a Member searches the catalogue, borrows books and returns books. A Librarian manages books and members. Borrowing a book includes checking the membership.' },
+      { label: 'Context diagram', text: 'Context diagram of a student project management system: Students submit project data and receive feedback reports, Supervisors send comments and receive progress reports, and Administrators manage user accounts and receive usage statistics.' },
       { label: 'Login sequence', text: 'Sequence diagram: the user opens the mobile app, the app sends a login request to the server, the server checks the database and returns an access token to the app.' },
       { label: 'School classes', text: 'Class diagram of a school: Person has a name and an email. Student and Teacher inherit from Person. A Teacher teaches many Courses and a Course has many Students.' },
       { label: 'Online shop ERD', text: 'ER diagram of an online shop: a Customer places many Orders, an Order contains many Products, and each Product belongs to one Category.' },
@@ -38,6 +39,7 @@ const EXAMPLES = {
     ai: [
       { label: 'مخطط تسجيل الدخول', text: 'مخطط انسيابي لتسجيل الدخول: يدخل المستخدم اسم المستخدم وكلمة المرور، فإذا كانت البيانات صحيحة تُعرض لوحة التحكم، وإلا تظهر رسالة خطأ ويُطلب إدخال البيانات من جديد.' },
       { label: 'حالات استخدام المكتبة', text: 'مخطط حالات استخدام لنظام مكتبة: العضو يبحث في الفهرس ويستعير الكتب ويرجعها، وأمين المكتبة يدير الكتب والأعضاء. استعارة الكتاب تتضمن التحقق من العضوية.' },
+      { label: 'مخطط السياق', text: 'مخطط سياق لنظام إدارة مشاريع الطلاب: الطالب يرسل بيانات المشروع ويستلم تقارير التغذية الراجعة، والمشرف يرسل الملاحظات ويستلم تقارير التقدم، والمسؤول يدير حسابات المستخدمين ويستلم إحصاءات الاستخدام.' },
       { label: 'تسلسل تسجيل الدخول', text: 'مخطط تسلسل: يفتح المستخدم تطبيق الجوال، فيرسل التطبيق طلب تسجيل الدخول إلى الخادم، ويتحقق الخادم من قاعدة البيانات ثم يعيد رمز الدخول إلى التطبيق.' },
       { label: 'فئات المدرسة', text: 'مخطط فئات لنظام مدرسة: الشخص له اسم وبريد إلكتروني. الطالب والمعلم يرثان من الشخص. المعلم يدرّس عدة مقررات، والمقرر فيه عدة طلاب.' },
       { label: 'كيانات المتجر', text: 'مخطط كيانات وعلاقات لمتجر إلكتروني: العميل يقدّم عدة طلبات، والطلب يحتوي على عدة منتجات، وكل منتج ينتمي إلى تصنيف واحد.' },
@@ -49,7 +51,7 @@ const EXAMPLES = {
 }[lang === 'ar' ? 'ar' : 'en'];
 
 const MERMAID_FLOW = 'flowchart TD\n  A([Start]) --> B[/Enter credentials/]\n  B --> C{Valid?}\n  C -->|Yes| D[Show dashboard]\n  C -->|No| E[Show error]\n  E --> B\n  D --> F([End])';
-const MERMAID_SEQ = 'sequenceDiagram\n  participant U as User\n  participant A as Web App\n  participant D as Database\n  U->>A: login()\n  A->>D: find user\n  D-->>A: user record\n  A-->>U: show dashboard';
+const MERMAID_SEQ = 'sequenceDiagram\n  participant U as User\n  participant A as Web App\n  participant D as Database\n  U->>A: login()\n  A->>D: find user\n  D-->>A: user record\n  A-)D: write audit log\n  A-->>U: show dashboard';
 const MERMAID_CLASS = 'classDiagram\n  class Person {\n    +String name\n    +getName() String\n  }\n  Person <|-- Student\n  Person <|-- Teacher\n  Teacher "1" --> "*" Course : teaches';
 const JSON_FLOW = JSON.stringify({
   type: 'flowchart', title: 'Login flow',
@@ -58,7 +60,7 @@ const JSON_FLOW = JSON.stringify({
 }, null, 2);
 const JSON_SEQ = JSON.stringify({
   type: 'sequence', title: 'Login sequence', participants: ['User', 'Web App', 'Database'],
-  messages: [{ from: 'User', to: 'Web App', label: 'login()' }, { from: 'Web App', to: 'Database', label: 'find user' }, { from: 'Database', to: 'Web App', label: 'user record', reply: true }, { from: 'Web App', to: 'User', label: 'dashboard', reply: true }],
+  messages: [{ from: 'User', to: 'Web App', label: 'login()' }, { from: 'Web App', to: 'Database', label: 'find user' }, { from: 'Database', to: 'Web App', label: 'user record', reply: true }, { from: 'Web App', to: 'Database', label: 'write audit log', async: true }, { from: 'Web App', to: 'User', label: 'dashboard', reply: true }],
 }, null, 2);
 
 /** Thumbnail that is never blown up more than 1.5× (a single shape should not fill the whole preview). */

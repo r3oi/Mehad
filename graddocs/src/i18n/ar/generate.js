@@ -4,7 +4,7 @@ export default {
   // ---- Editor: auto layout & generate ----
   'Auto layout': 'ترتيب تلقائي',
   'Generate from text…': 'إنشاء من نص…',
-  'Auto layout is not suited to fishbone, sequence or timeline figures — they keep their own layout.': 'الترتيب التلقائي لا يناسب مخططات عظم السمكة والتسلسل والجدول الزمني — فهي تحتفظ بترتيبها الخاص.',
+  'Auto layout is not suited to this kind of figure (fishbone, sequence, timeline, context diagram or image) — it keeps its own layout.': 'الترتيب التلقائي لا يناسب هذا النوع من الأشكال (عظم السمكة، التسلسل، الجدول الزمني، مخطط السياق أو الصورة) — فهو يحتفظ بترتيبه الخاص.',
   'Nothing to arrange yet.': 'لا يوجد ما يُرتَّب بعد.',
   'Already arranged.': 'المخطط مرتّب بالفعل.',
   'Arranged {n} selected shapes': 'تم ترتيب {n} من الأشكال المحددة',

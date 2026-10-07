@@ -91,6 +91,11 @@
 .exp-row .meta { margin-top: 3px; min-width: 0; row-gap: 2px; }
 .exp-actions { margin-inline-start: auto; flex-wrap: wrap; justify-content: flex-end; opacity: 1 !important; }
 
+.exp-ref { align-items: flex-start; flex-wrap: nowrap !important; }
+.exp-ref-n { flex: none; min-width: 34px; justify-content: center; direction: ltr; font-variant-numeric: tabular-nums; }
+.exp-ref-text { font-size: 13px; line-height: 1.55; color: var(--text-2); overflow-wrap: anywhere; }
+.exp-ref-text em { font-style: italic; }
+
 .exp-empty { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 22px 18px; }
 .exp-empty > div:nth-child(2) { flex: 1 1 240px; }
 .exp-empty-icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); flex: none; }

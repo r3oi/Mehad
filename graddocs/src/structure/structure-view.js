@@ -9,6 +9,7 @@ import { FRONT_MATTER_KINDS, SECTION_STATUSES, createFrontMatterItem } from '../
 import { getNumbering } from '../core/numbering.js';
 import { buildDocument } from '../core/document.js';
 import { resolveText } from '../core/references.js';
+import { declarationText } from '../core/presets.js';
 import { clone } from '../core/utils.js';
 import { t, isRTL } from '../i18n/index.js';
 import * as ops from './outline-ops.js';
@@ -18,7 +19,7 @@ import { createBodyEditor } from './body-editor.js';
 const collapsedByProject = new Map();
 
 const FM_ICONS = { declaration: 'fileText', acknowledgements: 'fileText', abstract: 'fileText', toc: 'structure', lot: 'table', lof: 'figure', loa: 'acronym', custom: 'file' };
-const wordsOf = (text) => (String(text).trim() ? String(text).trim().split(/\s+/).length : 0);
+const wordsOf = ops.countWords;
 const STATUS_LABEL = Object.fromEntries(SECTION_STATUSES.map((s) => [s.value, s.label]));
 const iso = ops.isolate; // keeps user titles inside translated sentences in their own direction
 
@@ -98,9 +99,9 @@ export default {
 
     function labelOf(project, id) {
       const n = getNumbering(project);
-      if (n.chapters.has(id)) return `${n.chapters.get(id).label}: ${n.chapters.get(id).title}`;
+      if (n.chapters.has(id)) return ops.chapterName(n, n.chapters.get(id));
       const s = n.sections.get(id);
-      return s ? `${s.number} ${s.title}` : '';
+      return s ? [s.number, s.title].filter(Boolean).join(' ') : '';
     }
 
     // ------------------------------------------------------------------ rendering
@@ -111,11 +112,14 @@ export default {
         const def = FRONT_MATTER_KINDS[item.kind] || FRONT_MATTER_KINDS.custom;
         const off = item.include === false;
         let sub = '';
+        let over = false;
         if (def.generated) {
           sub = { toc: t('Built from your chapters and sections'), lot: ops.countLabel(project.tables.length, 'table'), lof: ops.countLabel(project.figures.length, 'figure'), loa: ops.countLabel(project.acronyms.length, 'acronym') }[item.kind] || t('Generated automatically');
         } else {
           const words = wordsOf(resolveText(project, item.body));
-          sub = words ? ops.countLabel(words, 'word') : t('No text yet');
+          const limit = Number(item.wordLimit) || 0;
+          over = limit > 0 && words > limit;
+          sub = limit ? t('{n} / {limit} words', { n: words, limit }) : words ? ops.countLabel(words, 'word') : t('No text yet');
         }
         return `
         <li class="fm-row ${off ? 'off' : ''}" data-fm="${esc(item.id)}">
@@ -126,7 +130,7 @@ export default {
           <span class="fm-icon">${icon(FM_ICONS[item.kind] || 'file')}</span>
           <div class="fm-main">
             <div class="fm-title" data-title dir="auto">${esc(item.title)}</div>
-            <div class="fm-sub">${def.generated ? `<span class="fm-auto-sm">${t('Auto-generated')} · </span>` : ''}${esc(sub)}</div>
+            <div class="fm-sub${over ? ' over' : ''}">${def.generated ? `<span class="fm-auto-sm">${t('Auto-generated')} · </span>` : ''}${esc(sub)}</div>
           </div>
           ${def.generated ? `<span class="badge badge-info" data-tip="${t('Filled in automatically from your project')}">${icon('sparkles')}${t('Auto-generated')}</span>` : ''}
           <div class="fm-actions">
@@ -148,7 +152,9 @@ export default {
       const kids = node.sections || [];
       const open = !collapsed.has(node.id);
       const info = kind === 'chapter' ? num.chapters.get(node.id) : num.sections.get(node.id);
-      const label = kind === 'chapter' ? `${info.label}:` : info.number;
+      // Unnumbered chapters (e.g. CONCLUSIONS) and their sections have no number.
+      const unnumbered = kind === 'chapter' && info.numbered === false;
+      const label = kind === 'chapter' ? (unnumbered ? '' : `${info.label}:`) : info.number;
       const canAdd = ops.canAddChild(project, node.id);
       const addLabel = kind === 'chapter' ? t('Add section') : t('Add subsection');
       let meta = '';
@@ -161,11 +167,12 @@ export default {
       const c = kind === 'chapter' ? counts.chapter.get(node.id) : counts.section.get(node.id);
       return `
         <div class="ol-row ${kind}" style="--lvl:${depth}" data-id="${esc(node.id)}" data-kind="${kind}" tabindex="${node.id === activeId ? 0 : -1}" draggable="true"
-             aria-label="${esc(`${label} ${node.title}`)}">
+             aria-label="${esc(`${label} ${node.title}`.trim())}">
           <span class="ol-grip" aria-hidden="true">${icon('grip')}</span>
           ${kids.length ? `<button class="ol-toggle" data-action="toggle" aria-label="${open ? t('Collapse') : t('Expand')}" aria-expanded="${open}" tabindex="-1">${icon('chevronRight')}</button>` : '<span class="ol-toggle-gap"></span>'}
-          <span class="ol-num" dir="ltr">${esc(label)}</span>
+          ${label ? `<span class="ol-num" dir="ltr">${esc(label)}</span>` : ''}
           <span class="ol-title" dir="auto" data-title title="${esc(node.title)}">${esc(node.title)}</span>
+          ${unnumbered ? `<span class="badge ol-unnum" data-tip="${esc(t('No “Chapter N” heading; its sections have no numbers'))}">${t('Unnumbered')}</span>` : ''}
           ${countsHTML(c)}
           ${meta}
           <span class="ol-actions">
@@ -209,9 +216,16 @@ export default {
       const chapterBold = project.settings.chapterTitle?.style === 'upper' ? 'upper' : 'title';
       const line = (id, text, cls, lvl) => `<div class="toc-line ${cls}" data-toc="${esc(id)}" style="--toc-lvl:${lvl}" role="button" tabindex="0"><span class="toc-text">${esc(text)}</span><span class="toc-leader" aria-hidden="true"></span><span class="toc-page" aria-hidden="true">—</span></div>`;
       const lines = [];
-      for (const f of doc.front.filter((x) => x.kind !== 'toc')) lines.push(line(f.id, f.title, 'toc-front', 0));
-      for (const entry of doc.toc) lines.push(line(entry.id, entry.text, entry.kind === 'chapter' ? `toc-chapter ${chapterBold}` : 'toc-sec', entry.kind === 'chapter' ? 0 : entry.level - 1));
-      const empty = !doc.toc.length;
+      // Front-matter pages come from the document's TOC when Settings lists them there; otherwise they are still shown first.
+      if (!doc.toc.some((entry) => entry.kind === 'front')) for (const f of doc.front.filter((x) => x.kind !== 'toc')) lines.push(line(f.id, f.title, 'toc-front', 0));
+      for (const entry of doc.toc) {
+        const text = entry.text || entry.title || '';
+        if (entry.kind === 'front') lines.push(line(entry.id, text, 'toc-front', 0));
+        else if (entry.kind === 'chapter') lines.push(line(entry.id, text, `toc-chapter ${chapterBold}`, 0));
+        else if (entry.kind === 'references') lines.push(line(entry.id, text, `toc-chapter toc-refs ${chapterBold}`, 0));
+        else lines.push(line(entry.id, text, 'toc-sec', Math.max(0, (entry.level || 2) - 1)));
+      }
+      const empty = !doc.toc.some((entry) => entry.kind === 'chapter' || entry.kind === 'section');
       return `
         <div class="card-header">
           <div class="st-head-text"><h2>${t('Table of Contents')}</h2><p>${t('Live preview of your document')}</p></div>
@@ -224,7 +238,7 @@ export default {
         </div>
         <div class="toc-bar" aria-hidden="true"><span style="width:${Math.max(prog.percent, prog.total ? 2 : 0)}%"></span></div>
         <div class="toc-scroll">
-          <div class="toc-paper" dir="ltr" style="font-family:'${esc(font)}','Times New Roman',Times,serif">
+          <div class="toc-paper${project.settings.toc?.style === 'academic' ? ' toc-academic' : ''}" dir="ltr" style="font-family:'${esc(font)}','Times New Roman',Times,serif">
             <div class="toc-heading">Table of Contents</div>
             ${empty && !lines.length ? `<p class="toc-empty" dir="auto">${t('Add chapters to see them listed here.')}</p>` : lines.join('')}
             ${empty && lines.length ? `<p class="toc-empty" dir="auto">${t('Chapters will be listed here.')}</p>` : ''}
@@ -429,6 +443,15 @@ export default {
       });
     }
 
+    function toggleNumbered(id) {
+      const info = ops.locate(store.project, id);
+      if (!info || info.kind !== 'chapter') return;
+      const numbered = info.node.numbered === false; // toggles
+      store.update((p) => { ops.setChapterNumbered(p, id, numbered); }, { activity: { text: ops.numberingActivity(info.node.title, numbered), kind: 'edit', targetId: id } });
+      pending.focus = id; pending.pulse = id;
+      render();
+    }
+
     function statusMenu(btn, id) {
       const node = ops.locate(store.project, id)?.node;
       if (!node) return;
@@ -453,6 +476,7 @@ export default {
         '-',
         { label: t('Move up'), icon: 'arrowUp', shortcut: ops.ltr('Alt ↑'), disabled: !ops.canMoveUp(project, id), onClick: () => move(id, -1) },
         { label: t('Move down'), icon: 'arrowDown', shortcut: ops.ltr('Alt ↓'), disabled: !ops.canMoveDown(project, id), onClick: () => move(id, 1) },
+        chapter && { label: t('Unnumbered chapter (e.g. Conclusions)'), icon: info.node.numbered === false ? 'check' : undefined, onClick: () => toggleNumbered(id) },
         !chapter && { label: t('Indent'), icon: 'indent', shortcut: ops.ltr(`Alt ${ops.ARROW_FORWARD}`), disabled: !ops.canIndent(project, id), onClick: () => doIndent(id, 1) },
         !chapter && { label: t('Outdent'), icon: 'outdent', shortcut: ops.ltr(`Alt ${ops.ARROW_BACK}`), disabled: !ops.canOutdent(project, id), onClick: () => doIndent(id, -1) },
         '-',
@@ -501,11 +525,14 @@ export default {
         value: item.body || '',
         label: item.title,
         minHeight: 240,
+        hint: item.hint || '', // template guidance, shown while the page is empty
+        wordLimit: Number(item.wordLimit) || 0,
         placeholder: item.kind === 'abstract' ? t('Summarise the problem, your solution and the main results…') : item.kind === 'declaration' ? t('We hereby declare that this report is our own work…') : t('Write the text of this page…'),
         onChange: (body) => store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.body = body; }, { activity: { text: t('Edited “{title}”', { title: iso(item.title) }), kind: 'edit', targetId: id } }),
       });
       const wrap = document.createElement('div');
       wrap.className = 'fm-modal-body';
+      if (item.kind === 'declaration') wrap.append(declarationTools(id, editor));
       wrap.append(editor.el);
       const modal = openModal({
         title: item.title,
@@ -516,6 +543,43 @@ export default {
         onClose: () => editor.destroy(),
       });
       setTimeout(() => { if (modal.root.isConnected) editor.focus(); }, 80);
+    }
+
+    /** Declaration page: write the standard text from the project details, and one signature line per student. */
+    function declarationTools(id, editor) {
+      const item = () => store.project.frontMatter.find((f) => f.id === id);
+      const tools = document.createElement('div');
+      tools.className = 'fm-tools';
+      tools.innerHTML = `
+        <div class="fm-tools-row">
+          <button type="button" class="btn btn-sm" data-fm-fill>${icon('wand')}${t('Fill from project details')}</button>
+          <label class="switch fm-sign"><input type="checkbox" data-fm-sign ${item()?.signatures ? 'checked' : ''}><span class="track"></span><span>${t('Signature line for each student')}</span></label>
+        </div>
+        <div class="field fm-note" data-fm-note ${item()?.signatures ? '' : 'hidden'}>
+          <label for="fm-sig-note">${t('Note under the signature lines')}</label>
+          <input class="input input-sm" id="fm-sig-note" dir="auto" value="${esc(item()?.signatureNote || '')}" placeholder="${esc(t('e.g. Note: sign across your name'))}">
+        </div>
+        <p class="fm-tools-hint">${icon('signature')}<span>${esc(t('Each student listed in the project details gets one signature line on the declaration page.'))}</span></p>`;
+      tools.querySelector('[data-fm-fill]').addEventListener('click', async () => {
+        const text = declarationText(store.project);
+        if (editor.getValue().trim() && editor.getValue().trim() !== text.trim()) {
+          const ok = await confirmDialog({ title: t('Replace the declaration text?'), message: esc(t('The text you wrote will be replaced by the standard declaration built from your project details.')), confirmText: t('Replace'), danger: true });
+          if (!ok) return;
+        }
+        editor.setValue(text);
+        store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.body = text; }, { activity: 'Filled the declaration from project details' });
+        toast(t('Declaration text updated from your project details.'), { type: 'success' });
+      });
+      tools.querySelector('[data-fm-sign]').addEventListener('change', (e) => {
+        const on_ = e.target.checked;
+        store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.signatures = on_; }, { activity: on_ ? 'Turned signature lines on' : 'Turned signature lines off' });
+        tools.querySelector('[data-fm-note]').hidden = !on_;
+      });
+      tools.querySelector('#fm-sig-note').addEventListener('change', (e) => {
+        const value = e.target.value.trim();
+        store.update((p) => { const f = p.frontMatter.find((x) => x.id === id); if (f) f.signatureNote = value; }, { activity: { text: `Edited “${item()?.title || ''}”`, kind: 'edit', targetId: id } });
+      });
+      return tools;
     }
 
     function frontMenu(anchor, id) {
@@ -625,6 +689,7 @@ export default {
     // Table of contents: click a line to find it in the outline.
     function jumpTo(id) {
       if (!id) return;
+      if (id === '__references') { ctx.navigate(ctx.href('references')); return; }
       if (store.project.frontMatter.some((f) => f.id === id)) {
         const el = frontEl.querySelector(`[data-fm="${CSS.escape(id)}"]`);
         if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); pulse(el); }
@@ -722,6 +787,10 @@ export default {
       render();
       pending.scroll = id;
       afterRender();
+    }
+    if (q.edit && store.project.frontMatter.some((f) => f.id === q.edit)) {
+      pending.scroll = q.edit; afterRender();
+      setTimeout(() => editFrontBody(q.edit), 60);
     }
     if (q.new === 'chapter') {
       history.replaceState(null, '', ctx.href('structure'));
