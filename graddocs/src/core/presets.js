@@ -144,6 +144,8 @@ function mergeSettings(target, patch) {
 }
 
 const norm = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^\p{L}\p{N}]+/gu, '');
+/** Same title ignoring case, punctuation, "&"/"and" and a plural "s" ("Conclusion" = "Conclusions"). */
+const sameTitle = (a, b) => { const x = norm(a); const y = norm(b); return x === y || x.replace(/s$/, '') === y.replace(/s$/, ''); };
 
 /**
  * Apply a preset's formatting to an existing project (run inside store.update). Never deletes anything:
@@ -172,8 +174,7 @@ export function applyPresetFormatting(project, presetId) {
     return item;
   });
   project.frontMatter = [...ordered, ...project.frontMatter.filter((f) => !used.has(f.id))];
-  const closing = new Set(preset.closing.map(([title]) => norm(title)));
-  for (const ch of project.chapters) if (closing.has(norm(ch.title))) ch.numbered = false;
+  for (const ch of project.chapters) if (preset.closing.some(([title]) => sameTitle(title, ch.title))) ch.numbered = false;
   invalidateNumbering(project);
   return { added };
 }
@@ -191,7 +192,7 @@ export function mergePresetStructure(project, presetId) {
   const mergeSections = (list, specs) => {
     for (const spec of specs) {
       const [title, hint, children] = spec;
-      let sec = list.find((s) => norm(s.title) === norm(title));
+      let sec = list.find((s) => sameTitle(s.title, title));
       if (!sec) { sec = buildSection(spec); list.push(sec); sections += 1 + countSections(sec.sections); continue; }
       if (hint && !sec.hint) sec.hint = hint;
       if (!Array.isArray(sec.sections)) sec.sections = [];
@@ -204,7 +205,7 @@ export function mergePresetStructure(project, presetId) {
     return i;
   };
   for (const spec of preset.chapters) {
-    const ch = project.chapters.find((c) => norm(c.title) === norm(spec[0]));
+    const ch = project.chapters.find((c) => sameTitle(c.title, spec[0]));
     if (!ch) {
       const chapter = buildChapter(spec);
       project.chapters.splice(insertAt(), 0, chapter);
@@ -215,7 +216,7 @@ export function mergePresetStructure(project, presetId) {
     mergeSections(ch.sections, spec[2] || []);
   }
   for (const spec of preset.closing) {
-    const ch = project.chapters.find((c) => norm(c.title) === norm(spec[0]));
+    const ch = project.chapters.find((c) => sameTitle(c.title, spec[0]));
     if (!ch) { project.chapters.push(buildChapter(spec, { numbered: false })); chapters += 1; } else {
       ch.numbered = false;
       if (spec[1] && !ch.hint) ch.hint = spec[1];

@@ -352,6 +352,111 @@ test('numbering a large document with many placements stays fast', () => {
   assert.equal(n.figures.get(figures[0].id).label, 'Figure 300');
 });
 
+console.log('bibliography and templates');
+const { createReference } = await import('../src/core/model.js');
+const { formatReference, parseBibTeX, parseNames, findDuplicateReference } = await import('../src/core/bibliography.js');
+const { presetProjectFields, applyPresetFormatting, mergePresetStructure, declarationText } = await import('../src/core/presets.js');
+const { studentName, studentLines } = await import('../src/core/document.js');
+test('author names: "First Last", "Last, First", "Last I." and particles', () => {
+  const n = parseNames('Ahmed D. Alharthi; Smith, John\nBooth D.\nLudwig van Beethoven');
+  assert.deepEqual(n.map((x) => x.last), ['Alharthi', 'Smith', 'Booth', 'van Beethoven']);
+  assert.equal(n[2].first, 'D.');
+});
+test('IEEE and compact formatting', () => {
+  const ref = createReference({ type: 'journal', authors: 'Ahmed D. Alharthi\nJohn Smith', title: 'A Study', container: 'IEEE Access', volume: '9', issue: '2', pages: '100-110', year: '2021' });
+  assert.equal(formatReference(ref, 'ieee'), 'A. D. Alharthi and J. Smith, “A Study,” IEEE Access, vol. 9, no. 2, pp. 100–110, 2021.');
+  assert.equal(formatReference(ref, 'compact'), 'Alharthi A.D., Smith J., “A Study”, IEEE Access, vol. 9, no. 2, pp. 100–110. 2021.');
+  assert.equal(formatReference({ ...ref, custom: 'Verbatim entry.' }, 'ieee'), 'Verbatim entry.');
+});
+test('BibTeX import and duplicate detection', () => {
+  const refs = parseBibTeX('@inproceedings{a, author={Babineau, W. and Barry, P.}, title={{Automated Testing}}, booktitle={Proc. SIW}, year={1998}}\n@book{b, author="Sommerville, Ian", title="Software Engineering", publisher={Pearson}, year=2016}');
+  assert.equal(refs.length, 2);
+  assert.equal(refs[0].type, 'conference');
+  assert.equal(refs[0].authors, 'Babineau, W.\nBarry, P.');
+  assert.equal(refs[1].container, '');
+  const list = refs.map((r) => createReference(r));
+  assert.ok(findDuplicateReference(list, createReference({ title: 'software  engineering!', year: '2016' })));
+  assert.equal(findDuplicateReference(list, createReference({ title: 'Software Engineering', year: '2020' })), null);
+});
+test('citations are numbered by first citation, alphabetically or manually', () => {
+  const { p, s11, s42 } = sampleProject();
+  const a = createReference({ authors: 'Zed, A.', title: 'Zeta' });
+  const b = createReference({ authors: 'Alpha, B.', title: 'Alpha' });
+  const c = createReference({ authors: 'Mid, C.', title: 'Never cited' });
+  p.references = [a, b, c];
+  s42.body = `Later ${makeRef('cite', a.id)}.`;
+  s11.body = `First ${makeRef('cite', b.id)} then ${makeRef('cite', a.id)}.`;
+  invalidateNumbering(p);
+  assert.equal(resolveText(p, s11.body), 'First [1] then [2].');
+  assert.equal(getNumbering(p).references.get(c.id).label, '[3]');
+  assert.equal(getNumbering(p).references.get(c.id).cited, false);
+  p.settings.references.order = 'alphabetical'; invalidateNumbering(p);
+  assert.equal(resolveText(p, s11.body), 'First [1] then [3].');
+  p.settings.references.order = 'manual'; invalidateNumbering(p);
+  assert.equal(resolveText(p, s11.body), 'First [2] then [1].');
+  p.references = [a, c]; invalidateNumbering(p);
+  assert.equal(resolveText(p, s11.body), 'First [?] then [1].');
+  assert.deepEqual(findBrokenReferences(p).map((x) => x.kind), ['cite']);
+});
+test('unnumbered chapters keep later chapter numbers and have unnumbered sections', () => {
+  const { p, ch2 } = sampleProject();
+  const concl = createChapter({ title: 'Conclusions', numbered: false, sections: [createSection({ title: 'Future Work' })] });
+  p.chapters.splice(1, 0, concl);
+  invalidateNumbering(p);
+  const n = getNumbering(p);
+  assert.equal(n.chapters.get(ch2.id).number, '2');
+  assert.equal(n.chapters.get(concl.id).number, '');
+  assert.equal(n.sections.get(concl.sections[0].id).number, '');
+  const doc = buildDocument(p);
+  assert.ok(doc.toc.some((e) => e.text === 'CONCLUSIONS' && e.number === ''));
+  assert.ok(doc.toc.some((e) => e.text === 'Future Work'));
+  assert.ok(doc.body.some((b) => b.type === 'chapter' && b.heading === 'CONCLUSIONS' && b.numbered === false));
+});
+test('UQU preset: structure, settings, TOC with front matter and references', () => {
+  const p = createProject(presetProjectFields('uqu-swe-gp1', { name: 'Meyar', students: 'Ahmed Ali (443001234)\nSara Omar (443005678)', university: '' }));
+  assert.equal(p.university, 'Umm Al-Qura University');
+  assert.deepEqual(p.frontMatter.map((f) => f.kind), ['declaration', 'abstract', 'acknowledgements', 'toc', 'lot', 'lof', 'loa']);
+  assert.equal(p.frontMatter[1].wordLimit, 150);
+  assert.ok(p.frontMatter[0].body.includes('“Meyar”') && p.frontMatter[0].body.includes('Umm Al-Qura University'));
+  assert.equal(p.settings.typography.lineSpacing, 2);
+  assert.equal(p.settings.page.size, 'Letter');
+  p.references = [createReference({ title: 'X', authors: 'Y, Z.' })];
+  invalidateNumbering(p);
+  const doc = buildDocument(p);
+  const texts = doc.toc.map((e) => e.text);
+  assert.equal(texts[0], 'Declaration');
+  assert.ok(texts.includes('CHAPTER 3: REQUIREMENT ENGINEERING AND ANALYSIS'));
+  assert.ok(texts.includes('3.2.3 Use Cases: Description & Details'));
+  assert.ok(texts.includes('3.3 Nonfunctional Requirements: Quality & Constraints'));
+  assert.deepEqual(texts.slice(-2), ['CONCLUSIONS', 'REFERENCES']);
+  assert.ok(!texts.includes('CONTENT'));
+  assert.deepEqual(doc.titlePage.studentNames, ['Ahmed Ali', 'Sara Omar']);
+  assert.equal(doc.titlePage.layout, 'submission');
+});
+test('applying the preset to an existing project never deletes anything', () => {
+  const { p, ch1, s11 } = sampleProject();
+  s11.body = 'Keep me.';
+  p.chapters.push(createChapter({ title: 'Conclusion' }));
+  const before = p.chapters.length;
+  const r1 = applyPresetFormatting(p, 'uqu-swe-gp1');
+  assert.equal(r1.added, 1); // acknowledgment page
+  assert.equal(p.frontMatter.find((f) => f.kind === 'toc').title, 'CONTENT');
+  assert.equal(p.chapters[p.chapters.length - 1].numbered, false);
+  const r2 = mergePresetStructure(p, 'uqu-swe-gp1');
+  assert.equal(r2.chapters, 3);
+  assert.equal(p.chapters.length, before + 3);
+  assert.equal(p.chapters[0].id, ch1.id);
+  assert.equal(p.chapters[0].sections[0].body, 'Keep me.');
+  assert.equal(p.chapters[p.chapters.length - 1].title, 'Conclusion');
+  assert.deepEqual(mergePresetStructure(p, 'uqu-swe-gp1'), { chapters: 0, sections: 0 });
+});
+test('students: IDs are stripped for signature lines', () => {
+  assert.deepEqual(studentLines('A (1)\nB - 22'), ['A (1)', 'B - 22']);
+  assert.equal(studentName('Ahmed Ali Alharbi (443001234)'), 'Ahmed Ali Alharbi');
+  assert.equal(studentName('Sara Omar - 443005678'), 'Sara Omar');
+  assert.ok(declarationText({ name: 'X', department: 'SE Dept' }).includes('at SE Dept.'));
+});
+
 console.log('translations');
 const { AR } = await import('../src/i18n/ar/index.js');
 test('every Arabic translation keeps the English placeholders', () => {
