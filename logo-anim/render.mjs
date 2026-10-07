@@ -8,7 +8,7 @@ import path from "node:path";
 
 const [brand = "mehad", format = "16x9", out = "stills", list] = process.argv.slice(2);
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".webp": "image/webp" };
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".webp": "image/webp", ".css": "text/css", ".woff2": "font/woff2" };
 const server = http.createServer((req, res) => {
   const p = path.join(ROOT, decodeURIComponent(req.url.split("?")[0]));
   if (!p.startsWith(ROOT) || !fs.existsSync(p)) { res.writeHead(404); return res.end(); }
@@ -21,7 +21,8 @@ const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromi
 const [w, h] = format === "1x1" ? [1080, 1080] : [1920, 1080];
 const page = await browser.newPage({ viewport: { width: w, height: h } });
 page.on("pageerror", e => console.error("PAGEERR:", e.message));
-await page.goto(`http://127.0.0.1:${port}/engine/index.html?render&brand=${brand}&format=${format}`);
+const [idea, logo] = brand.split("-");   // idea stings: mash-mehad, risk-aim, …
+await page.goto(`http://127.0.0.1:${port}/engine/index.html?render&brand=${idea}&format=${format}${logo ? "&logo=" + logo : ""}`);
 await page.waitForFunction(() => window.READY || window.BOOT_ERROR, null, { timeout: 60000 });
 const err = await page.evaluate(() => window.BOOT_ERROR); if (err) { console.error(err); process.exit(1); }
 const total = await page.evaluate(() => FRAMES());
