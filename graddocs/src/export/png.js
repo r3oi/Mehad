@@ -1,5 +1,6 @@
 // SVG → PNG rasterisation with correct DPI metadata (pHYs chunk), so a 3× PNG
 // is inserted into Microsoft Word at its intended physical size.
+import { t } from '../i18n/index.js';
 
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -22,7 +23,7 @@ export function loadSvgImage(svg) {
     const img = new Image();
     const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
     img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not rasterise the SVG.')); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('Could not rasterise the SVG.'))); };
     img.src = url;
   });
 }
@@ -40,7 +41,7 @@ export async function svgToCanvas(svg, width, height, { scale = 3, background = 
 }
 
 export function canvasToBlob(canvas, type = 'image/png', quality) {
-  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Canvas export failed.'))), type, quality));
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(t('Canvas export failed.')))), type, quality));
 }
 
 /** Insert/replace the pHYs chunk of a PNG so viewers know its DPI. */
@@ -79,6 +80,6 @@ export async function svgToPngBlob(svg, width, height, { scale = 3, dpi, backgro
 
 /** Copy a PNG blob to the clipboard (paste straight into Word). */
 export async function copyPngToClipboard(blob) {
-  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error('This browser cannot copy images to the clipboard. Download the PNG instead.');
+  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error(t('This browser cannot copy images to the clipboard. Download the PNG instead.'));
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
 }

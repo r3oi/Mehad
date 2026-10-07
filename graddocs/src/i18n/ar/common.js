@@ -113,4 +113,7 @@ export default {
   'List of Acronyms and Abbreviations': 'قائمة الاختصارات',
   'Untitled Page': 'صفحة بدون عنوان',
   ', ': '، ',
+  'Could not rasterise the SVG.': 'تعذّر تحويل الرسم إلى صورة.',
+  'Canvas export failed.': 'فشل تصدير الصورة.',
+  'This browser cannot copy images to the clipboard. Download the PNG instead.': 'هذا المتصفح لا يدعم نسخ الصور إلى الحافظة. حمّل ملف PNG بدلًا من ذلك.',
 };
