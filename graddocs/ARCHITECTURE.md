@@ -121,7 +121,8 @@ source for Document Preview and the Word export. Body blocks: chapter, heading, 
 
 - `ui/dom.js`: `esc, $, $$, h, on, Disposer, highlight, flash, fromHTML`
 - `ui/icons.js`: `icon(name, cls)` → inline SVG string (see names in the file)
-- `ui/modal.js`: `openModal({ title, subtitle, size: 'sm'|'lg'|'xl', body, footer, onMount, onClose })`, `confirmDialog`, `promptDialog`, `formDialog({ fields })`
+- `ui/modal.js`: `openModal({ title, subtitle, size: 'sm'|'lg'|'xl', body, footer, onMount, onClose })`, `confirmDialog`, `promptDialog`, `formDialog({ fields })`, `closeAllModals()`.
+  Note: `body`/`footer` strings and `confirmDialog({ message })` are HTML — escape user text with `esc()`.
 - `ui/toast.js`: `toast(msg, { type: 'success'|'error'|'info'|'warning', action: { label, onClick } })`, `toastError(err, title)`
 - `ui/menu.js`: `openMenu(anchorElOrPoint, items)` — items: `{ label, icon, shortcut, danger, disabled, onClick } | '-' | { heading }`
 - Tooltips: any element with `data-tip="…"` (+ optional `data-kbd="Ctrl K"`).

@@ -66,6 +66,8 @@
 }
 .be-hint > .icon { color: var(--primary); }
 .be-hint-text { flex: 1; min-width: 0; }
+.be-hint .btn-soft { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-xs); }
+.be-hint .btn-soft:hover { background: var(--surface-hover); }
 .be-hint-text strong { color: var(--text); font-weight: 650; }
 .be-hint-actions { display: inline-flex; gap: 4px; flex: none; }
 .be-hint-acronym { background: var(--info-soft); }

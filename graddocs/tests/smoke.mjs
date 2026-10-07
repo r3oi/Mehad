@@ -143,6 +143,63 @@ await check('a new figure earlier in the document renumbers later ones', async (
   assert(result.newLabel === 'Figure 1' && result.oldLabel === 'Figure 2', JSON.stringify(result));
 });
 
+console.log('tables, chapters, acronyms, structure');
+await check('table cell edits autosave', async () => {
+  const tid = await evalStore(() => window.graddocs.store.project.tables[0].id);
+  await go(`tables/${tid}`);
+  const cell = page.locator('textarea[data-r="1"][data-c="1"]').first();
+  await cell.click();
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('Accounts & Roles');
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(1000);
+  const text = await evalStore((id) => window.graddocs.store.project.tables.find((t) => t.id === id).rows[1][1].text, tid);
+  assert(text === 'Accounts & Roles', `cell text is "${text}"`);
+});
+await check('chapters show live reference chips', async () => {
+  await go('chapters');
+  const chips = await page.locator('.ref-chip').allInnerTexts();
+  assert(chips.includes('Figure 1') && chips.includes('Table 1'), `chips: ${chips.join(', ')}`);
+});
+await check('adding a chapter renumbers the outline', async () => {
+  await go('structure', '?new=chapter');
+  await page.waitForSelector('.modal input');
+  await page.fill('.modal input', 'Appendix');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(300);
+  const n = await evalStore(() => window.graddocs.store.project.chapters.length);
+  assert(n === 7, `expected 7 chapters, got ${n}`);
+});
+await check('duplicate acronyms are rejected', async () => {
+  await go('acronyms');
+  await page.click('[data-action="add"]');
+  await page.fill('.modal [name="acronym"]', 'ai');
+  await page.fill('.modal [name="meaning"]', 'Artificial Intelligence');
+  await page.click('.modal [data-submit]');
+  assert((await page.locator('.modal').innerText()).includes('This acronym already exists.'), 'no duplicate error');
+  await page.keyboard.press('Escape');
+});
+
+console.log('preview & export');
+await check('preview paginates with lists and page numbers', async () => {
+  await go('preview');
+  await page.waitForSelector('.pv-page');
+  await page.waitForTimeout(400);
+  const pages = await page.locator('.pv-page').count();
+  const text = await page.locator('.pv-pages').innerText();
+  assert(pages >= 8, `only ${pages} pages`);
+  assert(/LIST OF FIGURES/.test(text) && text.includes('Figure 1: Feature Fishbone Diagram'), 'list of figures missing');
+});
+await check('Word export downloads a valid .docx', async () => {
+  await go('export');
+  const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.click('[data-action="docx"]')]);
+  const path = await dl.path();
+  const { readFileSync } = await import('node:fs');
+  const bytes = readFileSync(path);
+  assert(dl.suggestedFilename().endsWith('.docx') && bytes[0] === 0x50 && bytes[1] === 0x4b, 'not a zip/docx');
+  assert(bytes.includes(Buffer.from('word/document.xml')), 'document.xml missing');
+});
+
 console.log('command palette');
 await check('Ctrl+K searches the project', async () => {
   await page.keyboard.press('Control+k');

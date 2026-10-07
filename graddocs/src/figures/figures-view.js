@@ -41,12 +41,12 @@ export function parseLocation(project, value) {
 const locationValue = (f) => (f.sectionId ? `sec:${f.sectionId}` : f.chapterId ? `ch:${f.chapterId}` : '');
 
 /** Opens the New Figure dialog. Resolves with the created figure id (or null). */
-export function openNewFigureDialog(store, { sectionId = null, type = 'flowchart' } = {}) {
+export function openNewFigureDialog(store, { sectionId = null, chapterId = null, type = 'flowchart' } = {}) {
   const project = store.project;
   const types = figureTypes();
   let selectedType = type;
   let titleTouched = false;
-  const initialLoc = sectionId ? `sec:${sectionId}` : '';
+  const initialLoc = sectionId ? `sec:${sectionId}` : chapterId ? `ch:${chapterId}` : '';
   return new Promise((resolve) => {
     let created = null;
     const modal = openModal({
@@ -235,8 +235,8 @@ export default {
     }
     let focusSearch = false;
 
-    async function createNew(sectionId = null) {
-      const id = await openNewFigureDialog(store, { sectionId });
+    async function createNew(sectionId = null, chapterId = null) {
+      const id = await openNewFigureDialog(store, { sectionId, chapterId });
       if (id) ctx.navigate(ctx.href('figures', id));
     }
 
@@ -336,7 +336,7 @@ export default {
     render();
     if (params.query?.new === '1') {
       history.replaceState(null, '', ctx.href('figures'));
-      createNew(params.query.section || null);
+      createNew(params.query.section || null, params.query.chapter || null);
     }
     return { unmount() { offs.forEach((off) => off()); } };
   },
