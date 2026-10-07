@@ -137,6 +137,7 @@ export class Shell {
       instance = {};
     }
     this.current = { key, view: parsed.view, section: parsed.section, instance };
+    document.getElementById('boot')?.remove();
   }
 
   #unmountCurrent() {
