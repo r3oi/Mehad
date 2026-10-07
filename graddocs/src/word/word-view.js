@@ -11,11 +11,12 @@ import {
 import { getWatcher } from './watcher.js';
 
 const IMPORTS = [
-  { icon: 'structure', title: 'Chapters and sections', text: 'Heading 1 becomes a chapter and Heading 2–4 become sections. “Chapter 3:” labels, “1.4.2” numbers and ALL-CAPS titles are tidied up.' },
-  { icon: 'fileText', title: 'Text and lists', text: 'Paragraphs and bulleted or numbered lists, in the order you wrote them. References such as “Figure 3” become live links.' },
+  { icon: 'structure', title: 'Chapters and sections', text: 'Heading 1 becomes a chapter and Heading 2–4 become sections. “Chapter 3:” labels, “1.4.2” numbers and ALL-CAPS titles are tidied up. Conclusions and other closing headings become unnumbered chapters.' },
+  { icon: 'fileText', title: 'Text and lists', text: 'Paragraphs and bulleted or numbered lists, in the order you wrote them. References such as “Figure 3” and citations such as “[2]” become live links.' },
   { icon: 'table', title: 'Tables', text: 'Cells, merged cells, header rows, alignment and column widths, together with their captions.' },
   { icon: 'figure', title: 'Pictures', text: 'Pictures become figures, scaled down to keep your project small. The caption becomes the title.' },
   { icon: 'acronym', title: 'Acronyms', text: 'The list of abbreviations in your front matter, as a table or as “AI – Artificial Intelligence” lines.' },
+  { icon: 'book', title: 'References', text: 'The entries under REFERENCES or BIBLIOGRAPHY become your reference list. Changed entries are updated, and references you added yourself are never touched.' },
   { icon: 'chapters', title: 'Front matter', text: 'Declaration, acknowledgements and abstract. The table of contents and the lists of figures and tables are rebuilt by GradDocs.' },
 ];
 

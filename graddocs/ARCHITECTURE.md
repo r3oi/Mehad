@@ -157,6 +157,12 @@ diagrams made in GradDocs are only linked, never replaced) → `review-dialog.js
 map, hashes). `watcher.js` (started in main.js) polls the File System Access handle (stored in IndexedDB `graddocs-word`)
 every 3 s and auto-applies safe changes; other browsers fall back to picking the file again.
 
+Report templates: a REFERENCES / BIBLIOGRAPHY heading is never a chapter — its entries become `project.references`
+(`type: 'other'`, `custom` = the Word text, `source: 'word'`; only those are ever updated or removed, matched via
+`wordLink.hashes.refs`), and the first import sets `settings.references.order = 'manual'` so numbers match Word.
+In-text `[n]`, `[1], [2]`, `[1]–[3]` become `{{ref:cite:id}}` tokens (`refs.js`). Closing chapters after the numbered
+ones (CONCLUSIONS, SUMMARY, FUTURE WORK …) come in with `numbered: false` (`wordLink.hashes.numbered`).
+
 ## Diagram generation & auto-layout
 
 - `figures/layout.js`: `autoLayout(diagram, { mode: 'layered'|'tree'|'auto', direction: 'TB'|'LR', ids })` — layered (Sugiyama-style) or tidy-tree layout, undoable when called through `editor.mutate`.

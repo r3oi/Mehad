@@ -11,14 +11,17 @@
 //  • Removals are offered, never pre-selected, and only for things that were imported from Word before.
 //  • Text is only overwritten when the Word text itself changed since the last sync (or, on the first
 //    link, when it differs from what the project has), so edits made in GradDocs survive a sync.
+//  • The REFERENCES list of the Word file becomes project.references (source 'word'); only those are ever updated or
+//    removed. "[3]" citations in the text become {{ref:cite:id}} tokens and are compared by the number Word shows.
 import { uid, clone } from '../core/utils.js';
 import {
-  createChapter, createSection, createFigure, createTable, createDiagram, createAcronym, createFrontMatterItem, findNode,
+  createChapter, createSection, createFigure, createTable, createDiagram, createAcronym, createFrontMatterItem, createReference, findNode,
 } from '../core/model.js';
 import { resolveText, makeRef } from '../core/references.js';
 import { addVersion } from '../figures/versions.js';
 import { snapshotContent, contentKey } from '../tables/table-ops.js';
-import { normKey, hashOf, similarity, tidy } from './text-utils.js';
+import { normKey, hashOf, similarity, closingTitlesAlike, tidy } from './text-utils.js';
+import { matchReferences, citationIndex, convertCitations } from './refs.js';
 import { prepareImage } from './images.js';
 
 // ---------------------------------------------------------------------------
@@ -28,7 +31,7 @@ export function emptyLink(fileName = '') {
   return {
     fileName, lastModified: 0, lastSyncedAt: null, autoSync: true, history: [],
     map: { chapters: {}, sections: {}, tables: {}, figures: {}, front: {}, acronyms: {} },
-    hashes: { containers: {}, tables: {}, figures: {}, front: {} },
+    hashes: { containers: {}, tables: {}, figures: {}, front: {}, refs: {}, numbered: {} },
   };
 }
 
@@ -52,22 +55,33 @@ const TOKEN_LINE = /^\s*\{\{(table|figure):([A-Za-z0-9_-]+)\}\}\s*$/;
 const TOKEN_ANY = /\{\{(?:table|figure):[A-Za-z0-9_-]+\}\}/g;
 const tokenOf = (kind, id) => `{{${kind}:${id}}}`;
 
-/** The text lines Word contributes to a chapter/section (placements excluded). */
-export function wordLinesOf(node) {
+const CITE_TOKEN = /\{\{ref:cite:([A-Za-z0-9_-]+)\}\}/g;
+
+/**
+ * The text lines Word contributes to a chapter/section (placements excluded). `cite` (optional) rewrites the citations
+ * of a line to their canonical "[n]" form, so "[1]–[3]" and "[1], [2], [3]" compare equal.
+ */
+export function wordLinesOf(node, cite = null) {
   const out = [];
   for (const b of node.blocks) {
     if (b.type !== 'p' && b.type !== 'li') continue;
     const t = tidy(b.text);
-    if (t) out.push(b.type === 'li' ? `- ${t}` : t);
+    if (t) out.push(b.type === 'li' ? `- ${cite ? cite(t) : t}` : (cite ? cite(t) : t));
   }
   return out;
 }
 
-/** The text lines of a project body, comparable with wordLinesOf(). */
-export function bodyLines(project, body) {
+/**
+ * The text lines of a project body, comparable with wordLinesOf(). `citeLabel(id)` → "[n]" with the number the Word
+ * file uses for that reference (or null → the number the project shows), so a token and the typed "[n]" read the same.
+ */
+export function bodyLines(project, body, citeLabel = null) {
   return String(body || '').split('\n')
     .filter((l) => !TOKEN_LINE.test(l))
-    .map((l) => tidy(resolveText(project, l.replace(TOKEN_ANY, ''))).replace(/^[•*]\s+/, '- '))
+    .map((l) => {
+      const text = citeLabel ? l.replace(CITE_TOKEN, (m, id) => citeLabel(id) ?? m) : l;
+      return tidy(resolveText(project, text.replace(TOKEN_ANY, ''))).replace(/^[•*]\s+/, '- ');
+    })
     .filter(Boolean);
 }
 
@@ -110,6 +124,35 @@ const projectTableSig = (project, table) => JSON.stringify([table.rows.length, t
 const titlesOf = (pn) => { const parts = []; for (let p = pn; p; p = p.parent) parts.unshift(p.word.title); return parts; };
 const ancestorPath = (pn) => titlesOf(pn).slice(0, -1).join(' › ');
 
+/**
+ * The Word reference list against the references imported from Word earlier. null = the file has no REFERENCES section
+ * (nothing is added, changed or removed then). → { rows, removed, lookup(n) → reference id | null, numberOf: Map(id → n) }
+ * Ids of new references are chosen here, so the citations of the text can already point at them.
+ */
+function planReferences(project, link, entries) {
+  if (!Array.isArray(entries)) return null;
+  const existing = (project.references || []).filter((r) => r.source === 'word');
+  const { rows, removed } = matchReferences(entries, existing, link.hashes.refs || {});
+  const index = citationIndex(entries);
+  const numberOf = new Map();
+  rows.forEach((row, i) => {
+    row.id = row.proj ? row.proj.id : uid('ref');
+    row.isNew = !row.proj;
+    numberOf.set(row.id, index.numberOf(i));
+  });
+  const lookup = (n) => { const i = index.indexOf(n); return i >= 0 ? rows[i].id : null; };
+  return { rows, removed, lookup, numberOf };
+}
+
+/** How many typed citations ("[2]") of a project body would become live links. */
+function linkableCitations(project, body, refPlan) {
+  let n = 0;
+  for (const line of String(body || '').split('\n')) {
+    if (!TOKEN_LINE.test(line)) convertCitations(line, refPlan.lookup, () => { n += 1; return ''; });
+  }
+  return n;
+}
+
 /** buildPlan(project, parsed) → plan. Pure: nothing in the project changes until the plan is applied. */
 export function buildPlan(project, parsed) {
   const link = normalizeLink(project.wordLink);
@@ -137,6 +180,15 @@ export function buildPlan(project, parsed) {
       const k = normKey(r.w.title);
       const cand = projNodes.find((p) => !claimed.has(p) && normKey(p.title) === k);
       if (cand) { r.p = cand; claimed.add(cand); }
+    }
+    // Closing chapters ("Conclusion" for "Conclusions", "Conclusions and Recommendations"): paired with an unnumbered project
+    // chapter of a like title even when that one was never imported (the preset creates an empty "Conclusions").
+    if (isChapter) {
+      for (const r of rows) {
+        if (r.p || r.w.numbered !== false) continue;
+        const cand = projNodes.find((p) => !claimed.has(p) && p.numbered === false && closingTitlesAlike(p.title, r.w.title));
+        if (cand) { r.p = cand; claimed.add(cand); }
+      }
     }
     // Renamed headings: unmatched Word headings vs. imported-but-missing project headings between the same neighbours.
     // On the very first link nothing is "imported" yet, so near-identical titles are paired too (never duplicated).
@@ -169,6 +221,7 @@ export function buildPlan(project, parsed) {
         word: r.w, proj: r.p, id: r.p ? r.p.id : uid(isChapter ? 'ch' : 'sec'), isChapter, isNew: !r.p, parent,
         chapterPN: null, children: [], removed: [], prevSibling: null, textChanged: false, lines: [],
         renamed: !!r.p && normKey(r.p.title) !== normKey(r.w.title),
+        numbered: r.w.numbered !== false, numberedChanged: false,
       };
       pn.chapterPN = isChapter ? pn : chapterHolder;
       return pn;
@@ -255,6 +308,12 @@ export function buildPlan(project, parsed) {
   const figureMatch = matchItems('figure');
   plan.tps = tableMatch.entries; plan.fps = figureMatch.entries;
 
+  // ----- 2b. references: matched before the text is compared, because citations in the text point at them ------
+  const refPlan = planReferences(project, link, parsed.references);
+  plan.refs = refPlan;
+  const canonCites = refPlan ? (text) => convertCitations(text, refPlan.lookup, (n) => `[${n}]`) : null;
+  const citeLabel = refPlan ? (id) => (refPlan.numberOf.has(id) ? `[${refPlan.numberOf.get(id)}]` : null) : null;
+
   // ----- 3. emit items, in document order ----------------------------------------------------------
   const paragraphCount = (pn) => pn.word.blocks.filter((b) => b.type === 'p' || b.type === 'li').length;
 
@@ -314,7 +373,7 @@ export function buildPlan(project, parsed) {
 
   const emitContainer = (pn) => {
     const word = pn.word;
-    pn.lines = wordLinesOf(word);
+    pn.lines = wordLinesOf(word, canonCites);
     pn.textHash = hashOf(pn.lines.join('\n'));
     const unit = pn.isChapter ? 'chapter' : 'section';
     const context = ancestorPath(pn);
@@ -331,7 +390,18 @@ export function buildPlan(project, parsed) {
           run: (ctx) => ctx.renameNode(pn),
         });
       }
-      const old = bodyLines(project, pn.proj.body);
+      if (pn.isChapter) {
+        // CONCLUSIONS (no chapter number) ↔ a numbered chapter: Word decides, unless the project was changed by hand since the last sync.
+        const storedNumbered = link.hashes.numbered[pn.proj.id];
+        pn.numberedChanged = pn.numbered !== (pn.proj.numbered !== false) && (storedNumbered === undefined || storedNumbered !== pn.numbered);
+        if (pn.numberedChanged) {
+          add({
+            group: 'structure', kind: 'update', unit, title: word.title, context, detail: [pn.numbered ? 'Now a numbered chapter' : 'Now an unnumbered chapter', {}],
+            run: (ctx) => ctx.setNumbered(pn),
+          });
+        }
+      }
+      const old = bodyLines(project, pn.proj.body, citeLabel);
       const stored = link.hashes.containers[pn.proj.id];
       const same = old.join('\n') === pn.lines.join('\n');
       pn.textChanged = !same && (stored === undefined || stored !== pn.textHash);
@@ -342,6 +412,15 @@ export function buildPlan(project, parsed) {
           detail: ['{added} added, {removed} removed', { added: diff.added.length, removed: diff.removed.length }], diff,
           run: (ctx) => ctx.textApplied.add(pn.id),
         });
+      } else if (same && refPlan) {
+        // Same words, but typed "[2]" citations that can now be live links (the reference list appeared after the text was imported).
+        const n = linkableCitations(project, pn.proj.body, refPlan);
+        if (n) {
+          add({
+            group: 'text', kind: 'update', unit, title: word.title, context,
+            detail: n === 1 ? ['1 citation linked', {}] : ['{n} citations linked', { n }], run: (ctx) => ctx.textApplied.add(pn.id),
+          });
+        }
       }
     }
     for (const blk of word.blocks) {
@@ -420,6 +499,28 @@ export function buildPlan(project, parsed) {
     }
   });
 
+  // ----- 6. references -----------------------------------------------------------------------------
+  if (refPlan) {
+    const shorten = (text) => (text.length > 90 ? `${text.slice(0, 90).trimEnd()}…` : text);
+    for (const row of refPlan.rows) {
+      const n = refPlan.numberOf.get(row.id);
+      if (row.isNew) {
+        add({ group: 'references', kind: 'add', title: `[${n}]`, context: '', rawDetail: row.entry.text, run: (ctx) => ctx.addRef(row) });
+      } else if (row.changed) {
+        add({
+          group: 'references', kind: 'update', title: `[${n}]`, context: '', rawDetail: row.entry.text,
+          diff: { removed: [tidy(row.proj.custom)], added: [row.entry.text] }, run: (ctx) => ctx.updateRef(row),
+        });
+      }
+    }
+    for (const p of refPlan.removed) {
+      add({
+        group: 'references', kind: 'remove', title: shorten(tidy(p.custom)), context: '', detail: ['No longer in the Word file', {}],
+        checked: false, destructive: true, run: (ctx) => ctx.removeRef(p.id),
+      });
+    }
+  }
+
   plan.hasRemovals = items.some((i) => i.kind === 'remove');
   plan.counts = countKinds(items);
   return plan;
@@ -452,7 +553,9 @@ const WORD_REF = /\b(Figure|Fig\.|Table|Section|Chapter)\s+(\d+(?:\.\d+)*)\b/g;
 
 function createContext(project, plan, prepared) {
   const link = project.wordLink;
-  const ctx = { project, plan, prepared, link, textApplied: new Set(), created: new Set(), applied: new Set() };
+  const ctx = {
+    project, plan, prepared, link, textApplied: new Set(), created: new Set(), applied: new Set(), numberedApplied: new Set(), refsUpdated: new Set(),
+  };
   const arrayFor = (pn) => (pn.isChapter ? project.chapters : (findNode(project, pn.parent.id)?.node.sections || null));
   const locationOf = (pn) => (pn.isChapter ? { chapterId: pn.id, sectionId: null } : { chapterId: pn.chapterPN.id, sectionId: pn.id });
 
@@ -460,7 +563,7 @@ function createContext(project, plan, prepared) {
     const arr = arrayFor(pn);
     if (!arr) return;
     const node = pn.isChapter
-      ? createChapter({ id: pn.id, title: pn.word.title })
+      ? createChapter({ id: pn.id, title: pn.word.title, numbered: pn.numbered })
       : createSection({ id: pn.id, title: pn.word.title, status: pn.lines.length ? 'draft' : 'todo' });
     let idx = pn.prevSibling ? arr.length : 0;
     for (let s = pn.prevSibling; s; s = s.prevSibling) {
@@ -472,6 +575,7 @@ function createContext(project, plan, prepared) {
     ctx.textApplied.add(pn.id);
   };
   ctx.renameNode = (pn) => { const f = findNode(project, pn.id); if (f) f.node.title = pn.word.title; };
+  ctx.setNumbered = (pn) => { const f = findNode(project, pn.id); if (f) { f.node.numbered = pn.numbered; ctx.numberedApplied.add(pn.id); } };
   ctx.removeNode = (id) => {
     const f = findNode(project, id);
     if (!f) return;
@@ -557,6 +661,29 @@ function createContext(project, plan, prepared) {
   };
   ctx.removeFigure = (id) => { project.figures = project.figures.filter((f) => f.id !== id); };
 
+  const refs = plan.refs;
+  ctx.addRef = (row) => {
+    const list = project.references || (project.references = []);
+    // Word's order: right after the previous Word entry that is in the project; the first ones go before the other imported ones.
+    let at = -1;
+    for (let k = row.index - 1; k >= 0 && at < 0; k -= 1) {
+      const idx = list.findIndex((r) => r.id === refs.rows[k].id);
+      if (idx >= 0) at = idx + 1;
+    }
+    if (at < 0) { const first = list.findIndex((r) => r.source === 'word'); at = first >= 0 ? first : 0; }
+    // The first import makes Word's list order the numbering order, so "[3]" on the site is "[3]" in Word.
+    if (!list.some((r) => r.source === 'word')) project.settings.references = { ...project.settings.references, order: 'manual' };
+    list.splice(at, 0, createReference({ id: row.id, type: 'other', custom: row.entry.text, source: 'word' }));
+    ctx.created.add(row.id);
+  };
+  ctx.updateRef = (row) => {
+    const ref = (project.references || []).find((r) => r.id === row.id);
+    if (!ref) return;
+    ref.custom = row.entry.text; // `custom` is shown instead of the formatted fields
+    ctx.refsUpdated.add(row.id);
+  };
+  ctx.removeRef = (id) => { project.references = (project.references || []).filter((r) => r.id !== id); };
+
   ctx.addAcronym = (wa) => project.acronyms.push(createAcronym({ acronym: wa.acronym, meaning: wa.meaning }));
   ctx.updateAcronym = (id, wa) => { const a = project.acronyms.find((x) => x.id === id); if (a) a.meaning = wa.meaning; };
   ctx.removeAcronym = (id) => { project.acronyms = project.acronyms.filter((a) => a.id !== id); };
@@ -592,7 +719,12 @@ function buildRefLinker(ctx) {
   for (const e of plan.fps) if (ctx.itemExists(e) && project.figures.some((f) => f.id === e.id)) put(maps.fig, e.word.number, e.id);
   for (const e of plan.tps) if (ctx.itemExists(e) && project.tables.some((t) => t.id === e.id)) put(maps.tab, e.word.number, e.id);
   for (const pn of plan.pns) if (findNode(project, pn.id)) put(pn.isChapter ? maps.ch : maps.sec, pn.word.number, pn.id);
-  return (line) => line.replace(WORD_REF, (m, word, num) => {
+  // "[3]" → {{ref:cite:id}}, only for references that exist in the project once the plan is applied.
+  const have = new Set((project.references || []).map((r) => r.id));
+  const cite = plan.refs
+    ? (text) => convertCitations(text, (n) => { const id = plan.refs.lookup(n); return id && have.has(id) ? id : null; }, (n, id) => makeRef('cite', id))
+    : (text) => text;
+  return (line) => cite(line).replace(WORD_REF, (m, word, num) => {
     const kind = word === 'Figure' || word === 'Fig.' ? 'fig' : word === 'Table' ? 'tab' : word === 'Section' ? 'sec' : 'ch';
     const id = maps[kind].get(num);
     return id ? makeRef(kind, id) : m;
@@ -677,6 +809,7 @@ function recordLink(ctx, fileInfo) {
     figure: (id) => project.figures.some((f) => f.id === id),
     front: (id) => project.frontMatter.some((f) => f.id === id),
     acronym: (id) => project.acronyms.some((a) => a.id === id),
+    ref: (id) => (project.references || []).some((r) => r.id === id),
   };
   const prune = (obj, test) => { for (const [k, id] of Object.entries(obj)) if (!test(id)) delete obj[k]; }; // key → id maps
   const pruneKeys = (obj, test) => { for (const id of Object.keys(obj)) if (!test(id)) delete obj[id]; }; // id → hash maps
@@ -684,12 +817,18 @@ function recordLink(ctx, fileInfo) {
   prune(map.chapters, exists.node); prune(map.sections, exists.node); prune(map.tables, exists.table);
   prune(map.figures, exists.figure); prune(map.front, exists.front); prune(map.acronyms, exists.acronym);
   pruneKeys(hashes.containers, exists.node); pruneKeys(hashes.tables, exists.table); pruneKeys(hashes.figures, exists.figure); pruneKeys(hashes.front, exists.front);
+  pruneKeys(hashes.refs, exists.ref); pruneKeys(hashes.numbered, exists.node);
 
   for (const pn of plan.pns) {
     if (!exists.node(pn.id)) continue;
     const target = pn.isChapter ? map.chapters : map.sections;
     dropValue(target, pn.id); target[pn.word.key] = pn.id;
     if (pn.isNew || ctx.textApplied.has(pn.id) || !pn.textChanged) hashes.containers[pn.id] = pn.textHash;
+    if (pn.isChapter && (pn.isNew || ctx.numberedApplied.has(pn.id) || !pn.numberedChanged)) hashes.numbered[pn.id] = pn.numbered;
+  }
+  for (const row of plan.refs?.rows || []) {
+    if (!exists.ref(row.id)) continue;
+    if (ctx.created.has(row.id) || ctx.refsUpdated.has(row.id) || (!row.isNew && !row.changed)) hashes.refs[row.id] = row.hash;
   }
   for (const e of plan.tps) {
     if (!exists.table(e.id) || !ctx.itemExists(e)) continue;

@@ -3,20 +3,24 @@
 //   const parsed = await parseDocx(arrayBuffer, { fileName })
 //
 //   parsed = {
-//     fileName, title, author, titlePage: { name, university, college, department, supervisor, students, academicYear },
+//     fileName, title, author, titlePage: { university, college, department, supervisor, students, academicYear, submissionDate },
 //     front:    [{ kind, title, body }],                 // declaration / acknowledgements / abstract / custom (+ generated kinds, no body)
 //     acronyms: [{ acronym, meaning }],
-//     chapters: [Node],  Node = { depth, title, key, blocks: [Block], children: [Node] }
+//     references: null | [{ label, text }],              // the REFERENCES list (null = the file has none); "[n]" and "n." numbers stripped
+//     chapters: [Node],  Node = { depth, title, key, number, numbered, blocks: [Block], children: [Node] }
+//                numbered: false for closing chapters without a chapter number (CONCLUSIONS, FUTURE WORK …); they take no number
 //     Block  =  { type: 'p' | 'li', text }  |  { type: 'table', table }  |  { type: 'image', image }
 //     tables / images: flat lists in document order (blocks point at the same objects)
-//     warnings: [{ code, count }],  stats: { chapters, sections, paragraphs, tables, images, acronyms }
+//     warnings: [{ code, count }],  stats: { chapters, sections, paragraphs, tables, images, acronyms, references }
 //   }
 //
 // Direction is Word → GradDocs only: nothing here ever writes to the document.
 import { readDocx } from './docx-reader.js';
 import {
   tidy, normKey, hashOf, asciiDigits, cleanTitle, isChapterLabelOnly, parseCaption, frontKindOf, looksLikeChapter, parseAcronymLine,
+  hasChapterLabel, hasOutlineNumber, isReferencesTitle, isClosingTitle, isAllCaps,
 } from './text-utils.js';
+import { parseReferenceEntry } from './refs.js';
 
 const NS = {
   w: 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
@@ -380,12 +384,14 @@ function analyze(raw) {
 
   // Pseudo headings: documents that never use heading styles still get a structure (bold, numbered lines).
   if (!raw.some((b) => b.kind === 'p' && b.level > 0)) {
+    let sawChapter = false;
     for (const b of raw) {
       if (b.kind !== 'p' || !b.text || b.text.length > 110 || b.text.includes('\n') || b.list || b.style.isToc || b.style.isCaption || !b.allBold) continue;
-      if (/^(chapter|الفصل)\s+\S+/i.test(b.text)) b.level = 1;
+      if (/^(chapter|الفصل)\s+\S+/i.test(b.text)) { b.level = 1; sawChapter = true; }
+      else if (sawChapter && (isReferencesTitle(b.text) || isClosingTitle(b.text))) b.level = 1; // CONCLUSIONS / REFERENCES typed as a bold line
       else {
         const m = /^(\d{1,2}(?:\.\d{1,2}){0,3})\.?\s+\S/.exec(asciiDigits(b.text));
-        if (m && !/[.:;]$/.test(b.text)) b.level = m[1].split('.').length;
+        if (m && !/[.:;]$/.test(b.text)) { b.level = m[1].split('.').length; if (b.level === 1) sawChapter = true; }
       }
     }
     if (raw.some((b) => b.kind === 'p' && b.level > 0)) warn('pseudo-headings');
@@ -403,15 +409,23 @@ function analyze(raw) {
   let curFront = null;
   let pendingChapterLabel = false;
   let seenBlocks = 0;
+  let inRefs = false; // between a REFERENCES heading and the next chapter-level heading
+  let refsFound = false;
+  const refEntries = [];
+  // A real (styled) heading below this block that is not itself a closing page: then a bold "Summary" line is just a label inside a chapter.
+  const laterRealHeading = (from) => raw.slice(from + 1).some((b) => b.kind === 'p' && b.level > 0 && b.text && !isReferencesTitle(b.text) && !isClosingTitle(b.text));
   const laterChapterLike = (from) => raw.slice(from + 1).some((b) => b.kind === 'p' && b.level === chapterLevel && !frontKindOf(b.text) && looksLikeChapter(b.text));
   const mkNode = (depth, rawTitle) => ({ depth, rawTitle, title: '', key: '', blocks: [], children: [] });
   const cur = () => stack[stack.length - 1] || null;
 
-  const startChapter = (rawTitle) => {
+  const startChapter = (rawTitle, p = null) => {
     const node = mkNode(0, rawTitle);
+    node.listed = !!p?.list; // numbered by Word's own list ("CHAPTER 1:" is not in the text)
     chapters.push(node); stack.length = 0; stack.push(node);
-    phase = 'body'; curFront = null;
+    phase = 'body'; curFront = null; inRefs = false;
   };
+  // REFERENCES never becomes a chapter: its paragraphs are collected as list entries until the next chapter-level heading.
+  const startReferences = () => { inRefs = true; refsFound = true; curFront = null; if (phase === 'title') phase = 'front'; };
   const startSection = (depth, rawTitle) => {
     if (depth > stack.length) depth = stack.length; // skipped heading level: attach to the deepest parent
     stack.length = depth;
@@ -428,6 +442,15 @@ function analyze(raw) {
     // ----- tables
     if (b.kind === 'table') {
       seenBlocks += 1;
+      if (inRefs) { // a reference list laid out as a table: "[1] | entry" per row
+        for (const row of b.rows) {
+          const cells = row.map((c) => tidy(c.text.replace(/\n/g, ' '))).filter(Boolean);
+          if (!cells.length) continue;
+          const bare = cells.length > 1 && /^\[?([\d٠-٩]{1,3})\]?[.)]?$/.exec(cells[0]);
+          refEntries.push(bare ? `[${asciiDigits(bare[1])}] ${cells.slice(1).join(' ')}` : cells.join(' '));
+        }
+        return;
+      }
       if (phase === 'front' && curFront?.kind === 'loa') {
         const rows = b.rows.filter((r) => r.some((c) => c.text));
         rows.forEach((r, i) => {
@@ -474,7 +497,7 @@ function analyze(raw) {
     // ----- title style
     if (p.style.isTitle) {
       if (phase === 'title') titleLines.push({ text: flat, title: true });
-      else if (phase === 'body' && cur() && flat) cur().blocks.push({ type: 'p', text: flat });
+      else if (phase === 'body' && cur() && flat && !inRefs) cur().blocks.push({ type: 'p', text: flat });
       return;
     }
 
@@ -482,13 +505,15 @@ function analyze(raw) {
     if (p.level > 0 && flat) {
       const depth = p.level - chapterLevel;
       if (depth <= 0) {
+        if (isReferencesTitle(flat)) { pendingChapterLabel = false; startReferences(); return; }
         if (pendingChapterLabel && phase === 'body') { cur().rawTitle = `${cur().rawTitle} ${flat}`; pendingChapterLabel = false; return; }
         if (phase === 'title' && !looksLikeChapter(flat) && laterChapterLike(index) && seenBlocks < CHAPTER_LIKE_LIMIT) { titleLines.push({ text: flat, heading: true }); return; }
-        if (isChapterLabelOnly(flat)) { startChapter(flat); pendingChapterLabel = true; return; }
+        if (isChapterLabelOnly(flat)) { startChapter(flat, p); pendingChapterLabel = true; return; }
         pendingChapterLabel = false;
-        startChapter(flat);
+        startChapter(flat, p);
         return;
       }
+      if (inRefs) return; // "Books" / "Websites" sub-headings inside the list of references
       if (phase === 'body' && depth <= maxDepth) { pendingChapterLabel = false; startSection(depth, flat); return; }
       if (phase === 'title') { titleLines.push({ text: flat, heading: true }); return; }
       // too deep (Heading 5+) or outside a chapter: keep the text as a paragraph.
@@ -497,6 +522,21 @@ function analyze(raw) {
       cur().rawTitle = `${cur().rawTitle} ${flat}`; pendingChapterLabel = false; return;
     }
     pendingChapterLabel = false;
+
+    // ----- closing pages typed as a bold, centred or capitalised line instead of a heading style
+    if (phase === 'body' && p.level === 0 && flat && flat.length <= 70 && !p.list && p.allBold && (p.align === 'center' || isAllCaps(flat)) && !hasImages) {
+      const references = isReferencesTitle(flat);
+      if ((references || isClosingTitle(flat)) && !laterRealHeading(index)) {
+        if (references) startReferences(); else startChapter(flat, p);
+        return;
+      }
+    }
+
+    // ----- the entries of the reference list
+    if (inRefs) {
+      if (flat && !p.style.isCaption) refEntries.push(flat);
+      return;
+    }
 
     // ----- body content
     if (phase === 'title') { if (flat) titleLines.push({ text: flat, align: p.align, bold: p.allBold }); return; }
@@ -520,7 +560,23 @@ function analyze(raw) {
     for (const im of p.images) node.blocks.push({ type: 'image', ref: im });
   });
 
-  return { titleLines, front, acronyms, chapters, warnings };
+  markClosingChapters(chapters);
+  const references = refsFound ? refEntries.map(parseReferenceEntry).filter((e) => e.text) : null;
+  return { titleLines, front, acronyms, chapters, references, warnings };
+}
+
+/**
+ * Chapters that carry no chapter number: closing pages (CONCLUSIONS, SUMMARY, FUTURE WORK, RECOMMENDATIONS, APPENDIX …).
+ * A chapter is numbered when its heading says so ("CHAPTER 4:", "4. Design") or Word numbers it from a list. One that
+ * is not, and that comes after every numbered one, is a closing chapter; in a file where no chapter is numbered at all
+ * only the known closing titles qualify (so "Introduction / Design / Conclusion" keeps two numbered chapters).
+ */
+function markClosingChapters(chapters) {
+  const labeled = chapters.map((c) => hasChapterLabel(c.rawTitle) || hasOutlineNumber(c.rawTitle) || c.listed);
+  const last = labeled.lastIndexOf(true);
+  chapters.forEach((c, i) => {
+    c.numbered = !(i > last && !labeled[i] && (last >= 0 || (i > 0 && isClosingTitle(c.rawTitle))));
+  });
 }
 
 /** Attach caption paragraphs to the nearest table (usually below) / picture (usually above). */
@@ -546,37 +602,72 @@ function associateCaptions(node) {
 
 // ---------------------------------------------------------------------------
 
+const SUPERVISOR_LABEL = '(?:supervised by|supervisor|supervisors|under the supervision of|co-?supervisor|إشراف|بإشراف|المشرف|المشرفون)';
+const STUDENTS_LABEL = '(?:prepared by|submitted by|by|students?|team members?|إعداد|اعداد|من إعداد|الطلاب|الطالب)';
+const MONTH_YEAR = /^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?,?\s*(?:19|20)\d{2}$/i;
+
 function sniffTitlePage(lines) {
-  const info = { university: '', college: '', department: '', supervisor: '', students: '', academicYear: '' };
-  const students = [];
-  let inStudents = false;
+  const info = { university: '', college: '', department: '', supervisor: '', students: '', academicYear: '', submissionDate: '' };
+  const students = []; const supervisors = [];
+  let mode = ''; // which block the plain lines under a label ("by" / "Supervised by") belong to
   for (const { text } of lines) {
     const t = tidy(text);
     let m;
-    if ((m = /^(?:supervised by|supervisor|under the supervision of|إشراف|بإشراف|المشرف)\s*[:：\-–]?\s*(.*)$/i.exec(t)) && m[1]) { info.supervisor = info.supervisor || m[1]; inStudents = false; continue; }
-    if (/^(?:prepared by|submitted by|by|students?|team members?|إعداد|اعداد|من إعداد|الطلاب|الطالب)\s*[:：]?\s*$/i.test(t)) { inStudents = true; continue; }
+    if ((m = new RegExp(`^${SUPERVISOR_LABEL}(?:\\s*[:：\\-–]\\s*|\\s+)(.+)$`, 'i').exec(t))) { supervisors.push(m[1]); mode = ''; continue; }
+    if (new RegExp(`^${SUPERVISOR_LABEL}\\s*[:：]?\\s*$`, 'i').test(t)) { mode = 'supervisor'; continue; }
+    if (new RegExp(`^${STUDENTS_LABEL}\\s*[:：]?\\s*$`, 'i').test(t)) { mode = 'students'; continue; }
     if ((m = /^(?:prepared by|submitted by|students?|إعداد|اعداد|من إعداد)\s*[:：\-–]\s*(.+)$/i.exec(t))) { students.push(...m[1].split(/\s*[,;،]\s*|\s+and\s+/i)); continue; }
-    if (/^(?:20\d{2}|19\d{2})(?:\s*[-–/]\s*(?:20)?\d{2})?$/.test(asciiDigits(t))) { info.academicYear = asciiDigits(t); inStudents = false; continue; }
+    if (/^(?:20\d{2}|19\d{2})(?:\s*[-–/]\s*(?:20)?\d{2})?$/.test(asciiDigits(t))) { info.academicYear = asciiDigits(t); mode = ''; continue; }
+    if (MONTH_YEAR.test(t)) { info.submissionDate = t; mode = ''; continue; }
     if (!info.university && /\b(university|institute|polytechnic)\b|جامعة|معهد/i.test(t)) { info.university = t; continue; }
     if (!info.college && /\b(college|faculty|school of)\b|كلية/i.test(t)) { info.college = t; continue; }
     if (!info.department && /\bdepartment\b|قسم/i.test(t)) { info.department = t; continue; }
-    if (inStudents && t.length < 60 && !/[.:]$/.test(t)) students.push(t);
+    if (t.length < 60 && !/[.:]$/.test(t)) {
+      if (mode === 'students') students.push(t);
+      else if (mode === 'supervisor') supervisors.push(t);
+    }
   }
   info.students = students.map(tidy).filter(Boolean).join('\n');
+  info.supervisor = supervisors.map(tidy).filter(Boolean).join(', ');
   return info;
+}
+
+/** The project title on a "submission" title page: the line above "A project submitted in partial fulfillment …". */
+function titleBeforeStatement(lines) {
+  const at = lines.findIndex((l) => /^(?:an?\s+|the\s+)?(?:\w+\s+){0,2}(?:project|thesis|dissertation|report)\b.*\bsubmitted\b|^submitted\s+in\s+partial|^in\s+partial\s+fulfil/i.test(tidy(l.text)));
+  const prev = at > 0 ? lines[at - 1] : null;
+  if (!prev || prev.title || (!prev.bold && prev.align !== 'center')) return '';
+  const t = tidy(prev.text);
+  return t && t.length <= 150 && !/\b(university|institute|college|faculty|department)\b|جامعة|كلية|قسم/i.test(t) ? t : '';
+}
+
+const SIGNATURE_LINE = /^(?:(?:student|name|signature|signed|الطالب|التوقيع)\s*\d*\s*[:.\-–_]*[\s_.\-–]*|note\s*:\s*sign\b.*|[_.\-–\s]{3,})$/i;
+/** The signature block at the end of a declaration ("Student 1", the students' names, "Note: sign across your name") is generated by GradDocs. */
+function withoutSignatures(lines, studentKeys) {
+  const out = [...lines];
+  const isSignature = (line) => {
+    const t = tidy(line);
+    if (SIGNATURE_LINE.test(t)) return true;
+    const k = normKey(t); const words = k.split(' ');
+    return k.length >= 5 && words.length >= 2 && studentKeys.some((sk) => { const have = new Set(sk.split(' ')); return words.every((w) => have.has(w)); });
+  };
+  while (out.length && isSignature(out[out.length - 1])) out.pop();
+  return out;
 }
 
 /** Walk every node: clean titles, compute stable keys and numbers. */
 function finalize(parsed, keep) {
   const visit = (nodes, parentKey, numberPrefix, chapterLevel) => {
     const used = new Map();
+    let numbered = 0; // closing chapters (numbered: false) take no number, so they never shift the real ones
     nodes.forEach((node, i) => {
       node.title = cleanTitle(node.rawTitle, { chapter: chapterLevel, keep });
       let k = normKey(node.title) || `untitled-${i + 1}`;
       const n = (used.get(k) || 0) + 1; used.set(k, n);
       if (n > 1) k = `${k}~${n}`;
       node.key = parentKey ? `${parentKey}/${k}` : k;
-      node.number = chapterLevel ? String(i + 1) : `${numberPrefix}.${i + 1}`;
+      if (chapterLevel) node.number = node.numbered === false ? '' : String(numbered += 1);
+      else node.number = numberPrefix ? `${numberPrefix}.${i + 1}` : '';
       node.wordIndex = i;
       visit(node.children, node.key, node.number, false);
     });
@@ -686,11 +777,15 @@ export async function parseDocx(input, { fileName = '' } = {}) {
   const firstHeading = a.chapters[0]?.title || '';
   const baseName = tidy(String(fileName).replace(/\.docx$/i, '').replace(/[_]+/g, ' ').replace(/\s*-\s*/g, ' - '));
   const generic = /^(document\d*|untitled|new document|microsoft word.*|مستند\d*)$/i;
-  const title = titleStyle || (coreTitle && !generic.test(coreTitle) ? coreTitle : '') || titleEntries.find((l) => l.heading)?.text || firstHeading || baseName || 'Untitled Project';
+  const title = titleStyle || titleBeforeStatement(titleEntries) || (coreTitle && !generic.test(coreTitle) ? coreTitle : '') || titleEntries.find((l) => l.heading)?.text || firstHeading || baseName || 'Untitled Project';
   const titlePage = sniffTitlePage(titleEntries.filter((l) => !l.title));
 
   // Front matter bodies.
-  const frontOut = a.front.map((f) => ({ kind: f.kind, title: cleanTitle(f.title, { keep }), generated: f.generated, body: f.generated ? '' : f.lines.join('\n') }));
+  const studentKeys = titlePage.students.split('\n').map(normKey).filter(Boolean);
+  const frontOut = a.front.map((f) => ({
+    kind: f.kind, title: cleanTitle(f.title, { keep }), generated: f.generated,
+    body: f.generated ? '' : (f.kind === 'declaration' ? withoutSignatures(f.lines, studentKeys) : f.lines).join('\n'),
+  }));
 
   const countNodes = (nodes) => nodes.reduce((n, x) => n + 1 + countNodes(x.children), 0);
   let paragraphs = 0;
@@ -700,9 +795,12 @@ export async function parseDocx(input, { fileName = '' } = {}) {
 
   return {
     fileName, title: cleanTitle(title, { keep }) || title, rawTitle: title, author: tidy(pkg.core?.creator || ''), titlePage,
-    front: frontOut, acronyms, chapters: a.chapters, tables, images,
+    front: frontOut, acronyms, references: a.references, chapters: a.chapters, tables, images,
     warnings: [...a.warnings].map(([code, count]) => ({ code, count })),
-    stats: { chapters: a.chapters.length, sections: countNodes(a.chapters) - a.chapters.length, paragraphs, tables: tables.length, images: images.length, acronyms: acronyms.length },
+    stats: {
+      chapters: a.chapters.length, sections: countNodes(a.chapters) - a.chapters.length, paragraphs, tables: tables.length, images: images.length,
+      acronyms: acronyms.length, references: a.references ? a.references.length : 0,
+    },
   };
 }
 

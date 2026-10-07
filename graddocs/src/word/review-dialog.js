@@ -13,6 +13,7 @@ const GROUPS = [
   { id: 'tables', label: 'Tables', icon: 'table' },
   { id: 'figures', label: 'Figures', icon: 'figure' },
   { id: 'acronyms', label: 'Acronyms', icon: 'acronym' },
+  { id: 'references', label: 'References', icon: 'book' },
   { id: 'front', label: 'Front matter', icon: 'chapters' },
 ];
 const KIND = {
@@ -77,14 +78,21 @@ function rowHTML(item, { checkbox = true, checked = true, disabled = false } = {
 }
 
 const KIND_RANK = { add: 0, rename: 1, move: 2, update: 3, reorder: 4, remove: 5 };
+/** One line under a group's title that sums it up (only the references group has one). */
+function groupNote(id, items) {
+  if (id !== 'references') return '';
+  const n = (kind) => items.filter((i) => i.kind === kind).length;
+  return t('References: {added} new, {updated} changed, {removed} removed', { added: n('add'), updated: n('update'), removed: n('remove') });
+}
 /** Groups in a fixed order; inside a group new things first, removals last (document order is kept otherwise). */
 function groupsOf(items) {
-  return GROUPS.map((g) => ({
-    ...g,
-    items: items.filter((i) => i.group === g.id).map((item, order) => ({ item, order }))
-      .sort((a, b) => (KIND_RANK[a.item.kind] - KIND_RANK[b.item.kind]) || (a.order - b.order)).map((x) => x.item),
-  })).filter((g) => g.items.length);
+  return GROUPS.map((g) => {
+    const list = items.filter((i) => i.group === g.id).map((item, order) => ({ item, order }))
+      .sort((a, b) => (KIND_RANK[a.item.kind] - KIND_RANK[b.item.kind]) || (a.order - b.order)).map((x) => x.item);
+    return { ...g, items: list, note: groupNote(g.id, list) };
+  }).filter((g) => g.items.length);
 }
+const noteHTML = (g) => (g.note ? `<div class="ws-group-note">${esc(g.note)}</div>` : '');
 
 const countsLine = (items) => {
   const c = { add: 0, update: 0, remove: 0 };
@@ -147,6 +155,7 @@ export function openReviewDialog({ plan, fileName, applyLabel }) {
             <span class="grow"></span>
             <button type="button" class="btn btn-ghost btn-sm" data-group-open="${g.id}" aria-expanded="${open}">${open ? esc(t('Hide')) : esc(t('Show'))}${icon(open ? 'chevronUp' : 'chevronDown', 'icon-sm')}</button>
           </header>
+          ${noteHTML(g)}
           ${open ? `<div class="ws-group-body">${shown.map((i) => {
     const blocked = !!i.requires && !checked.get(i.requires);
     return rowHTML(i, { checked: checked.get(i.id) && !blocked, disabled: blocked });
@@ -206,6 +215,7 @@ export function openAppliedDialog({ items, fileName, at }) {
     <div class="ws-review-top"><div class="ws-file">${icon('word')}<bdi class="ws-file-name">${esc(fileName || '')}</bdi></div><div class="ws-review-counts">${esc(countsLine(items))}</div></div>
     <div class="ws-groups">${groups.map((g) => `<section class="ws-group">
       <header class="ws-group-head"><span class="ws-group-icon">${icon(g.icon, 'icon-sm')}</span><h3>${esc(t(g.label))}</h3><span class="badge">${g.items.length}</span></header>
+      ${noteHTML(g)}
       <div class="ws-group-body">${g.items.map((i) => rowHTML(i, { checkbox: false })).join('')}</div></section>`).join('')}</div></div>`;
   const modal = openModal({
     title: t('What changed'), subtitle: at ? t('Applied from {file}', { file: fileName || '' }) : '', size: 'lg', className: 'ws-modal', body,

@@ -163,7 +163,7 @@ export default {
 
           <article class="ch-article">
             <header class="ch-head card" id="ch-head" data-id="${esc(chapter.id)}">
-              <h1 class="ch-heading ${upper ? 'upper' : ''}" aria-label="${esc(chapterHeading(project, chapter))}">
+              <h1 dir="auto" class="ch-heading ${upper ? 'upper' : ''}" aria-label="${esc(chapterHeading(project, chapter))}">
                 <span class="ch-heading-prefix" data-ch-prefix dir="ltr" ${chapterPrefix(project, chapter) ? '' : 'hidden'}>${esc(chapterPrefix(project, chapter))}</span>
                 <input class="ch-title" data-title="${esc(chapter.id)}" data-orig="${esc(chapter.title)}" value="${esc(chapter.title)}" maxlength="200" dir="auto" aria-label="${t('Chapter title')}" placeholder="${t('Chapter title')}">
               </h1>

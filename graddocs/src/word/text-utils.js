@@ -69,6 +69,8 @@ export const isChapterLabelOnly = (s) => {
   return (CHAPTER_PREFIX.test(t) && !t.replace(CHAPTER_PREFIX, '').trim()) || (CHAPTER_PREFIX_AR.test(t) && !t.replace(CHAPTER_PREFIX_AR, '').trim());
 };
 export const hasChapterLabel = (s) => CHAPTER_PREFIX.test(tidy(s)) || CHAPTER_PREFIX_AR.test(tidy(s));
+/** "1. Introduction" / "2 Design" / "3.1 Scope": the heading carries its own outline number. */
+export const hasOutlineNumber = (s) => NUMBER_PREFIX.test(tidy(s)) || NUMBER_PREFIX_TIGHT.test(tidy(s));
 
 /** "Chapter 3:" / "CHAPTER 3 -" / "الفصل الثالث:" prefix removed (title unchanged when there is none). */
 export function stripChapterPrefix(s) {
@@ -87,6 +89,7 @@ export function stripNumbering(s) {
 // Short all-caps words that are ordinary English (so ALL-CAPS titles read "Top Ten", not "TOP Ten"); other short ones stay (AI, API, SQL).
 const COMMON_SHORT = new Set(['one', 'two', 'six', 'ten', 'the', 'and', 'for', 'not', 'but', 'all', 'new', 'top', 'use', 'our', 'out', 'off', 'any', 'can', 'may', 'way', 'day', 'big', 'low', 'how', 'why', 'who', 'set', 'end', 'add', 'get', 'run', 'map', 'log', 'web', 'its', 'you', 'are', 'was', 'has', 'had', 'see', 'yes', 'non', 'pre', 'no', 'go', 'up', 'do', 'so', 'we', 'my', 'me', 'be', 'is', 'if', 'he']);
 const SMALL_WORDS = new Set(['a', 'an', 'the', 'and', 'or', 'but', 'nor', 'for', 'of', 'in', 'on', 'at', 'to', 'by', 'with', 'from', 'as', 'vs', 'via', 'per']);
+const LABEL_WORDS = new Set(['appendix', 'annex', 'part', 'section', 'table', 'figure', 'phase', 'stage', 'step', 'group', 'type', 'level', 'class']);
 const KNOWN_UPPER = new Set(['HTTP', 'HTTPS', 'HTML', 'JSON', 'REST', 'RESTFUL', 'MVC', 'NOSQL', 'MYSQL', 'OAUTH', 'CRUD', 'AJAX', 'GRPC', 'IEEE', 'WIFI', 'LORA', 'LORAWAN', 'MQTT', 'BLE', 'IOT', 'UML', 'SRS', 'GUI', 'NASA']);
 
 const hasCased = (s) => s !== s.toLowerCase() || s !== s.toUpperCase();
@@ -100,6 +103,7 @@ export function isAllCaps(s) {
 export function toTitleCase(s, keep = new Set()) {
   const parts = String(s).split(/(\s+|[-–—/]+)/);
   let first = true;
+  let prev = '';
   return parts.map((tok) => {
     if (!tok || /^(\s+|[-–—/]+)$/.test(tok)) return tok;
     const m = tok.match(/^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/su);
@@ -108,7 +112,9 @@ export function toTitleCase(s, keep = new Set()) {
     const upper = core.toUpperCase();
     const lower = core.toLowerCase();
     const isFirst = first; first = false;
+    const before = prev; prev = lower;
     if (keep.has(upper) || KNOWN_UPPER.has(upper)) return pre + upper + post;
+    if (core.length === 1 && LABEL_WORDS.has(before)) return pre + upper + post; // "Appendix A" is a label, not the article "a"
     if (!isFirst && SMALL_WORDS.has(lower)) return pre + lower + post;
     if (core.length <= 3 && /^[A-Z0-9&]+$/.test(core) && !COMMON_SHORT.has(lower)) return tok; // AI, API, 5G
     return pre + lower.charAt(0).toUpperCase() + lower.slice(1) + post;
@@ -127,6 +133,20 @@ export function cleanTitle(raw, { chapter = false, keep } = {}) {
   t = t.replace(/[\s:：.\-–—]+$/u, '').trim();
   if (isAllCaps(t)) t = toTitleCase(t, keep || new Set());
   return t || tidy(raw);
+}
+
+/**
+ * Do two titles of closing chapters name the same page? "Conclusion" ~ "Conclusions" ~ "Conclusions and Recommendations"
+ * (all the words of the shorter title are in the longer one). Appendices are told apart by their letter.
+ */
+export function closingTitlesAlike(a, b) {
+  if (similarity(a, b) >= 0.7) return true;
+  if (APPENDIX.test(tidy(a)) || APPENDIX.test(tidy(b))) return false;
+  const stem = (w) => (w.length > 3 && /s$/.test(w) && !/ss$/.test(w) ? w.slice(0, -1) : w);
+  const wa = new Set(normKey(a).split(' ').filter(Boolean).map(stem));
+  const wb = new Set(normKey(b).split(' ').filter(Boolean).map(stem));
+  const [small, big] = wa.size <= wb.size ? [wa, wb] : [wb, wa];
+  return small.size > 0 && [...small].every((w) => big.has(w));
 }
 
 /** Word-overlap similarity of two strings, 0..1. */
@@ -166,7 +186,7 @@ const FRONT_TITLES = {
   declaration: new Set([...['declaration', 'student declaration', 'students declaration', 'declaration of originality', 'statement of originality', 'originality statement', 'declaration of authorship', 'undertaking', 'plagiarism declaration', 'student declaration of originality'].map(normKey), ...AR('الإقرار', 'إقرار', 'إقرار الطالب', 'إقرار الطلاب', 'تعهد', 'الإقرار والتعهد', 'إقرار وتعهد', 'بيان الأصالة')]),
   acknowledgements: new Set([...['acknowledgements', 'acknowledgments', 'acknowledgement', 'acknowledgment', 'acknowledgements and thanks', 'thanks and acknowledgements', 'thanks and appreciation'].map(normKey), ...AR('الشكر والتقدير', 'شكر وتقدير', 'الشكر', 'شكر', 'شكر وعرفان', 'الشكر والعرفان', 'كلمة شكر', 'شكر وامتنان')]),
   abstract: new Set([...['abstract', 'executive summary', 'summary'].map(normKey), ...AR('الملخص', 'ملخص', 'مستخلص', 'الملخص العربي', 'ملخص المشروع', 'ملخص البحث', 'الخلاصة', 'الملخص التنفيذي')]),
-  toc: new Set([...['table of contents', 'table of content', 'contents', 'toc'].map(normKey), ...AR('فهرس المحتويات', 'المحتويات', 'جدول المحتويات', 'محتويات', 'الفهرس')]),
+  toc: new Set([...['table of contents', 'table of content', 'content', 'contents', 'contents page', 'list of contents', 'toc'].map(normKey), ...AR('فهرس المحتويات', 'المحتويات', 'جدول المحتويات', 'محتويات', 'الفهرس')]),
   lot: new Set([...['list of tables', 'index of tables'].map(normKey), ...AR('قائمة الجداول', 'فهرس الجداول')]),
   lof: new Set([...['list of figures', 'list of images', 'list of illustrations', 'index of figures'].map(normKey), ...AR('قائمة الأشكال', 'فهرس الأشكال', 'قائمة الصور', 'فهرس الصور')]),
   loa: new Set([...['list of acronyms', 'list of abbreviations', 'list of acronyms and abbreviations', 'list of abbreviations and acronyms', 'list of symbols and abbreviations', 'list of symbols', 'abbreviations', 'acronyms', 'abbreviations and acronyms', 'acronyms and abbreviations', 'nomenclature', 'glossary', 'list of terms'].map(normKey), ...AR('قائمة الاختصارات', 'قائمة المختصرات', 'الاختصارات', 'المختصرات', 'قائمة الرموز والاختصارات', 'قائمة الرموز', 'الاختصارات والمختصرات', 'قائمة المصطلحات', 'المصطلحات')]),
@@ -181,6 +201,33 @@ export function frontKindOf(text) {
   if (!key) return null;
   for (const [kind, titles] of Object.entries(FRONT_TITLES)) if (titles.has(key)) return kind;
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Closing pages: references and unnumbered closing chapters
+
+const REFERENCE_TITLES = new Set([...['references', 'reference', 'reference list', 'references list', 'list of references', 'bibliography', 'selected bibliography', 'works cited', 'literature cited', 'sources', 'list of sources', 'references and bibliography', 'bibliography and references'].map(normKey), ...AR('المراجع', 'مراجع', 'قائمة المراجع', 'المصادر', 'قائمة المصادر', 'المصادر والمراجع', 'المراجع والمصادر', 'المراجع العلمية', 'مصادر ومراجع')]);
+const CLOSING_TITLES = new Set([...['conclusion', 'conclusions', 'conclusion and future work', 'conclusions and future work', 'conclusion and future works', 'conclusion and recommendations', 'conclusions and recommendations', 'conclusion and recommendation', 'conclusions and future directions', 'conclusion and future directions', 'summary', 'summary and conclusion', 'summary and conclusions', 'summary and recommendations', 'summary and future work', 'future work', 'future works', 'future work and recommendations', 'future directions', 'future enhancements', 'future improvements', 'future scope', 'limitations and future work', 'recommendations', 'recommendation', 'recommendations and future work', 'concluding remarks', 'final remarks', 'closing remarks', 'appendix', 'appendices'].map(normKey), ...AR('الخاتمة', 'خاتمة', 'الخلاصة', 'الخلاصة والتوصيات', 'الخاتمة والتوصيات', 'الاستنتاجات', 'الاستنتاج', 'التوصيات', 'العمل المستقبلي', 'الأعمال المستقبلية', 'الأعمال المستقبلية والتوصيات', 'الملاحق', 'ملحق')]);
+const APPENDIX = /^(?:appendix|appendices|annex)\b|^(?:ملحق|الملاحق)(?=\s|$)/i;
+
+/** The words of a heading without outline numbers, "Chapter N:" labels, trailing colons and case. */
+function headingCore(text) {
+  let t = tidy(text).replace(/^(?:[ivxlc]+|\d{1,2})\s*[.)\-–]\s+/i, '');
+  t = stripNumbering(stripChapterPrefix(stripNumbering(t)));
+  return normKey(t.replace(/[\s:：.\-–—]+$/u, ''));
+}
+
+/** REFERENCES / BIBLIOGRAPHY / WORKS CITED …: the list of sources, never a chapter. */
+export function isReferencesTitle(text) {
+  const raw = tidy(text);
+  return !!raw && raw.length <= 70 && REFERENCE_TITLES.has(headingCore(raw));
+}
+
+/** CONCLUSIONS / SUMMARY / FUTURE WORK / RECOMMENDATIONS / APPENDIX …: headings that close a report without a chapter number. */
+export function isClosingTitle(text) {
+  const raw = tidy(text);
+  if (!raw || raw.length > 90) return false;
+  return CLOSING_TITLES.has(headingCore(raw)) || APPENDIX.test(stripChapterPrefix(raw));
 }
 
 /** Does a heading read like the start of a real chapter (so it can never be cover-page text)? */
