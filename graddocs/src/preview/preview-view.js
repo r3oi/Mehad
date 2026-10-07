@@ -1,0 +1,619 @@
+// Document Preview: a Word-like, paginated rendering of the whole report.
+//
+//   buildDocument(project) ──► items (HTML blocks) ──► paginate.js ──► pages ──► DOM
+//
+// Two passes: the body (chapters) is paginated first so we know on which page every heading,
+// figure and table lands (arabic numbers from 1); the TOC / List of Figures / List of Tables are
+// then built with those numbers and the front matter is paginated (lower-roman numbers).
+import { buildDocument } from '../core/document.js';
+import { FRONT_MATTER_KINDS } from '../core/model.js';
+import { resolveHTML } from '../core/references.js';
+import { clamp, debounce, plural } from '../core/utils.js';
+import { renderFigureSVG } from '../figures/render.js';
+import { fontStack } from '../figures/text-layout.js';
+import { renderTableHTML } from '../tables/table-render.js';
+import { prefs } from '../app/prefs.js';
+import { esc } from '../ui/dom.js';
+import { icon } from '../ui/icons.js';
+import { createMeasureHost, formatPageNumber, pageMetrics, paginate } from './paginate.js';
+
+const PREF_KEY = 'preview';
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 3;
+const DEFAULT_STATE = { mode: 'auto', zoom: 1, navOpen: true, show: { title: true, front: true, body: true } };
+
+// ---------------------------------------------------------------------------
+// Block builders: document model → items (see paginate.js for the item shape)
+
+function captionParts(caption, label, sep) {
+  const text = String(caption || '');
+  if (label && text.startsWith(label)) {
+    const rest = text.slice(label.length);
+    if (sep && rest.startsWith(sep)) return { lead: `${label}${sep}`, title: rest.slice(sep.length).trim() };
+    const m = rest.match(/^\s*[:.—–-]?\s*/);
+    return { lead: label + (m ? m[0].trimEnd() : ''), title: rest.slice(m ? m[0].length : 0).trim() };
+  }
+  return { lead: '', title: text };
+}
+
+function captionHTML(cfg, block, pos) {
+  const { lead, title } = captionParts(block.caption, block.label, cfg.separator);
+  const align = ['left', 'center', 'right', 'justify'].includes(cfg.align) ? cfg.align : 'center';
+  return `<div class="pv-caption" data-pos="${pos}" data-label="${esc(block.label)}" style="text-align:${align}">`
+    + `${lead ? `<span class="pv-cap-label${cfg.labelBold === false ? '' : ' is-bold'}">${esc(lead)}</span> ` : ''}`
+    + `<span class="pv-cap-title${cfg.titleItalic ? ' is-italic' : ''}">${esc(title)}</span></div>`;
+}
+
+function figureItem(project, block, m) {
+  const cfg = project.settings.captions.figure;
+  const pos = cfg.position === 'above' ? 'above' : 'below';
+  let svgHTML;
+  try {
+    const { svg, width, height } = renderFigureSVG(block.figure, { background: '#ffffff' });
+    const maxW = m.contentWidth;
+    const maxH = m.contentHeight * 0.55;
+    let w = Math.min(width, maxW);
+    let h = (w * height) / width;
+    if (h > maxH) { h = maxH; w = (h * width) / height; }
+    svgHTML = svg.replace('<svg ', `<svg class="pv-fig-svg" style="width:${w.toFixed(1)}px;height:${h.toFixed(1)}px;max-width:100%" `);
+  } catch (err) {
+    console.warn('[preview] figure failed to render', block.id, err);
+    svgHTML = '<div class="pv-missing">This figure could not be rendered.</div>';
+  }
+  const caption = captionHTML(cfg, block, pos);
+  return {
+    kind: 'figure',
+    anchors: [block.id],
+    html: `<figure class="pv-figure" data-fig-id="${esc(block.id)}" title="Double-click to edit">${pos === 'above' ? caption : ''}<div class="pv-fig-img">${svgHTML}</div>${pos === 'below' ? caption : ''}</figure>`,
+  };
+}
+
+function tableItem(project, block) {
+  const cfg = project.settings.captions.table;
+  const pos = cfg.position === 'below' ? 'below' : 'above';
+  let tableHTML;
+  try { tableHTML = renderTableHTML(project, block.table, { caption: false }); } catch (err) {
+    console.warn('[preview] table failed to render', block.id, err);
+    tableHTML = '<div class="pv-missing">This table could not be rendered.</div>';
+  }
+  const caption = captionHTML(cfg, block, pos);
+  return {
+    kind: 'table',
+    splitMode: 'rows',
+    anchors: [block.id],
+    html: `<div class="pv-tblock" data-tbl-id="${esc(block.id)}" title="Double-click to edit">${pos === 'above' ? caption : ''}<div class="pv-tbl">${tableHTML}</div>${pos === 'below' ? caption : ''}</div>`,
+  };
+}
+
+const paragraphItem = (project, text) => ({
+  kind: 'p', splitMode: 'lines', html: `<p class="pv-p" dir="auto">${resolveHTML(project, text, { chipClass: 'doc-ref' })}</p>`,
+});
+const bulletItem = (project, text, last) => ({
+  kind: 'li', splitMode: 'lines', html: `<div class="pv-li${last ? ' pv-li-last' : ''}" dir="auto">${resolveHTML(project, text, { chipClass: 'doc-ref' })}</div>`,
+});
+
+/** Items for [{ type: 'p' | 'li', text }] (front-matter bodies). */
+function textItems(project, blocks) {
+  return blocks.map((b, i) => (b.type === 'li' ? bulletItem(project, b.text, blocks[i + 1]?.type !== 'li') : paragraphItem(project, b.text)));
+}
+
+/** Pass 1: the report body → items. */
+function buildBodyItems(project, doc, m) {
+  const newPage = project.settings.chapterTitle?.newPage !== false;
+  const items = [];
+  doc.body.forEach((b, i) => {
+    if (b.type === 'chapter') {
+      items.push({ kind: 'h1', breakBefore: newPage, keepWithNext: true, anchors: [b.id], html: `<h1 class="pv-h1" data-a="${esc(b.id)}">${esc(b.heading)}</h1>` });
+    } else if (b.type === 'heading') {
+      const level = clamp(b.level, 2, 4);
+      items.push({ kind: `h${level}`, keepWithNext: true, anchors: [b.id], html: `<h${level} class="pv-h${level}" data-a="${esc(b.id)}">${esc(b.text)}</h${level}>` });
+    } else if (b.type === 'paragraph') items.push(paragraphItem(project, b.text));
+    else if (b.type === 'bullet') items.push(bulletItem(project, b.text, doc.body[i + 1]?.type !== 'bullet'));
+    else if (b.type === 'figure') items.push(figureItem(project, b, m));
+    else if (b.type === 'table') items.push(tableItem(project, b));
+  });
+  return items;
+}
+
+const tocLine = ({ id, text, page, cls = '', indent = 0 }) => `<div class="pv-toc ${cls}"${id && page !== '' ? ` data-goto="${esc(id)}"` : ''}${indent ? ` style="padding-inline-start:${indent}em"` : ''}>`
+  + `<span class="t">${esc(text)}</span><span class="lead" aria-hidden="true"></span><span class="n">${esc(page)}</span></div>`;
+const noteItem = (text) => ({ kind: 'note', html: `<p class="pv-note">${esc(text)}</p>` });
+
+/** Pass 2: front matter → items; `pageOf(id)` gives the body page number of a heading / figure / table. */
+function buildFrontItems(project, doc, pageOf) {
+  const items = [];
+  for (const f of doc.front) {
+    const start = items.length;
+    const title = (f.title || FRONT_MATTER_KINDS[f.kind]?.title || 'Untitled Page').toUpperCase();
+    items.push({ kind: 'front-h', keepWithNext: true, anchors: [f.id], html: `<h1 class="pv-h1 pv-front-h" data-a="${esc(f.id)}">${esc(title)}</h1>` });
+    if (f.kind === 'toc') {
+      if (!doc.toc.length) items.push(noteItem('No chapters yet.'));
+      for (const e of doc.toc) {
+        const page = pageOf(e.id);
+        items.push({ kind: 'toc', html: tocLine({ id: e.id, text: e.text, page: page ?? '', cls: e.level === 1 ? 'is-ch' : '', indent: (e.level - 1) * 1.6 }) });
+      }
+    } else if (f.kind === 'lof' || f.kind === 'lot') {
+      const list = f.kind === 'lof' ? doc.figures : doc.tables;
+      if (!list.length) items.push(noteItem(f.kind === 'lof' ? 'No figures in this document.' : 'No tables in this document.'));
+      for (const e of list) items.push({ kind: 'toc', html: tocLine({ id: e.id, text: e.caption, page: pageOf(e.id) ?? '', cls: 'is-list' }) });
+    } else if (f.kind === 'loa') {
+      if (!doc.acronyms.length) items.push(noteItem('No acronyms defined.'));
+      for (const a of doc.acronyms) items.push({ kind: 'acr', html: `<div class="pv-acr"><span class="a">${esc(a.acronym)}</span><span class="m">${esc(a.meaning)}</span></div>` });
+    } else {
+      items.push(...textItems(project, f.blocks));
+    }
+    items[start].breakBefore = true;
+  }
+  return items;
+}
+
+const withPrefix = (value, re, prefix) => (!value ? '' : re.test(value.trim()) ? value.trim() : `${prefix}${value.trim()}`);
+
+function titlePageHTML(t) {
+  const college = withPrefix(t.college, /^(college|faculty|school|institute|academy)\b/i, 'College of ');
+  const department = withPrefix(t.department, /^(department|dept\b|school|faculty|division|institute|college)/i, 'Department of ');
+  const top = [
+    t.university && `<div class="pv-uni">${esc(t.university)}</div>`,
+    college && `<div class="pv-org">${esc(college)}</div>`,
+    department && `<div class="pv-org">${esc(department)}</div>`,
+  ].filter(Boolean).join('');
+  const students = t.students.length
+    ? `<div class="pv-credit"><div class="pv-label">Prepared by:</div>${t.students.map((s) => `<div class="pv-name">${esc(s)}</div>`).join('')}</div>` : '';
+  const supervisor = t.supervisor ? `<div class="pv-credit"><span class="pv-label">Supervised by:</span> <span class="pv-name">${esc(t.supervisor)}</span></div>` : '';
+  const year = t.academicYear ? `<div class="pv-year">Academic Year: ${esc(t.academicYear)}</div>` : '';
+  return `<div class="pv-title">
+    <div class="pv-title-top">${top}</div>
+    <div class="pv-title-mid">
+      <div class="pv-rule"></div>
+      <div class="pv-project">${esc(t.name)}</div>
+      ${t.type ? `<div class="pv-ptype">${esc(t.type)}</div>` : ''}
+      <div class="pv-rule"></div>
+    </div>
+    <div class="pv-title-bottom">${students}${supervisor}${year}</div>
+  </div>`;
+}
+
+const toNode = (html) => {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html.trim();
+  return tpl.content.firstElementChild;
+};
+
+// ---------------------------------------------------------------------------
+// View
+
+class PreviewView {
+  constructor(container, ctx) {
+    this.container = container;
+    this.ctx = ctx;
+    this.store = ctx.store;
+    const saved = prefs.get(PREF_KEY, {}) || {};
+    this.state = {
+      ...DEFAULT_STATE,
+      ...saved,
+      zoom: Number.isFinite(saved.zoom) ? clamp(saved.zoom, ZOOM_MIN, ZOOM_MAX) : 1,
+      show: { ...DEFAULT_STATE.show, ...(saved.show || {}) },
+    };
+    if (window.matchMedia?.('(max-width: 800px)').matches) this.state.navOpen = false;
+    this.zoom = this.state.zoom;
+    this.pages = [];
+    this.nav = [];
+    this.refPages = new Map();
+    this.pinnedNav = null;
+    this.metrics = null;
+    this.cleanups = [];
+    this.destroyed = false;
+    this.schedule = debounce(() => this.render(), 300);
+  }
+
+  start() {
+    this.container.innerHTML = `
+      <div class="pv-root" id="pv-root">
+        <div class="pv-toolbar" role="toolbar" aria-label="Preview controls">
+          <button class="btn btn-sm btn-icon pv-nav-toggle" data-act="nav" aria-pressed="true" aria-label="Toggle navigator" data-tip="Navigator">${icon('structure')}</button>
+          <div class="btn-group" role="group" aria-label="Zoom">
+            <button class="btn btn-sm btn-icon" data-act="zoom-out" aria-label="Zoom out" data-tip="Zoom out">${icon('minus')}</button>
+            <button class="btn btn-sm pv-zoom" data-act="zoom-reset" data-tip="Reset to 100%" aria-label="Zoom level">100%</button>
+            <button class="btn btn-sm btn-icon" data-act="zoom-in" aria-label="Zoom in" data-tip="Zoom in">${icon('plus')}</button>
+          </div>
+          <button class="btn btn-sm pv-fit" data-act="fit" data-tip="Fit page width">${icon('maximize')}<span class="pv-tl">Fit width</span></button>
+          <span class="pv-count" aria-live="polite"></span>
+          <div class="segmented pv-toggles" role="group" aria-label="Sections to show">
+            <button type="button" data-sec="title" aria-pressed="true">Title page</button>
+            <button type="button" data-sec="front" aria-pressed="true">Front matter</button>
+            <button type="button" data-sec="body" aria-pressed="true">Chapters</button>
+          </div>
+          <span class="spacer"></span>
+          <button class="btn btn-sm" data-act="refresh" data-tip="Re-paginate">${icon('refresh')}<span class="pv-tl">Refresh</span></button>
+          <button class="btn btn-sm btn-primary" data-act="print" data-tip="Opens the print dialog; choose “Save as PDF”">${icon('printer')}<span class="pv-tl pv-tl-full">Print / Save as PDF</span><span class="pv-tl-short">Print</span></button>
+        </div>
+        <div class="pv-body">
+          <aside class="pv-nav" aria-label="Navigator">
+            <div class="pv-nav-head"><span>Navigator</span>
+              <button class="btn btn-ghost btn-icon btn-sm" data-act="nav" aria-label="Collapse navigator">${icon('chevronLeft')}</button></div>
+            <div class="pv-nav-list" role="list"></div>
+          </aside>
+          <div class="pv-stage">
+            <div class="pv-canvas" tabindex="0" aria-label="Document pages"><div class="pv-pages"></div></div>
+            <div class="pv-indicator" aria-hidden="true"></div>
+          </div>
+        </div>
+      </div>`;
+    const q = (s) => this.container.querySelector(s);
+    this.root = q('.pv-root');
+    this.canvas = q('.pv-canvas');
+    this.pagesEl = q('.pv-pages');
+    this.navEl = q('.pv-nav');
+    this.navList = q('.pv-nav-list');
+    this.countEl = q('.pv-count');
+    this.zoomEl = q('.pv-zoom');
+    this.indicator = q('.pv-indicator');
+    this.styleEl = document.createElement('style');
+    this.styleEl.id = 'preview-page-size';
+    document.head.append(this.styleEl);
+
+    this.listen(this.root, 'click', (e) => this.onClick(e));
+    this.listen(this.canvas, 'dblclick', (e) => this.onDblClick(e));
+    this.listen(this.canvas, 'scroll', () => this.onScroll(), { passive: true });
+    this.listen(this.canvas, 'wheel', (e) => this.onWheel(e), { passive: false });
+    // Once the reader scrolls by hand, the navigator follows the scroll position again (see onNavClick).
+    for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) this.listen(this.canvas, type, () => { this.pinnedNav = null; }, { passive: true });
+    const unsubscribe = this.store.on('change', () => this.schedule());
+    this.cleanups.push(unsubscribe);
+    if (typeof ResizeObserver !== 'undefined') {
+      let lastW = 0;
+      const ro = new ResizeObserver(() => {
+        const w = this.canvas.clientWidth;
+        if (w === lastW) return;
+        lastW = w;
+        if (this.state.mode !== 'manual') this.applyZoom();
+      });
+      ro.observe(this.canvas);
+      this.cleanups.push(() => ro.disconnect());
+    }
+    this.syncToolbar();
+    this.render();
+  }
+
+  listen(target, type, handler, options) {
+    target.addEventListener(type, handler, options);
+    this.cleanups.push(() => target.removeEventListener(type, handler, options));
+  }
+
+  destroy() {
+    this.destroyed = true;
+    this.schedule.cancel();
+    clearTimeout(this.indicatorTimer);
+    cancelAnimationFrame(this.scrollFrame);
+    for (const fn of this.cleanups.splice(0)) { try { fn(); } catch (err) { console.error(err); } }
+    this.styleEl?.remove();
+  }
+
+  savePrefs() {
+    prefs.set(PREF_KEY, { mode: this.state.mode, zoom: this.state.mode === 'manual' ? this.zoom : this.state.zoom, navOpen: this.state.navOpen, show: this.state.show });
+  }
+
+  // ----- Layout + render -------------------------------------------------
+  /** Paginate the whole report and return the page model (no DOM writes besides the off-screen measure host). */
+  layout(project) {
+    const m = pageMetrics(project.settings);
+    this.applyVars(m, project.settings);
+    const doc = buildDocument(project);
+    const mh = createMeasureHost(this.root, m);
+    try {
+      // Pass 1: body. Page numbers start at 1 on the first chapter page.
+      const body = paginate(buildBodyItems(project, doc, m), mh, m);
+      const pageOf = (id) => (body.anchors.has(id) ? String(body.anchors.get(id) + 1) : null);
+      // Pass 2: front matter, now that TOC / LoF / LoT numbers are known.
+      const front = paginate(buildFrontItems(project, doc, pageOf), mh, m);
+
+      const show = this.state.show;
+      const pages = [];
+      if (show.title) pages.push({ kind: 'title', label: '', node: toNode(titlePageHTML(doc.titlePage)) });
+      const frontBase = pages.length;
+      if (show.front) front.pages.forEach((p, i) => pages.push({ kind: 'front', label: formatPageNumber('front', i + 1), items: p.items }));
+      const bodyBase = pages.length;
+      if (show.body) body.pages.forEach((p, i) => pages.push({ kind: 'body', label: formatPageNumber('body', i + 1), items: p.items }));
+
+      // Navigation model + cross-reference targets (absolute page index).
+      const nav = [];
+      const refPages = new Map();
+      if (show.title) nav.push({ label: 'Title page', level: 0, page: 0 });
+      if (show.front && doc.front.length) {
+        nav.push({ group: 'Front matter' });
+        for (const f of doc.front) {
+          const idx = front.anchors.get(f.id);
+          if (idx === undefined) continue;
+          nav.push({ id: f.id, label: f.title || FRONT_MATTER_KINDS[f.kind]?.title || 'Untitled Page', level: 0, page: frontBase + idx, pageLabel: formatPageNumber('front', idx + 1) });
+          refPages.set(f.id, frontBase + idx);
+        }
+      }
+      if (show.body) {
+        if (doc.body.length) nav.push({ group: 'Report' });
+        for (const b of doc.body) {
+          if (b.type !== 'chapter' && b.type !== 'heading') continue;
+          const idx = body.anchors.get(b.id);
+          if (idx === undefined) continue;
+          const isCh = b.type === 'chapter';
+          if (isCh || b.level <= 3) {
+            nav.push({
+              id: b.id,
+              label: isCh ? (b.unassigned ? b.title : `Chapter ${b.number}: ${b.title}`) : `${b.number} ${b.title}`,
+              level: isCh ? 0 : b.level - 1, chapter: isCh, page: bodyBase + idx, pageLabel: String(idx + 1),
+            });
+          }
+        }
+        for (const [id, idx] of body.anchors) refPages.set(id, bodyBase + idx);
+      }
+      return { m, pages, nav, refPages };
+    } finally {
+      // Nodes that were placed on pages have already been moved out of the host.
+      mh.destroy();
+    }
+  }
+
+  applyVars(m, settings) {
+    const t = settings.typography || {};
+    const sizes = t.headingSizes || {};
+    const set = (k, v) => this.root.style.setProperty(k, v);
+    set('--pw', `${m.width}px`);
+    set('--ph', `${m.height}px`);
+    set('--mt', `${m.margins.top}px`);
+    set('--mr', `${m.margins.right}px`);
+    set('--mb', `${m.margins.bottom}px`);
+    set('--ml', `${m.margins.left}px`);
+    set('--cw', `${m.contentWidth}px`);
+    set('--ch', `${m.contentHeight}px`);
+    set('--pv-font', fontStack(t.fontFamily || 'Times New Roman'));
+    set('--pv-size', `${Number(t.fontSize) || 12}pt`);
+    set('--pv-lh', String(Number(t.lineSpacing) || 1.5));
+    set('--pv-para', `${Number.isFinite(Number(t.paragraphSpacing)) ? Number(t.paragraphSpacing) : 6}pt`);
+    set('--pv-h1', `${Number(sizes.h1) || 18}pt`);
+    set('--pv-h2', `${Number(sizes.h2) || 16}pt`);
+    set('--pv-h3', `${Number(sizes.h3) || 14}pt`);
+    set('--pv-align', t.justify === false ? 'left' : 'justify');
+    set('--pv-align-last', t.justify === false ? 'auto' : 'justify');
+    this.styleEl.textContent = `@page { size: ${m.cssSize}; margin: 0; }\n`
+      + `@media print { .preview-page { width: ${m.mmW}mm !important; height: ${(m.mmH - 0.4).toFixed(2)}mm !important; } }\n`;
+  }
+
+  render() {
+    if (this.destroyed || !this.store.project) return;
+    this.schedule.cancel();
+    const t0 = performance.now();
+    const scrollTop = this.canvas.scrollTop;
+    let model;
+    try {
+      model = this.layout(this.store.project);
+    } catch (err) {
+      console.error('[preview] pagination failed', err);
+      this.pagesEl.innerHTML = `<div class="pv-error"><strong>The preview could not be generated.</strong><br>${esc(err?.message || err)}</div>`;
+      return;
+    }
+    const { m, pages, nav, refPages } = model;
+    this.metrics = m;
+    this.pages = pages;
+    this.nav = nav;
+    this.pinnedNav = null;
+    this.refPages = refPages;
+
+    const frag = document.createDocumentFragment();
+    pages.forEach((pg, i) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'pv-page-wrap';
+      wrap.dataset.page = String(i);
+      const sheet = document.createElement('section');
+      sheet.className = `preview-page pv-page pv-kind-${pg.kind}`;
+      sheet.setAttribute('aria-label', pg.label ? `Page ${pg.label}` : `Page ${i + 1}`);
+      const content = document.createElement('div');
+      content.className = 'pv-content';
+      if (pg.node) content.append(pg.node);
+      else pg.items.forEach((item, j) => { item.node.classList.toggle('pv-top', j === 0); content.append(item.node); });
+      sheet.append(content);
+      if (pg.label) {
+        const footer = document.createElement('div');
+        footer.className = 'pv-footer';
+        footer.innerHTML = `<span>${esc(pg.label)}</span>`;
+        sheet.append(footer);
+      }
+      wrap.append(sheet);
+      frag.append(wrap);
+    });
+    if (!pages.length) {
+      const empty = document.createElement('div');
+      empty.className = 'pv-empty';
+      empty.textContent = 'Nothing to show. Turn on a section above.';
+      frag.append(empty);
+    }
+    this.pagesEl.replaceChildren(frag);
+    this.applyZoom({ keepScroll: false });
+    this.canvas.scrollTop = scrollTop;
+
+    this.countEl.textContent = plural(pages.length, 'page');
+    this.renderNav();
+    this.onScroll();
+    this.renderMs = Math.round(performance.now() - t0);
+    this.container.dataset.renderMs = String(this.renderMs);
+  }
+
+  renderNav() {
+    this.navList.innerHTML = this.nav.map((e, i) => (e.group
+      ? `<div class="pv-nav-group">${esc(e.group)}</div>`
+      : `<button type="button" class="pv-nav-item lvl-${e.level}${e.chapter ? ' is-ch' : ''}" data-page="${e.page}" data-nav="${i}" role="listitem">
+          <span class="pv-lbl">${esc(e.label)}</span><span class="pv-pg">${esc(e.pageLabel || '')}</span></button>`)).join('');
+    // Heading elements, used to highlight the section that is currently at the top of the viewport.
+    this.navEls = this.nav.map((e) => (e.id ? this.pagesEl.querySelector(`[data-a="${CSS.escape(e.id)}"]`) : null));
+  }
+
+  // ----- Zoom ----------------------------------------------------------
+  fitZoom() {
+    if (!this.metrics) return 1;
+    const cs = getComputedStyle(this.pagesEl);
+    const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    const avail = Math.max(120, this.canvas.clientWidth - pad);
+    return avail / this.metrics.width;
+  }
+
+  /** Apply the current zoom mode ('auto' = fit but never above 100 %, 'fit' = exact width, 'manual'). */
+  applyZoom({ keepScroll = true } = {}) {
+    let z = this.zoom;
+    if (this.state.mode === 'auto') z = Math.min(1, this.fitZoom());
+    else if (this.state.mode === 'fit') z = Math.min(2, this.fitZoom());
+    this.setZoomValue(clamp(z, ZOOM_MIN, ZOOM_MAX), keepScroll);
+  }
+
+  setZoomValue(z, keepScroll = true) {
+    const c = this.canvas;
+    const ratio = keepScroll && c.scrollHeight ? (c.scrollTop + c.clientHeight / 2) / c.scrollHeight : null;
+    this.zoom = z;
+    this.pagesEl.style.setProperty('--zoom', String(+z.toFixed(4)));
+    if (ratio !== null) c.scrollTop = ratio * c.scrollHeight - c.clientHeight / 2;
+    this.syncToolbar();
+  }
+
+  setZoom(z, mode = 'manual') {
+    this.state.mode = mode;
+    this.zoom = clamp(z, ZOOM_MIN, ZOOM_MAX);
+    this.applyZoom();
+    this.savePrefs();
+  }
+
+  stepZoom(dir) {
+    const pct = Math.round(this.zoom * 100);
+    const next = dir > 0 ? (Math.floor(pct / 10) + 1) * 10 : (Math.ceil(pct / 10) - 1) * 10;
+    this.setZoom(next / 100);
+  }
+
+  syncToolbar() {
+    this.zoomEl.textContent = `${Math.round(this.zoom * 100)}%`;
+    this.root.querySelector('[data-act="fit"]').classList.toggle('active', this.state.mode === 'fit');
+    const navToggle = this.root.querySelector('.pv-nav-toggle');
+    navToggle.setAttribute('aria-pressed', String(this.state.navOpen));
+    navToggle.classList.toggle('active', this.state.navOpen);
+    this.navEl.classList.toggle('collapsed', !this.state.navOpen);
+    for (const b of this.root.querySelectorAll('[data-sec]')) {
+      const on = !!this.state.show[b.dataset.sec];
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+  }
+
+  // ----- Interaction ---------------------------------------------------
+  scrollToPage(index, { smooth = true } = {}) {
+    const wrap = this.pagesEl.children[index];
+    if (!wrap || !wrap.classList.contains('pv-page-wrap')) return;
+    const top = wrap.getBoundingClientRect().top - this.canvas.getBoundingClientRect().top + this.canvas.scrollTop - 16;
+    this.canvas.scrollTo({ top: Math.max(0, top), behavior: smooth && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'auto' });
+  }
+
+  currentPage() {
+    const wraps = this.pagesEl.children;
+    const probe = this.canvas.scrollTop + this.canvas.clientHeight * 0.3;
+    let cur = 0;
+    for (let i = 0; i < wraps.length; i += 1) { if (wraps[i].offsetTop - 16 <= probe) cur = i; else break; }
+    return cur;
+  }
+
+  onScroll() {
+    cancelAnimationFrame(this.scrollFrame);
+    this.scrollFrame = requestAnimationFrame(() => {
+      if (this.destroyed || !this.pages.length) { this.indicator.classList.remove('show'); return; }
+      const cur = this.currentPage();
+      const pg = this.pages[cur];
+      this.indicator.textContent = `Page ${cur + 1} of ${this.pages.length}${pg?.label ? ` · ${pg.label}` : ''}`;
+      this.indicator.classList.add('show');
+      clearTimeout(this.indicatorTimer);
+      this.indicatorTimer = setTimeout(() => this.indicator.classList.remove('show'), 1600);
+      // Highlight the last heading that has scrolled past the 30 % line of the viewport.
+      const probe = this.canvas.getBoundingClientRect().top + this.canvas.clientHeight * 0.3;
+      let active = -1;
+      for (let i = 0; i < this.nav.length && this.pinnedNav == null; i += 1) {
+        const e = this.nav[i];
+        if (e.group) continue;
+        if (e.page > cur + 1) break;
+        const el = this.navEls[i] || this.pagesEl.children[e.page];
+        if (!el || el.getBoundingClientRect().top > probe) { if (e.page >= cur) break; continue; }
+        active = i;
+      }
+      if (this.pinnedNav != null) active = this.pinnedNav;
+      for (const el of this.navList.querySelectorAll('.pv-nav-item')) {
+        const on = Number(el.dataset.nav) === active;
+        if (on === el.classList.contains('active')) continue;
+        el.classList.toggle('active', on);
+        if (on) this.revealInNav(el);
+      }
+    });
+  }
+
+  /** Keep the active navigator entry visible without scrolling anything but the navigator list. */
+  revealInNav(el) {
+    const list = this.navList;
+    if (!list.clientHeight) return;
+    const l = list.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (r.top < l.top + 8) list.scrollTop -= l.top + 8 - r.top;
+    else if (r.bottom > l.bottom - 8) list.scrollTop += r.bottom - l.bottom + 8;
+  }
+
+  onWheel(e) {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    this.setZoom(this.zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
+  }
+
+  onClick(e) {
+    const t = e.target instanceof Element ? e.target : null;
+    if (!t) return;
+    const act = t.closest('[data-act]')?.dataset.act;
+    if (act === 'nav') { this.state.navOpen = !this.state.navOpen; this.syncToolbar(); this.savePrefs(); return; }
+    if (act === 'zoom-in') { this.stepZoom(1); return; }
+    if (act === 'zoom-out') { this.stepZoom(-1); return; }
+    if (act === 'zoom-reset') { this.setZoom(1); return; }
+    if (act === 'fit') { this.setZoom(this.fitZoom(), 'fit'); return; }
+    if (act === 'refresh') { this.render(); return; }
+    if (act === 'print') { this.print(); return; }
+    const sec = t.closest('[data-sec]')?.dataset.sec;
+    if (sec) {
+      this.state.show[sec] = !this.state.show[sec];
+      this.syncToolbar();
+      this.savePrefs();
+      this.render();
+      return;
+    }
+    const navBtn = t.closest('.pv-nav-item');
+    if (navBtn) {
+      // The clicked entry stays highlighted until the reader scrolls by hand.
+      this.pinnedNav = Number(navBtn.dataset.nav);
+      this.scrollToPage(Number(navBtn.dataset.page));
+      this.onScroll();
+      return;
+    }
+    const toc = t.closest('.pv-toc[data-goto]');
+    const ref = t.closest('.doc-ref[data-ref]');
+    const target = toc ? toc.dataset.goto : ref ? ref.dataset.ref.split(':')[1] : null;
+    if (target && this.refPages.has(target)) this.scrollToPage(this.refPages.get(target));
+  }
+
+  onDblClick(e) {
+    const el = e.target instanceof Element ? e.target.closest('[data-fig-id], [data-tbl-id]') : null;
+    if (!el) return;
+    window.getSelection?.()?.removeAllRanges();
+    if (el.dataset.figId) this.ctx.navigate(this.ctx.href('figures', el.dataset.figId));
+    else this.ctx.navigate(this.ctx.href('tables', el.dataset.tblId));
+  }
+
+  print() {
+    this.schedule.flush();
+    window.print();
+  }
+}
+
+export default {
+  title: 'Document Preview',
+  layout: 'flush',
+  mount(container, ctx) {
+    const view = new PreviewView(container, ctx);
+    view.start();
+    return { unmount: () => view.destroy() };
+  },
+};

@@ -1,0 +1,91 @@
+/* =========================================================================
+   Acronyms & Abbreviations
+   ========================================================================= */
+.acr-page { max-width: 1100px; }
+.acr-count { margin-left: 6px; height: 22px; font-size: 12.5px; vertical-align: middle; font-variant-numeric: tabular-nums; }
+.acr-toolbar .input-group { max-width: 420px; }
+.acr-result { font-size: 12.5px; }
+
+/* Badge-style acronym */
+.acr-badge {
+  display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 6px;
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 650; letter-spacing: .01em; line-height: 1.5;
+  color: var(--primary-text); background: var(--primary-soft); overflow-wrap: anywhere;
+}
+
+/* Main list */
+.acr-card { overflow: hidden; }
+.acr-table th { position: static; }
+.acr-table td.acr-meaning { font-weight: 500; }
+.acr-table td.acr-desc { max-width: 360px; color: var(--muted); overflow-wrap: anywhere; }
+.acr-table .acr-used-col, .acr-table td.acr-used { white-space: nowrap; text-align: right; width: 84px; font-variant-numeric: tabular-nums; }
+.acr-table td.acr-used { color: var(--text-2); font-weight: 550; }
+.acr-table .acr-actions-col, .acr-table td.acr-actions { width: 84px; text-align: right; white-space: nowrap; }
+.acr-actions .btn { opacity: .65; }
+.acr-table tr:hover .acr-actions .btn, .acr-actions .btn:focus-visible { opacity: 1; }
+.acr-del:hover { color: var(--danger); background: var(--danger-soft); }
+.acr-table mark { padding: 0 1px; border-radius: 3px; color: inherit; background: color-mix(in srgb, var(--warning) 30%, transparent); }
+.acr-table tr.highlight-flash { animation: none; }
+.acr-table tr.highlight-flash td { animation: acr-row-flash 1.8s ease; }
+@keyframes acr-row-flash {
+  0%, 45% { background: color-mix(in srgb, var(--primary) 20%, transparent); }
+  100% { background: transparent; }
+}
+
+/* Suggestions */
+.acr-suggest {
+  margin-bottom: 18px;
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 6%, var(--surface)), var(--surface) 90px);
+}
+.acr-suggest .card-header { border-bottom: 0; padding-bottom: 8px; }
+.acr-suggest .card-header h2 { flex: none; }
+.acr-sug-ico { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; color: var(--primary); background: var(--primary-soft); }
+.acr-sug-desc { margin-top: 2px; font-size: 12.5px; color: var(--muted); }
+.acr-sug-list { padding: 0 18px 8px; }
+.acr-sug-row { display: flex; align-items: center; gap: 14px; padding: 11px 0; border-top: 1px solid var(--border); }
+.acr-sug-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 13.5px; }
+.acr-sug-meaning { font-weight: 500; }
+.acr-sep { color: var(--faint); }
+.acr-sug-src { margin-top: 3px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.acr-sug-actions { display: flex; flex: none; gap: 6px; }
+
+/* Paste dialog */
+.acr-paste { min-height: 190px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.65; white-space: pre; overflow: auto; }
+.acr-paste-summary { margin-top: 12px; font-size: 13px; font-weight: 550; }
+.ps-new { color: var(--success); }
+.ps-dup { color: var(--warning); }
+.ps-bad { color: var(--danger); }
+.acr-paste-rows {
+  display: flex; flex-direction: column; gap: 7px; max-height: 190px; overflow: auto; margin-top: 10px; padding: 10px 12px;
+  font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+}
+.acr-paste-bad { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.acr-paste-bad code { padding: 1px 5px; border-radius: 4px; font-family: var(--font-mono); background: var(--bg-subtle); }
+
+/* Phones: the table becomes a stack of cards */
+@media (max-width: 720px) {
+  .acr-table, .acr-table tbody { display: block; }
+  .acr-table thead { display: none; }
+  .acr-table tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "a x" "m m" "d d" "u u"; gap: 5px 8px;
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+  }
+  .acr-table tr:last-child { border-bottom: 0; }
+  .acr-table td { display: block; padding: 0; border: 0; width: auto; max-width: none; text-align: left; }
+  .acr-table tbody tr:hover td { background: transparent; }
+  .acr-table tbody tr:hover { background: var(--surface-2); }
+  .acr-table td[data-label="Acronym"] { grid-area: a; }
+  .acr-table td.acr-meaning { grid-area: m; }
+  .acr-table td.acr-desc { grid-area: d; font-size: 13px; }
+  .acr-table td.acr-desc:has(> .faint) { display: none; }
+  .acr-table td.acr-used { grid-area: u; font-size: 12.5px; text-align: left; width: auto; }
+  .acr-table td.acr-used::before { content: "Used: "; color: var(--muted); font-weight: 400; }
+  .acr-table td.acr-actions { grid-area: x; align-self: start; }
+  .acr-actions .btn { opacity: 1; }
+  .acr-sug-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .acr-sug-actions { justify-content: flex-end; }
+  .acr-suggest .card-header { flex-wrap: wrap; }
+  .acr-suggest .card-header .grow { flex-basis: calc(100% - 50px); }
+}

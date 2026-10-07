@@ -1,0 +1,107 @@
+// Command palette (Ctrl/⌘+K): commands + live project search.
+import { esc, highlight } from '../ui/dom.js';
+import { icon } from '../ui/icons.js';
+import { searchProject, KIND_ICONS } from './search.js';
+import { href } from './routes.js';
+import { modLabel } from '../core/utils.js';
+
+let open = null;
+
+function commands(shell) {
+  const p = shell.store.project;
+  const go = (section, itemId, query) => () => shell.navigate(href(p.id, section, itemId, query));
+  const list = [];
+  if (p) {
+    list.push(
+      { title: 'Create Figure', sub: 'Start from a diagram template', icon: 'plus', keywords: 'new figure diagram add', run: go('figures', null, { new: '1' }) },
+      { title: 'Create Table', sub: 'Start from a table template', icon: 'plus', keywords: 'new table add', run: go('tables', null, { new: '1' }) },
+      { title: 'Create Acronym', sub: 'Add to List of Acronyms', icon: 'plus', keywords: 'new acronym abbreviation add', run: go('acronyms', null, { new: '1' }) },
+      { title: 'Create Chapter', sub: 'Add a chapter to the document', icon: 'plus', keywords: 'new chapter add section', run: go('structure', null, { new: 'chapter' }) },
+      { title: 'Go to Dashboard', icon: 'dashboard', keywords: 'home overview', run: go('dashboard') },
+      { title: 'Go to Project Structure', icon: 'structure', keywords: 'outline toc sections', run: go('structure') },
+      { title: 'Go to Figures', icon: 'figure', keywords: 'diagrams', run: go('figures') },
+      { title: 'Go to Tables', icon: 'table', run: go('tables') },
+      { title: 'Go to Chapters', icon: 'chapters', keywords: 'write content sections', run: go('chapters') },
+      { title: 'Go to Acronyms', icon: 'acronym', keywords: 'abbreviations', run: go('acronyms') },
+      { title: 'Document Preview', icon: 'preview', keywords: 'print word pages toc', run: go('preview') },
+      { title: 'Export', sub: 'Word package, PNG, SVG, PDF', icon: 'export', keywords: 'download docx zip pdf png svg', run: go('export') },
+      { title: 'Export Project (JSON backup)', icon: 'archive', keywords: 'backup download json', run: go('export', null, { action: 'json' }) },
+      { title: 'Settings', icon: 'settings', keywords: 'page font margins captions storage', run: go('settings') },
+    );
+  }
+  list.push(
+    { title: 'All Projects', icon: 'folderOpen', keywords: 'switch open project', run: () => shell.navigate('#/projects') },
+    { title: 'New Project', icon: 'plus', keywords: 'create project', run: () => shell.navigate('#/projects?new=1') },
+    { title: 'Toggle Dark / Light Mode', icon: 'moon', keywords: 'theme dark light', run: () => shell.toggleTheme() },
+    { title: 'Keyboard Shortcuts', icon: 'keyboard', keywords: 'help keys', run: async () => (await import('./shortcuts.js')).showShortcutsHelp() },
+  );
+  return list;
+}
+
+export function openPalette(shell, initialQuery = '') {
+  if (open) { open.input.focus(); return; }
+  const root = document.createElement('div');
+  root.className = 'palette-root';
+  root.innerHTML = `
+    <div class="modal-backdrop" data-close></div>
+    <div class="palette" role="dialog" aria-label="Command palette">
+      <div class="palette-input">${icon('search')}<input type="text" placeholder="Search figures, tables, acronyms, sections… or type a command" aria-label="Search" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></div>
+      <div class="palette-results" role="listbox"></div>
+      <div class="palette-footer"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>Enter</kbd> open</span><span><kbd>${modLabel}</kbd><kbd>K</kbd> toggle</span></div>
+    </div>`;
+  document.body.append(root);
+  const input = root.querySelector('input');
+  const resultsEl = root.querySelector('.palette-results');
+  const allCommands = commands(shell);
+  let items = []; let active = 0;
+
+  const close = () => { root.remove(); document.removeEventListener('keydown', onKey, true); open = null; };
+
+  const render = () => {
+    const q = input.value.trim();
+    const ql = q.toLowerCase();
+    const cmds = (q ? allCommands.filter((c) => `${c.title} ${c.keywords || ''} ${c.sub || ''}`.toLowerCase().includes(ql)) : allCommands.slice(0, 8))
+      .map((c) => ({ ...c, group: 'Commands' }));
+    const hits = shell.store.project && q ? searchProject(shell.store.project, q, { limit: 12 }).map((r) => ({
+      title: r.title, sub: [r.sub, r.snippet].filter(Boolean).join(' — '), icon: KIND_ICONS[r.kind] || 'search', group: 'Search results',
+      hint: r.kind, run: () => shell.navigate(r.href),
+    })) : [];
+    items = q ? [...hits, ...cmds] : cmds;
+    active = Math.min(active, Math.max(0, items.length - 1));
+    if (!items.length) { resultsEl.innerHTML = `<div class="palette-empty">No results for “${esc(q)}”</div>`; return; }
+    let lastGroup = null;
+    resultsEl.innerHTML = items.map((it, i) => {
+      const head = it.group !== lastGroup ? `<div class="palette-group">${esc(it.group)}</div>` : '';
+      lastGroup = it.group;
+      return `${head}<div class="palette-item ${i === active ? 'active' : ''}" role="option" data-i="${i}" aria-selected="${i === active}">
+        <span class="pi-icon">${icon(it.icon)}</span>
+        <span class="grow"><div class="pi-title truncate">${highlight(it.title, q)}</div>${it.sub ? `<div class="pi-sub truncate">${highlight(it.sub, q)}</div>` : ''}</span>
+        ${it.hint ? `<span class="pi-hint">${esc(it.hint)}</span>` : ''}
+      </div>`;
+    }).join('');
+    resultsEl.querySelector('.palette-item.active')?.scrollIntoView({ block: 'nearest' });
+  };
+
+  const run = (i) => { const it = items[i]; if (!it) return; close(); it.run(); };
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % Math.max(1, items.length); render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = (active - 1 + items.length) % Math.max(1, items.length); render(); }
+    else if (e.key === 'Enter') { e.preventDefault(); run(active); }
+    else if ((e.key === 'k' || e.key === 'K') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); e.stopPropagation(); close(); }
+  };
+  input.addEventListener('input', () => { active = 0; render(); });
+  resultsEl.addEventListener('click', (e) => { const el = e.target.closest('.palette-item'); if (el) run(Number(el.dataset.i)); });
+  resultsEl.addEventListener('mousemove', (e) => {
+    const el = e.target.closest('.palette-item');
+    if (el && Number(el.dataset.i) !== active) { active = Number(el.dataset.i); resultsEl.querySelectorAll('.palette-item').forEach((n) => n.classList.toggle('active', n === el)); }
+  });
+  root.querySelector('[data-close]').addEventListener('click', close);
+  document.addEventListener('keydown', onKey, true);
+  input.value = initialQuery;
+  render();
+  input.focus();
+  open = { root, input, close };
+}
+
+export const isPaletteOpen = () => !!open;

@@ -1,0 +1,142 @@
+/* Design tokens. Light theme is the default; dark theme follows the OS
+   unless the user picks one explicitly (html[data-theme]). */
+:root {
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-doc: "Times New Roman", Times, "Liberation Serif", serif;
+
+  --bg: #f6f7f9;
+  --bg-subtle: #eef0f3;
+  --surface: #ffffff;
+  --surface-2: #fafbfc;
+  --surface-hover: #f3f4f6;
+  --surface-active: #eceef2;
+  --border: #e4e7ec;
+  --border-strong: #d0d5dd;
+  --text: #101828;
+  --text-2: #344054;
+  --muted: #667085;
+  --faint: #98a2b3;
+
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-soft: #eef2ff;
+  --primary-soft-2: #e0e7ff;
+  --primary-text: #3730a3;
+  --on-primary: #ffffff;
+
+  --success: #079455;
+  --success-soft: #ecfdf3;
+  --warning: #dc6803;
+  --warning-soft: #fffaeb;
+  --danger: #d92d20;
+  --danger-soft: #fef3f2;
+  --info: #1570ef;
+  --info-soft: #eff8ff;
+
+  --canvas-bg: #f2f4f7;
+  --canvas-dot: #d0d5dd;
+  --selection: #4f46e5;
+  --page-shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 8px 24px rgba(16, 24, 40, .08);
+
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, .05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, .08), 0 1px 2px rgba(16, 24, 40, .04);
+  --shadow-md: 0 4px 8px -2px rgba(16, 24, 40, .08), 0 2px 4px -2px rgba(16, 24, 40, .04);
+  --shadow-lg: 0 12px 24px -4px rgba(16, 24, 40, .12), 0 4px 8px -4px rgba(16, 24, 40, .06);
+  --shadow-xl: 0 24px 48px -12px rgba(16, 24, 40, .22);
+  --ring: 0 0 0 3px rgba(79, 70, 229, .22);
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --sidebar-w: 248px;
+  --topbar-h: 56px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0e12;
+    --bg-subtle: #12151b;
+    --surface: #14171e;
+    --surface-2: #181c24;
+    --surface-hover: #1d222b;
+    --surface-active: #232934;
+    --border: #262c36;
+    --border-strong: #353d4a;
+    --text: #eef0f4;
+    --text-2: #c9ced8;
+    --muted: #8d96a7;
+    --faint: #5e6777;
+    --primary: #7c74ff;
+    --primary-hover: #8f88ff;
+    --primary-soft: #1e1c3a;
+    --primary-soft-2: #27244d;
+    --primary-text: #b9b4ff;
+    --on-primary: #ffffff;
+    --success: #32d583;
+    --success-soft: #0d2a1d;
+    --warning: #fdb022;
+    --warning-soft: #2e2210;
+    --danger: #f97066;
+    --danger-soft: #331716;
+    --info: #53b1fd;
+    --info-soft: #102236;
+    --canvas-bg: #0f1217;
+    --canvas-dot: #2a303b;
+    --selection: #8f88ff;
+    --page-shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .45);
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, .5);
+    --shadow-md: 0 4px 10px rgba(0, 0, 0, .45);
+    --shadow-lg: 0 12px 28px rgba(0, 0, 0, .55);
+    --shadow-xl: 0 24px 56px rgba(0, 0, 0, .6);
+    --ring: 0 0 0 3px rgba(124, 116, 255, .32);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0c0e12;
+  --bg-subtle: #12151b;
+  --surface: #14171e;
+  --surface-2: #181c24;
+  --surface-hover: #1d222b;
+  --surface-active: #232934;
+  --border: #262c36;
+  --border-strong: #353d4a;
+  --text: #eef0f4;
+  --text-2: #c9ced8;
+  --muted: #8d96a7;
+  --faint: #5e6777;
+  --primary: #7c74ff;
+  --primary-hover: #8f88ff;
+  --primary-soft: #1e1c3a;
+  --primary-soft-2: #27244d;
+  --primary-text: #b9b4ff;
+  --on-primary: #ffffff;
+  --success: #32d583;
+  --success-soft: #0d2a1d;
+  --warning: #fdb022;
+  --warning-soft: #2e2210;
+  --danger: #f97066;
+  --danger-soft: #331716;
+  --info: #53b1fd;
+  --info-soft: #102236;
+  --canvas-bg: #0f1217;
+  --canvas-dot: #2a303b;
+  --selection: #8f88ff;
+  --page-shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .45);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .5);
+  --shadow-md: 0 4px 10px rgba(0, 0, 0, .45);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, .55);
+  --shadow-xl: 0 24px 56px rgba(0, 0, 0, .6);
+  --ring: 0 0 0 3px rgba(124, 116, 255, .32);
+  color-scheme: dark;
+}
