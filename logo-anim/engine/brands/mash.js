@@ -88,8 +88,8 @@
     const items = isM ? [
       (g, p) => { const [x, y] = S(665, 160); handEllipse(g, x, y, 260 * P.L, 175 * P.L, { ...o, p: p }); },
       (g, p) => { const [x, y] = S(560, 20); handArrow(g, [[x - 70 * sc, y - 70 * sc], [x - 40 * sc, y - 40 * sc], [x - 8 * sc, y - 8 * sc]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "تعليم", x - 80 * sc, y - 95 * sc, { font: F(34, 1), color: C.pen, seed, dir: "rtl", align: "center" }); },
-      (g, p) => { const [x0, y0] = S(900, 60), [x1, y1] = S(1320, 60); handArrow(g, [[x0, y0 - 60 * sc], [(x0 + x1) / 2, y0 - 110 * sc], [x1, y1 - 30 * sc]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "same knot", (x0 + x1) / 2, y0 - 135 * sc, { font: F(28), color: C.pen, seed, align: "center" }); },
-      (g, p) => { const [x0, y] = S(17, 740), [x1] = S(1155, 0); squiggle(g, x0, x0 + (x1 - x0) * p, y, { ...o }); if (p >= 1) handText(g, "kerning ✓", x1 + 18 * sc, y + 4 * sc, { font: F(26), color: C.pen, seed }); },
+      (g, p) => { const [x0, y0] = S(900, 60), [x1, y1] = S(1320, 60); handArrow(g, [[x0, y0 - 60 * sc], [(x0 + x1) / 2, y0 - 110 * sc], [x1, y1 - 30 * sc]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "معلّم وطالب", (x0 + x1) / 2, y0 - 140 * sc, { font: F(30, 1), color: C.pen, seed, dir: "rtl", align: "center" }); },
+      (g, p) => { const [x0, y] = S(17, 740), [x1] = S(1155, 0); squiggle(g, x0, x0 + (x1 - x0) * p, y, { ...o }); if (p >= 1) handText(g, "معرفة ✓", x1 + 18 * sc, y + 2 * sc, { font: F(28, 1), color: C.pen, seed, dir: "rtl", align: "left" }); },
     ] : [
       (g, p) => { const [x, y] = S(240, 160); handArrow(g, [[x - 90 * sc, y - 80 * sc], [x - 50 * sc, y - 40 * sc], [x - 8 * sc, y]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "you", x - 110 * sc, y - 100 * sc, { font: F(32), color: C.pen, seed, align: "center" }); },
       (g, p) => { const [x, y] = S(1760, 160); handArrow(g, [[x + 90 * sc, y - 80 * sc], [x + 50 * sc, y - 40 * sc], [x + 8 * sc, y]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "AI", x + 110 * sc, y - 100 * sc, { font: F(32), color: C.pen, seed, align: "center" }); },
