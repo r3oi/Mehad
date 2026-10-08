@@ -91,10 +91,10 @@
       (g, p) => { const [x0, y0] = S(900, 60), [x1, y1] = S(1320, 60); handArrow(g, [[x0, y0 - 60 * sc], [(x0 + x1) / 2, y0 - 110 * sc], [x1, y1 - 30 * sc]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "معلّم وطالب", (x0 + x1) / 2, y0 - 140 * sc, { font: F(30, 1), color: C.pen, seed, dir: "rtl", align: "center" }); },
       (g, p) => { const [x0, y] = S(17, 740), [x1] = S(1155, 0); squiggle(g, x0, x0 + (x1 - x0) * p, y, { ...o }); if (p >= 1) handText(g, "معرفة ✓", x1 + 18 * sc, y + 2 * sc, { font: F(28, 1), color: C.pen, seed, dir: "rtl", align: "left" }); },
     ] : [
-      (g, p) => { const [x, y] = S(240, 160); handArrow(g, [[x - 90 * sc, y - 80 * sc], [x - 50 * sc, y - 40 * sc], [x - 8 * sc, y]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "you", x - 110 * sc, y - 100 * sc, { font: F(32), color: C.pen, seed, align: "center" }); },
+      (g, p) => { const [x, y] = S(240, 160); handArrow(g, [[x - 90 * sc, y - 80 * sc], [x - 50 * sc, y - 40 * sc], [x - 8 * sc, y]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "makeup", x - 110 * sc, y - 100 * sc, { font: F(32), color: C.pen, seed, align: "center" }); },
       (g, p) => { const [x, y] = S(1760, 160); handArrow(g, [[x + 90 * sc, y - 80 * sc], [x + 50 * sc, y - 40 * sc], [x + 8 * sc, y]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "AI", x + 110 * sc, y - 100 * sc, { font: F(32), color: C.pen, seed, align: "center" }); },
       (g, p) => { const [x, y] = S(1000, 667); handEllipse(g, x, y, 380 * P.L, 640 * P.L, { ...o, p: p }); },
-      (g, p) => { const [x, y] = S(1000, 1334); handArrow(g, [[x + 120 * sc, y + 60 * sc], [x + 50 * sc, y + 40 * sc], [x + 8 * sc, y + 8 * sc]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "the fit ✓", x + 135 * sc, y + 62 * sc, { font: F(28), color: C.pen, seed }); },
+      (g, p) => { const [x, y] = S(1000, 1334); handArrow(g, [[x + 120 * sc, y + 60 * sc], [x + 50 * sc, y + 40 * sc], [x + 8 * sc, y + 8 * sc]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "clothes ✓", x + 135 * sc, y + 62 * sc, { font: F(28), color: C.pen, seed }); },
     ];
     items.forEach((f, i) => { const p = clamp((n - i * 2 + 1) / 2); if (p > 0) f(ctx, p); });
   }
