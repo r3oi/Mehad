@@ -1,0 +1,100 @@
+/* Text / AI diagram generator: the "Generate a diagram" dialog, the New Figure shortcut and Settings → AI. */
+
+/* ===================== Dialog ===================== */
+.gen-modal .modal-body { padding-top: 0; }
+.modal-root:has(.gen-modal) { grid-template-columns: minmax(0, 1fr); } /* wide content never pushes the dialog past the screen */
+.gen-modal { min-width: 0; }
+.gen { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.gen-tabs { margin: 0 -20px; padding: 0 20px; position: sticky; top: 0; background: var(--surface); z-index: 2; }
+.gen-body { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 22px; align-items: start; min-height: 470px; }
+.gen-input { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.gen-type .select { max-width: 320px; }
+.gen-panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.gen-panel[hidden] { display: none; }
+.gen-textarea { width: 100%; min-height: 150px; resize: vertical; line-height: 1.5; }
+.gen-textarea.mono { font-size: 12.5px; }
+.gen-hint { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 0; }
+
+.gen-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.gen-chips-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-inline-end: 2px; }
+.gen-chip {
+  padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2);
+  font-size: 12.5px; color: var(--text-2); line-height: 1.4;
+}
+.gen-chip:hover { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-text); }
+
+.gen-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.gen-actions .btn[hidden] { display: none; }
+.gen-link { background: none; border: 0; padding: 0; color: var(--primary-text); text-decoration: underline; text-underline-offset: 2px; font: inherit; cursor: pointer; }
+.gen-link:hover { color: var(--primary); }
+.gen-key { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.gen-key.ok .icon { color: var(--success); flex: none; }
+.gen-key-missing { font-size: 12.5px; }
+.gen-detected { min-height: 18px; font-size: 12.5px; color: var(--primary-text); font-weight: 550; }
+
+.gen-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; position: sticky; top: 52px; }
+.gen-preview {
+  height: 360px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px; display: grid; place-items: center; overflow: hidden; position: relative;
+}
+.gen-preview { direction: ltr; } /* diagram text keeps its own direction, like the other previews */
+.gen-preview svg { width: 100%; height: 100%; display: block; }
+.gen-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #98a2b3; font-size: 13px; text-align: center; padding: 0 16px; }
+.gen-empty .icon { width: 28px; height: 28px; }
+.gen-preview.busy::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(79, 70, 229, .12) 50%, transparent 80%);
+  background-size: 200% 100%; animation: gen-shimmer 1.2s linear infinite;
+}
+@keyframes gen-shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+.gen-meta { font-size: 12.5px; color: var(--muted); min-height: 16px; }
+.gen-messages { display: flex; flex-direction: column; gap: 8px; }
+.gen-messages .callout { font-size: 12.5px; align-items: flex-start; }
+.gen-messages .callout > div { min-width: 0; overflow-wrap: anywhere; }
+
+.gen-insert button { white-space: nowrap; }
+
+@media (max-width: 860px) {
+  .gen-body { grid-template-columns: minmax(0, 1fr); }
+  .gen-side { position: static; }
+  .gen-preview { height: 260px; }
+}
+@media (max-width: 560px) {
+  .gen-tabs { margin: 0 -16px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
+  .gen-tabs .tab { white-space: nowrap; flex: none; padding: 0 10px; }
+  .gen-tabs .tab .icon { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .gen-preview.busy::after { animation: none; } }
+
+/* ===================== New Figure shortcut ===================== */
+.nf-generate { justify-content: center; }
+
+/* ===================== Settings → AI ===================== */
+.ai-key { display: flex; gap: 6px; align-items: center; }
+.ai-key-input { width: min(300px, 100%); font-family: var(--font-mono); font-size: 12px; }
+.ai-model { min-width: 280px; }
+.ai-status { margin-top: 6px; font-size: 12px; color: var(--muted); text-align: end; overflow-wrap: anywhere; }
+.ai-link { color: var(--primary-text); text-decoration: underline; text-underline-offset: 2px; user-select: text; -webkit-user-select: text; }
+.ai-note .d { user-select: text; -webkit-user-select: text; }
+.set-row .set-control:has(.ai-key) { flex-direction: column; align-items: flex-end; }
+@media (max-width: 700px) {
+  .ai-key { flex-wrap: wrap; }
+  .ai-model { min-width: 280px; }
+.ai-status { text-align: start; }
+}
+
+/* "From image" tab: the picture of the diagram to rebuild. */
+.gen-drop {
+  min-block-size: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 14px; text-align: center; cursor: pointer;
+  color: var(--muted); background: var(--surface-2); border: 1.5px dashed var(--border-strong); border-radius: var(--radius);
+  transition: border-color .12s, background .12s, color .12s;
+}
+.gen-drop:hover, .gen-drop:focus-visible, .gen-drop.over { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-text); outline: none; }
+.gen-drop > svg { inline-size: 28px; block-size: 28px; color: var(--primary); }
+.gen-drop strong { font-size: 13.5px; color: var(--text); }
+.gen-drop > span { font-size: 12px; line-height: 1.35; }
+.gen-drop.has-image { padding: 8px; gap: 8px; border-style: solid; background: var(--surface); }
+.gen-drop.has-image img { max-inline-size: 100%; max-block-size: 220px; object-fit: contain; border-radius: calc(var(--radius) - 4px); background: #fff; }
+.gen-drop-bar { inline-size: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--text-2); }
+.gen-drop-bar .truncate { min-inline-size: 0; }

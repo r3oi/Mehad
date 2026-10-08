@@ -1,0 +1,140 @@
+/* Export page ------------------------------------------------------------ */
+.exp-page { display: flex; flex-direction: column; gap: 20px; }
+.exp-page > .page-header { margin-bottom: 0; }
+
+/* Icon tiles */
+.exp-tile {
+  width: 36px; height: 36px; border-radius: 10px; flex: none;
+  display: grid; place-items: center;
+  background: var(--primary-soft); color: var(--primary);
+}
+.exp-tile svg { width: 18px; height: 18px; }
+.exp-tile-lg { width: 40px; height: 40px; }
+.exp-tile-xl {
+  width: 54px; height: 54px; border-radius: 15px;
+  background: linear-gradient(135deg, var(--primary), #8b5cf6); color: #fff; box-shadow: var(--shadow-md);
+}
+.exp-tile-xl svg { width: 26px; height: 26px; }
+
+/* Card header with icon tile */
+.exp-card-head { gap: 12px; flex-wrap: wrap; }
+.exp-head-text { flex: 1 1 220px; min-width: 0; }
+.exp-head-text h2 { font-size: 15px; }
+.exp-head-text p { margin-top: 2px; font-size: 13px; font-weight: 400; color: var(--muted); line-height: 1.45; }
+.exp-head-actions { margin-inline-start: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Featured package card */
+.exp-featured {
+  display: grid; gap: 22px 36px; padding: 26px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  grid-template-areas: "head includes" "action includes";
+  grid-template-rows: auto 1fr;
+  align-items: start;
+  background: linear-gradient(135deg, var(--primary-soft) 0%, var(--surface) 62%);
+  border-color: color-mix(in srgb, var(--primary) 26%, var(--border));
+  box-shadow: var(--shadow-sm);
+}
+.exp-feat-head { grid-area: head; display: flex; gap: 16px; align-items: flex-start; }
+.exp-feat-head h2 { font-size: 19px; letter-spacing: -0.02em; }
+.exp-feat-head p { margin-top: 6px; color: var(--text-2); font-size: 13.5px; line-height: 1.55; }
+.exp-kicker { margin-bottom: 8px; }
+.exp-feat-action { grid-area: action; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; min-width: 0; width: 100%; }
+.exp-progress { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 6px; }
+.exp-progress[hidden] { display: none; }
+.exp-progress-label { font-size: 12.5px; color: var(--muted); }
+.exp-note { display: flex; gap: 7px; align-items: flex-start; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; line-height: 1.5; }
+.exp-note .icon { margin-top: 2px; }
+
+.exp-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.exp-stats span {
+  display: inline-flex; align-items: baseline; gap: 5px; padding: 6px 11px; border-radius: 20px;
+  font-size: 12.5px; color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 80%, transparent); border: 1px solid var(--border);
+}
+.exp-stats b { font-size: 14px; font-weight: 650; color: var(--text); }
+
+.exp-includes {
+  grid-area: includes; list-style: none; margin: 0; padding: 6px; display: grid; gap: 2px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+}
+.exp-includes li { display: flex; gap: 12px; align-items: flex-start; padding: 9px 10px; border-radius: var(--radius); }
+.exp-includes li + li { border-top: 1px solid var(--border); border-radius: 0; }
+.exp-includes li > .icon { width: 18px; height: 18px; margin-top: 2px; color: var(--primary); }
+.exp-includes li > div { min-width: 0; }
+.exp-includes b { display: block; font-size: 13.5px; font-weight: 600; font-family: var(--font-mono); letter-spacing: -0.01em; }
+.exp-includes li > div > span { display: block; margin-top: 1px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.exp-count {
+  display: inline-block; margin-inline-start: 4px; padding: 0 7px; border-radius: 10px;
+  font-family: var(--font-ui); font-size: 11.5px; font-weight: 650; line-height: 18px;
+  color: var(--primary-text); background: var(--primary-soft-2); vertical-align: 1px;
+}
+
+/* Two-up cards */
+.exp-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
+.exp-grid-2 > .card { display: flex; flex-direction: column; }
+.exp-grid-2 > .card > .card-body { flex: 1; }
+.exp-stack { display: flex; flex-direction: column; gap: 14px; }
+.exp-ticks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13.5px; color: var(--text-2); }
+.exp-ticks li { display: flex; gap: 9px; align-items: flex-start; }
+.exp-ticks .icon { margin-top: 3px; color: var(--success); }
+.exp-backup-actions { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.exp-backup-actions .btn { justify-content: flex-start; }
+
+/* Row lists (figures, tables, lists) */
+.exp-section { overflow: hidden; }
+.exp-rows .list-item { flex-wrap: wrap; row-gap: 10px; }
+.exp-rows .list-item:hover { background: var(--surface-2); }
+.exp-thumb { width: 88px; height: 58px; flex: none; padding: 4px; }
+.exp-row-main { flex: 1 1 240px; min-width: 0; }
+.exp-row .title { font-size: 14px; }
+.exp-row .meta { margin-top: 3px; min-width: 0; row-gap: 2px; }
+.exp-actions { margin-inline-start: auto; flex-wrap: wrap; justify-content: flex-end; opacity: 1 !important; }
+
+.exp-ref { align-items: flex-start; flex-wrap: nowrap !important; }
+.exp-ref-n { flex: none; min-width: 34px; justify-content: center; direction: ltr; font-variant-numeric: tabular-nums; }
+.exp-ref-text { font-size: 13px; line-height: 1.55; color: var(--text-2); overflow-wrap: anywhere; }
+.exp-ref-text em { font-style: italic; }
+
+.exp-empty { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 22px 18px; }
+.exp-empty > div:nth-child(2) { flex: 1 1 240px; }
+.exp-empty-icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); flex: none; }
+.exp-empty p { margin-top: 2px; color: var(--muted); font-size: 13px; }
+
+/* Arabic UI */
+:root[lang="ar"] .exp-feat-head h2 { letter-spacing: 0; }
+/* Counter chips read "label number" (الفصول 6): the grammar-safe order for Arabic. */
+:root[dir="rtl"] .exp-stats span { flex-direction: row-reverse; }
+/* Figure / table titles are report text (dir="auto"); keep them flush right in the Arabic list. */
+:root[dir="rtl"] .exp-row .title { text-align: right; }
+
+/* Busy buttons */
+.btn.is-busy { position: relative; color: transparent !important; pointer-events: none; }
+.btn.is-busy:disabled { opacity: .8; }
+.btn.is-busy > * { opacity: 0; }
+.btn.is-busy::after {
+  content: ""; position: absolute; inset: 0; margin: auto; width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--border-strong); border-top-color: var(--primary);
+  animation: exp-spin .7s linear infinite;
+}
+.btn-primary.is-busy::after { border-color: rgba(255, 255, 255, .38); border-top-color: #fff; }
+.btn-lg.is-busy::after { width: 18px; height: 18px; }
+@keyframes exp-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 1000px) {
+  .exp-featured { grid-template-columns: 1fr; grid-template-areas: "head" "action" "includes"; gap: 20px; }
+  .exp-grid-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .exp-featured { padding: 18px; }
+  .exp-feat-head { gap: 12px; }
+  .exp-tile-xl { width: 46px; height: 46px; border-radius: 13px; }
+  .exp-tile-xl svg { width: 22px; height: 22px; }
+  .exp-feat-action .btn-lg { width: 100%; }
+  .exp-stats { display: none; }
+  .exp-rows .list-item { padding: 14px; gap: 12px; }
+  .exp-thumb { width: 72px; height: 50px; }
+  .exp-actions { margin-inline-start: 0; width: 100%; justify-content: flex-start; }
+  .exp-head-actions { margin-inline-start: 0; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .btn.is-busy::after { animation-duration: 1.6s; } }

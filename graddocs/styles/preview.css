@@ -1,0 +1,267 @@
+/* Document Preview: toolbar, navigator, grey canvas and the white paper pages.
+   Page geometry / typography come from CSS variables set by preview-view.js on .pv-root:
+   --pw --ph (page px)  --ml --mr --mt --mb (margins px)  --cw --ch (content box px)
+   --pv-font --pv-size --pv-lh --pv-para --pv-h1..3 --pv-align --pv-align-last
+   --pv-hfont (heading font; unset = the body font) --pv-indent (first-line indent of paragraphs) --pv-sub-style (italic | normal, level 3+ headings)
+   Pages are always white paper with black text, even in dark mode, and always left-to-right paper:
+   the app may be RTL (Arabic) but the report is the user's document, so .pv-canvas / .preview-page /
+   the measuring host force direction: ltr. Paragraphs carry dir="auto" so Arabic text still reads RTL. */
+
+.pv-root {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; min-width: 0;
+  background: var(--bg-subtle);
+}
+
+/* ---------- Toolbar ---------- */
+.pv-toolbar {
+  flex: none; position: relative; z-index: 3;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px;
+  padding: 8px 14px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.pv-toolbar .btn-group > .btn { margin-inline-start: -1px; }
+.pv-toolbar .btn-group > .btn:first-child { margin-inline-start: 0; }
+.pv-zoom { min-width: 58px; font-variant-numeric: tabular-nums; }
+.pv-count { padding: 0 4px; font-size: 12.5px; font-weight: 600; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pv-toggles button { white-space: nowrap; }
+.pv-tl-short { display: none; }
+.pv-toggles button:not(.active) { opacity: .8; }
+
+/* ---------- Body: navigator + canvas ---------- */
+.pv-body { flex: 1; min-height: 0; display: flex; }
+
+.pv-nav {
+  width: 276px; flex: none; min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--surface); border-inline-end: 1px solid var(--border);
+}
+.pv-nav.collapsed { display: none; }
+.pv-nav-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px; padding-inline-start: 14px; min-height: 40px;
+  font-size: 11.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.pv-nav-list { flex: 1; min-height: 0; overflow: auto; padding: 4px 8px 16px; }
+.pv-nav-group { padding: 14px 8px 4px; font-size: 11px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); }
+.pv-nav-item {
+  display: flex; align-items: baseline; gap: 8px; width: 100%;
+  padding: 5px 8px; border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-2); text-align: start; font-size: 13px; line-height: 1.35;
+}
+.pv-nav-item:hover { background: var(--surface-hover); color: var(--text); }
+.pv-nav-item.active { background: var(--primary-soft); color: var(--primary-text); }
+.pv-nav-item .pv-lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-nav-item .pv-pg { flex: none; font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.pv-nav-item.active .pv-pg { color: inherit; opacity: .7; }
+.pv-nav-item.is-ch { margin-top: 4px; font-weight: 600; color: var(--text); }
+.pv-nav-item.is-ch.active { color: var(--primary-text); }
+.pv-nav-item.lvl-1 { padding-inline-start: 20px; }
+.pv-nav-item.lvl-2 { padding-inline-start: 32px; font-size: 12.5px; }
+
+.pv-stage { position: relative; flex: 1; min-width: 0; }
+.pv-canvas { position: absolute; inset: 0; overflow: auto; background: var(--bg-subtle); outline: none; overscroll-behavior: contain; direction: ltr; }
+.pv-pages {
+  --zoom: 1;
+  display: flex; flex-direction: column;
+  width: max-content; min-width: 100%;
+  padding: 28px;
+}
+.pv-page-wrap {
+  flex: none; position: relative;
+  width: calc(var(--pw) * var(--zoom)); height: calc(var(--ph) * var(--zoom));
+  margin: 0 auto 28px;
+}
+.preview-page {
+  position: absolute; left: 0; top: 0; direction: ltr;
+  width: var(--pw); height: var(--ph);
+  transform: scale(var(--zoom)); transform-origin: 0 0;
+  background: #fff; color: #000; color-scheme: light;
+  box-shadow: var(--page-shadow);
+  overflow: hidden;
+}
+
+.pv-indicator {
+  position: absolute; left: 50%; bottom: 14px; transform: translate(-50%, 6px); /* physical: the translate is physical too */
+  padding: 5px 12px; border-radius: 20px;
+  background: color-mix(in srgb, var(--text) 82%, transparent); color: var(--bg);
+  font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-md);
+  opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+}
+.pv-indicator.show { opacity: 1; transform: translate(-50%, 0); }
+
+.pv-empty, .pv-error { margin: 60px auto; max-width: 420px; text-align: center; color: var(--muted); }
+/* These two sit inside the (always LTR) canvas but are UI messages: follow the app direction. */
+:root[dir="rtl"] .pv-empty, :root[dir="rtl"] .pv-error { direction: rtl; }
+.pv-error { color: var(--danger); }
+
+/* ---------- Off-screen measuring host (same width + CSS as a page's content box) ---------- */
+.pv-measure-host { position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: hidden; visibility: hidden; pointer-events: none; direction: ltr; }
+
+/* ---------- Page content ---------- */
+.pv-content, .pv-measure {
+  display: flex; flex-direction: column; align-items: stretch;
+  font-family: var(--pv-font); font-size: var(--pv-size); line-height: var(--pv-lh);
+  font-weight: 400; font-style: normal; letter-spacing: normal; text-align: start; text-transform: none;
+  color: #000;
+}
+.pv-content { position: absolute; left: var(--ml); top: var(--mt); width: var(--cw); height: var(--ch); }
+.pv-content > *, .pv-measure > * { flex: none; min-width: 0; }
+.pv-content > .pv-top { margin-top: 0 !important; }
+
+.pv-p {
+  margin: 0 0 var(--pv-para);
+  text-align: var(--pv-align); overflow-wrap: break-word;
+  text-indent: var(--pv-indent, 0);
+}
+.pv-p.pv-split-tail { text-indent: 0; } /* the rest of a paragraph that continues on the next page is not indented */
+.pv-li {
+  position: relative; margin: 0 0 calc(var(--pv-para) * .5);
+  padding-inline-start: 1.75em; text-align: var(--pv-align); overflow-wrap: break-word;
+}
+.pv-li::before { content: "\2022"; position: absolute; inset-inline-start: .6em; }
+.pv-li-last { margin-bottom: var(--pv-para); }
+.pv-split-head { margin-bottom: 0 !important; text-align-last: var(--pv-align-last); }
+.pv-li.pv-split-tail::before { content: none; }
+.pv-note { margin: 0; text-align: center; font-style: italic; color: #555; }
+
+.pv-h1, .pv-h2, .pv-h3, .pv-h4 {
+  font-family: var(--pv-hfont, inherit); font-weight: 700; font-style: normal; letter-spacing: normal; color: #000;
+  line-height: 1.25; overflow-wrap: break-word;
+}
+.pv-h1 { margin: 24pt 0 18pt; font-size: var(--pv-h1); text-align: center; }
+.pv-h2 { margin: 14pt 0 6pt; font-size: var(--pv-h2); text-align: start; }
+.pv-h3, .pv-h4 { margin: 12pt 0 4pt; font-size: var(--pv-h3); text-align: start; font-style: var(--pv-sub-style, normal); }
+
+.pv-content .doc-ref, .pv-measure .doc-ref { color: inherit; border-radius: 2px; cursor: pointer; transition: background .12s; }
+.pv-content .doc-ref:hover { background: rgba(79, 70, 229, .13); box-shadow: 0 0 0 1px rgba(79, 70, 229, .13); }
+.pv-content .doc-ref.broken, .pv-measure .doc-ref.broken { color: #d92d20; }
+
+/* Figures and tables */
+.pv-figure { margin: 12pt 0; text-align: center; border-radius: 3px; }
+.pv-fig-img { display: flex; justify-content: center; }
+.pv-fig-svg { display: block; max-width: 100%; }
+.pv-missing { padding: 28px; border: 1px dashed #999; color: #666; font-style: italic; text-align: center; }
+.pv-caption { font-size: calc(var(--pv-size) * .92); line-height: 1.3; overflow-wrap: break-word; }
+.pv-caption[data-pos="below"] { margin: 6pt 0 0; }
+.pv-caption[data-pos="above"] { margin: 0 0 6pt; }
+.pv-cap-label.is-bold, .pv-cap-title.is-bold { font-weight: 700; }
+.pv-cap-title.is-italic { font-style: italic; }
+.pv-caption.pv-cont { font-style: italic; }
+.pv-tblock { margin: 12pt 0; border-radius: 3px; }
+.pv-tbl { text-align: start; color: #000; }
+.pv-tbl table { max-width: 100%; line-height: 1.25; color: #000; }
+.pv-figure[data-fig-id], .pv-tblock[data-tbl-id] { cursor: pointer; }
+.pv-figure[data-fig-id]:hover, .pv-tblock[data-tbl-id]:hover {
+  outline: 2px solid rgba(79, 70, 229, .5); outline-offset: 6px;
+}
+
+/* TOC / List of figures / List of tables */
+.pv-toc { display: flex; align-items: baseline; margin: 0 0 4pt; line-height: 1.3; }
+@supports (align-items: last baseline) { .pv-toc { align-items: last baseline; } }
+.pv-toc.is-ch { margin-top: 9pt; font-weight: 700; }
+.pv-toc.is-list { margin-bottom: 8pt; }
+.pv-toc .t { min-width: 0; padding-inline-end: .35em; overflow-wrap: break-word; }
+/* Leader dots are anchored to the right edge so they line up in columns across lines (like tab leaders). */
+.pv-toc .lead { flex: 1 1 1em; min-width: 1em; overflow: hidden; white-space: nowrap; direction: rtl; }
+.pv-toc .lead::after {
+  content: ". . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .";
+}
+.pv-toc .n { flex: none; min-width: 2.2em; padding-inline-start: .35em; text-align: end; font-variant-numeric: tabular-nums; }
+.pv-toc[data-goto] { cursor: pointer; }
+/* Academic style (settings.toc.style): chapters bold capitals, front matter and level-2 entries in small caps,
+   level-3 entries plain; no indentation and tighter lines so the whole contents fit on one page. */
+.pv-toc.acad { margin: 0 0 1.5pt; font-size: .92em; line-height: 1.2; }
+.pv-toc.acad.is-ch { margin-top: 5pt; font-size: 1em; font-weight: 700; text-transform: uppercase; }
+.pv-toc.acad.is-ch:first-child { margin-top: 0; }
+.pv-toc.acad.is-list { margin-bottom: 5pt; }
+.pv-toc.acad.is-front, .pv-toc.acad.is-l2, .pv-toc.acad.is-list { font-variant-caps: small-caps; }
+.pv-toc[data-goto]:hover .t { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+/* List of acronyms: acronym (bold) | meaning */
+.pv-acr { display: grid; grid-template-columns: minmax(5.5em, 28%) 1fr; column-gap: 1em; margin: 0 0 5pt; line-height: 1.35; }
+.pv-acr .a { font-weight: 700; overflow-wrap: anywhere; }
+
+/* References: "[1]" in the margin column, text aligned and hanging, single-spaced inside an entry */
+.pv-ref {
+  position: relative; margin: 0 0 9pt; padding-inline-start: 1.17cm;
+  line-height: 1.15; text-align: var(--pv-align); overflow-wrap: break-word;
+}
+.pv-ref::before { content: attr(data-n); position: absolute; inset-inline-start: 0; }
+.pv-ref.pv-split-tail::before { content: none; }
+.pv-ref em { font-style: italic; }
+
+/* Declaration: one signature line per student, then the note */
+.pv-sig { display: flex; align-items: flex-end; margin: 2.2em 0 0; line-height: 1.3; }
+.pv-sig .n { flex: none; padding-inline-end: .6em; }
+.pv-sig .line { flex: 0 1 55%; height: 0; border-bottom: 1px solid #000; }
+.pv-sig-note { margin: 2.8em 0 0; text-align: center; }
+
+/* Page number, centred in the bottom margin */
+.pv-footer {
+  position: absolute; left: 0; right: 0; bottom: 0; height: var(--mb);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--pv-font); font-size: var(--pv-size); line-height: 1; color: #000;
+}
+
+/* Title page */
+.pv-title {
+  height: var(--ch);
+  display: grid; grid-template-rows: 1fr auto 1fr;
+  text-align: center;
+}
+.pv-title-top { align-self: start; padding-top: .4em; }
+.pv-uni { margin-bottom: .35em; font-size: 1.4em; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; line-height: 1.3; overflow-wrap: break-word; }
+.pv-org { font-size: 1.2em; line-height: 1.55; }
+.pv-title-mid { display: flex; flex-direction: column; align-items: center; gap: 1.6em; padding: 0 4%; }
+.pv-rule { width: 38%; height: 0; border-top: 3px double #000; }
+.pv-project { font-size: 2.75em; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+.pv-ptype { margin-top: -.5em; font-size: 1.3em; font-style: italic; }
+.pv-title-bottom { align-self: end; display: flex; flex-direction: column; align-items: center; gap: .8em; padding-bottom: .4em; }
+.pv-credit { font-size: 1.15em; line-height: 1.5; }
+.pv-credit .pv-label { font-weight: 400; }
+.pv-credit .pv-name { font-weight: 700; }
+.pv-credit > .pv-label + .pv-name { margin-top: .15em; }
+.pv-year { margin-top: .5em; font-size: 1.15em; }
+/* The project's own logo (settings.projectLogo): centred just above the project title, about 1.1 inch tall, at most 4.5 inch wide.
+   preview-view.js shrinks the height of very wide logos once the picture has loaded so the aspect ratio is kept. */
+.pv-project-logo { display: block; flex: none; height: 1.1in; width: auto; max-width: min(4.5in, 100%); margin-bottom: -.5em; object-fit: contain; }
+
+/* Submission layout (settings.titlePage.layout): logo, university / college / department, title, degree statement,
+   "by" + students, "Supervised by" + supervisors and the month at the bottom (as many university templates). */
+.pv-ts { height: var(--ch); display: flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.4; }
+.pv-ts > * { flex: none; max-width: 100%; }
+.pv-ts-logo { display: block; height: 1in; width: auto; max-width: 100%; margin-bottom: 8pt; object-fit: contain; }
+.pv-ts > .pv-project-logo { max-width: min(4.5in, 100%); margin-bottom: 8pt; }
+.pv-ts-uni { font-weight: 700; font-size: 1.1em; overflow-wrap: break-word; }
+.pv-ts-org { font-weight: 700; overflow-wrap: break-word; }
+.pv-ts-gap { flex: 1 1 0; min-height: .8em; }
+.pv-ts-gap.g1 { flex-grow: 3; }
+.pv-ts-gap.g2 { flex-grow: 1; max-height: 4.5em; }
+.pv-ts-gap.g3 { flex-grow: 1; max-height: 4.5em; }
+.pv-ts-gap.g4 { flex-grow: 1; }
+.pv-ts-name { font-weight: 700; font-size: 1.5em; line-height: 1.25; overflow-wrap: anywhere; }
+.pv-ts-degree { margin-top: 1.4em; max-width: 92%; font-style: italic; overflow-wrap: break-word; }
+.pv-ts-by { font-weight: 700; margin-bottom: .2em; }
+.pv-ts-line { overflow-wrap: break-word; }
+.pv-ts-date { font-weight: 700; padding-bottom: .4em; }
+
+/* ---------- Arabic UI: no letter-spacing / capitals on Arabic labels (it would break the joined letters) ---------- */
+:root[lang="ar"] .pv-nav-head, :root[lang="ar"] .pv-nav-group { letter-spacing: 0; text-transform: none; }
+/* Navigator labels are the report's own headings (dir="auto": English ones are LTR and truncate at their end);
+   keep them flush with the right edge of the Arabic navigator. */
+:root[dir="rtl"] .pv-nav-item .pv-lbl { text-align: right; }
+
+/* ---------- Small screens: navigator hidden, compact toolbar ---------- */
+@media (max-width: 800px) {
+  .pv-nav, .pv-nav-toggle { display: none !important; }
+  .pv-toolbar { padding: 8px 10px; gap: 6px 8px; }
+  .pv-toolbar .pv-tl { display: none; }
+  .pv-toolbar [data-act="refresh"] { display: none; }
+  .pv-toggles button { padding: 0 8px; font-size: 12px; }
+  .pv-toolbar [data-act="print"] .pv-tl-short { display: inline; }
+  .pv-pages { padding: 14px 10px; }
+  .pv-page-wrap { margin-bottom: 16px; }
+}

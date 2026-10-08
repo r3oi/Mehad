@@ -1,0 +1,80 @@
+// Left "Elements" panel: searchable shape library grouped by category.
+// Click adds at the viewport centre; drag & drop places at the cursor.
+import { LIBRARY, getShape } from '../shapes.js';
+import { renderThumbnail } from '../render.js';
+import { esc } from '../../ui/dom.js';
+import { icon } from '../../ui/icons.js';
+import { t } from '../../i18n/index.js';
+
+const thumbCache = new Map();
+
+function presetThumb(preset) {
+  const key = JSON.stringify(preset);
+  if (!thumbCache.has(key)) {
+    if (preset.edge) {
+      // Connector presets: a short arrow that shows the line style and arrowhead.
+      const edge = { id: 'p', type: 'edge', source: { x: 0, y: 0 }, target: { x: 96, y: 0 }, routing: 'straight', text: '', style: { ...(preset.edge.style || {}), strokeWidth: 2 } };
+      thumbCache.set(key, renderThumbnail({ elements: [edge], defaults: { fontFamily: 'Arial', fontSize: 18 } }, { padding: 14 }));
+      return thumbCache.get(key);
+    }
+    const shape = getShape(preset.shape);
+    const w = preset.w ?? shape.defaults.w; const h = preset.h ?? shape.defaults.h;
+    const scale = Math.min(1, 120 / w, 80 / h);
+    const node = {
+      id: 'p', type: 'node', shape: preset.shape, x: 0, y: 0, w: Math.max(6, w * scale), h: Math.max(6, h * scale),
+      text: preset.shape === 'text' ? 'Aa' : '', style: { ...(preset.style || {}), fontSize: 18 },
+    };
+    thumbCache.set(key, renderThumbnail({ elements: [node], defaults: { fontFamily: 'Arial', fontSize: 18 } }, { padding: 6 }));
+  }
+  return thumbCache.get(key);
+}
+
+export function renderLibrary(container, { groupsFirst = [], onAdd }) {
+  const ordered = [...LIBRARY].sort((a, b) => {
+    const ia = groupsFirst.indexOf(a.group); const ib = groupsFirst.indexOf(b.group);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  const presets = [];
+  container.innerHTML = `
+    <div class="ed-panel-head"><span>${t('Elements')}</span></div>
+    <div class="ed-lib-search input-group">${icon('search')}<input class="input input-sm" type="search" placeholder="${t('Search shapes')}" aria-label="${t('Search shapes')}"></div>
+    <div class="ed-lib-groups">
+      ${ordered.map((g, gi) => `
+        <details class="ed-lib-group" ${gi < 2 || groupsFirst.includes(g.group) ? 'open' : ''}>
+          <summary>${icon('chevronRight', 'icon-sm chev')}${esc(t(g.group))}<span class="faint">${g.items.length}</span></summary>
+          <div class="ed-lib-grid">
+            ${g.items.map((item) => {
+              const idx = presets.push(item) - 1;
+              const name = t(item.name);
+              // Search matches the displayed name and the English one.
+              return `<button class="ed-lib-item" draggable="true" data-preset="${idx}" data-name="${esc(`${name} ${item.name}`.toLowerCase())}" data-tip="${esc(t('{name} — click or drag onto the canvas', { name }))}">
+                <span class="ed-lib-thumb">${presetThumb(item)}</span><span class="ed-lib-name truncate">${esc(name)}</span></button>`;
+            }).join('')}
+          </div>
+        </details>`).join('')}
+    </div>`;
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-preset]');
+    if (btn) onAdd(presets[Number(btn.dataset.preset)], null);
+  });
+  container.addEventListener('dragstart', (e) => {
+    const btn = e.target.closest('[data-preset]');
+    if (!btn) return;
+    e.dataTransfer.setData('application/x-graddocs-preset', btn.dataset.preset);
+    e.dataTransfer.effectAllowed = 'copy';
+  });
+  const search = container.querySelector('input[type=search]');
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    container.querySelectorAll('.ed-lib-group').forEach((group) => {
+      let any = false;
+      group.querySelectorAll('.ed-lib-item').forEach((item) => {
+        const hit = !q || item.dataset.name.includes(q);
+        item.hidden = !hit; any = any || hit;
+      });
+      group.hidden = !any;
+      if (q && any) group.open = true;
+    });
+  });
+  return { presetAt: (i) => presets[Number(i)] };
+}

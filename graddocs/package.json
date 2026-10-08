@@ -1,0 +1,16 @@
+{
+  "name": "graddocs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Graduation Project Documentation Builder — figures, tables, chapters, acronyms and auto-numbered lists.",
+  "type": "module",
+  "scripts": {
+    "start": "node serve.mjs 5173",
+    "test": "node tests/unit.mjs && node tests/generate.mjs && node tests/word-template.mjs && node tests/smoke.mjs",
+    "test:unit": "node tests/unit.mjs",
+    "test:e2e": "node tests/smoke.mjs",
+    "test:pdf": "node tests/pdf-vector.mjs",
+    "test:generate": "node tests/generate.mjs"
+  },
+  "license": "MIT"
+}

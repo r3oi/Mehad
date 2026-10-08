@@ -1,0 +1,90 @@
+/* =========================================================================
+   Updates from Claude: top-bar notice, review dialog, dashboard card, settings actions.
+   Only design tokens and logical properties are used, so dark mode and RTL just work.
+   ========================================================================= */
+
+/* ----- Top-bar notice ----- */
+.inbox-pill {
+  flex: none; display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px 0 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border)); border-radius: 20px;
+  background: var(--primary-soft); color: var(--primary-text); font-size: 12.5px; font-weight: 600; white-space: nowrap;
+  transition: background .15s, border-color .15s;
+}
+.inbox-pill[hidden] { display: none; }
+.inbox-pill:hover { background: var(--primary-soft-2); border-color: color-mix(in srgb, var(--primary) 50%, var(--border)); }
+.inbox-pill:focus-visible { outline: none; box-shadow: var(--ring); }
+.inbox-pill .icon { color: var(--primary); }
+.inbox-pill-n::before { content: "("; }
+.inbox-pill-n::after { content: ")"; }
+.inbox-pill-n { font-variant-numeric: tabular-nums; }
+@media (max-width: 960px) {
+  .inbox-pill { padding: 0 9px; }
+  .inbox-pill-label { display: none; }
+  .inbox-pill-n::before, .inbox-pill-n::after { content: none; }
+  .inbox-pill-n { min-width: 16px; text-align: center; }
+}
+
+/* ----- Review dialog ----- */
+.ib-modal .modal-body { padding-top: 4px; }
+.ib-note { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 14px; font-size: 12.5px; color: var(--muted); }
+.ib-note .icon { flex: none; margin-top: 2px; color: var(--info); }
+.ib-list { display: flex; flex-direction: column; gap: 12px; }
+.ib-item {
+  display: grid; grid-template-columns: 176px minmax(0, 1fr); gap: 16px; padding: 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface);
+}
+.ib-preview {
+  display: grid; place-items: center; align-self: start; height: 124px; padding: 8px; overflow: hidden;
+  border: 1px solid var(--border); border-radius: var(--radius); background: #fff;
+}
+.ib-preview svg, .ib-preview img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; }
+.ib-preview.thumb svg { width: 100%; height: 100%; }
+/* The logo is printed on a white page, so it is previewed on a light checkerboard in both themes. */
+.ib-preview-logo { background: repeating-conic-gradient(#eef0f3 0% 25%, #fff 0% 50%) 0 0 / 14px 14px; }
+.ib-preview-logo img { object-fit: contain; }
+.ib-broken { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px; font-size: 12px; text-align: center; color: var(--muted); }
+.ib-broken .icon { color: var(--warning); }
+.ib-main { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ib-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.ib-head .badge .icon { margin-inline-end: 4px; }
+.ib-date { margin-inline-start: auto; font-size: 12px; color: var(--muted); }
+.ib-title { margin: 2px 0 0; font-size: 14.5px; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; }
+.ib-desc { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2); overflow-wrap: anywhere; }
+.ib-where { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; margin-top: 2px; font-size: 12.5px; }
+.ib-where-label { color: var(--muted); }
+.ib-where-label::after { content: ":"; }
+.ib-where-value { font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.ib-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.ib-checked { align-self: center; font-size: 12.5px; }
+
+.ib-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 36px 16px 28px; text-align: center; }
+.ib-empty-ico { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: var(--success-soft); color: var(--success); }
+.ib-empty h3 { margin: 4px 0 0; font-size: 15px; }
+.ib-empty p { margin: 0 0 6px; max-width: 42ch; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .ib-item { grid-template-columns: minmax(0, 1fr); }
+  .ib-preview { height: 150px; }
+  .ib-date { margin-inline-start: 0; flex-basis: 100%; }
+}
+
+/* ----- Dashboard card ----- */
+.dash-inbox {
+  margin-bottom: 20px;
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+}
+.ib-card-head { align-items: center; flex-wrap: wrap; gap: 12px; border-bottom-color: color-mix(in srgb, var(--primary) 18%, var(--border)); }
+.ib-card-head h2 { font-size: 15px; }
+.ib-card-ico { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--primary-soft); color: var(--primary); }
+.ib-card-sub { margin-top: 2px; font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.ib-card-list { display: flex; flex-direction: column; gap: 8px; padding-block: 12px; }
+.ib-card-row { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13.5px; }
+.ib-card-kind { flex: none; display: grid; color: var(--primary); }
+.ib-card-title { flex: 1 1 auto; min-width: 0; font-weight: 550; }
+.ib-card-more { font-size: 12.5px; }
+
+/* ----- Settings ----- */
+.ib-set-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+[data-inbox-status] { display: inline-block; }
+@media (max-width: 640px) { .ib-set-actions { justify-content: flex-start; } }

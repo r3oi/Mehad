@@ -1,0 +1,50 @@
+/* Print / Save as PDF. Linked with media="print".
+   Only the preview pages print: the app shell and the preview chrome are hidden, zoom is
+   reset and every .preview-page becomes exactly one sheet.
+   The paper size cannot be dynamic here, so preview-view.js injects <style id="preview-page-size">
+   (an @page rule + the page size in mm) while the preview is mounted; the defaults below are A4 portrait. */
+@page { size: A4 portrait; margin: 0; }
+
+html, body {
+  height: auto !important; overflow: visible !important;
+  background: #fff !important; color: #000 !important;
+  /* The printed sheets are always left-to-right paper: print the page exactly as in English, whatever the app language. */
+  direction: ltr !important;
+}
+
+/* App shell and floating UI */
+.sidebar, .sidebar-backdrop, .topbar, #boot,
+.toast-stack, .tooltip, .menu, .modal-root, .palette-root { display: none !important; }
+.app { display: block !important; height: auto !important; overflow: visible !important; }
+.main, .main.flush { position: static !important; display: block !important; height: auto !important; overflow: visible !important; }
+
+/* Preview chrome */
+.pv-toolbar, .pv-nav, .pv-indicator, .pv-measure-host, .pv-empty { display: none !important; }
+.pv-root, .pv-body, .pv-stage, .pv-canvas {
+  position: static !important; display: block !important; inset: auto !important;
+  height: auto !important; overflow: visible !important; background: none !important;
+}
+.pv-pages {
+  --zoom: 1 !important;
+  display: block !important; width: auto !important; min-width: 0 !important; padding: 0 !important;
+}
+.pv-page-wrap {
+  display: block !important; position: static !important;
+  width: auto !important; height: auto !important; margin: 0 !important;
+}
+
+/* One sheet per page. The sheets are always left-to-right paper, whatever the app language
+   (preview.css sets direction: ltr on .pv-canvas and .preview-page). */
+.preview-page {
+  position: relative !important; left: auto !important; top: auto !important;
+  transform: none !important; box-shadow: none !important; margin: 0 !important;
+  width: 210mm; height: 296.6mm; overflow: hidden;
+  break-after: page; page-break-after: always; break-inside: avoid; page-break-inside: avoid;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.pv-page-wrap:last-child > .preview-page { break-after: auto; page-break-after: auto; }
+
+/* No interactive affordances on paper */
+.pv-figure[data-fig-id]:hover, .pv-tblock[data-tbl-id]:hover { outline: none !important; }
+.pv-content .doc-ref:hover { background: none !important; box-shadow: none !important; }
+.pv-toc[data-goto]:hover .t { text-decoration: none !important; }

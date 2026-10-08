@@ -1,0 +1,92 @@
+/* =========================================================================
+   References (bibliography): page, add / edit dialog, BibTeX import
+   ========================================================================= */
+.ref-page { max-width: 1100px; }
+.ref-count { margin-inline-start: 6px; height: 22px; font-size: 12.5px; vertical-align: middle; font-variant-numeric: tabular-nums; }
+.ref-toolbar { margin-bottom: 6px; }
+.ref-toolbar .spacer { flex: 1 1 0; min-width: 0; }
+.ref-result { font-size: 12.5px; }
+.ref-ctl { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 550; color: var(--muted); white-space: nowrap; }
+.ref-ctl .select { width: auto; min-width: 150px; max-width: 260px; }
+.ref-order-note { margin: 0 0 14px; font-size: 12.5px; color: var(--muted); }
+
+/* List */
+.ref-list { list-style: none; margin: 0; padding: 0; overflow: hidden; }
+.ref-row {
+  display: flex; align-items: flex-start; gap: 14px; padding: 14px 18px;
+  border-bottom: 1px solid var(--border); transition: background .12s;
+}
+.ref-row:last-child { border-bottom: 0; }
+.ref-row:hover { background: var(--surface-2); }
+.ref-num {
+  flex: none; min-width: 44px; margin-top: 1px; padding: 2px 8px; border-radius: 6px; text-align: center;
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 650; line-height: 1.5; font-variant-numeric: tabular-nums;
+  color: var(--primary-text); background: var(--primary-soft);
+}
+.ref-main { flex: 1; min-width: 0; }
+.ref-text { font-size: 14px; line-height: 1.6; color: var(--text); overflow-wrap: anywhere; }
+.ref-text em { font-style: italic; }
+.ref-text mark { padding: 0 1px; border-radius: 3px; color: inherit; background: color-mix(in srgb, var(--warning) 30%, transparent); }
+.ref-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 7px; font-size: 12px; }
+.ref-type { font-weight: 550; }
+.ref-cited { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--success); }
+.ref-cited .icon { width: 12px; height: 12px; }
+.ref-uncited { color: var(--faint); }
+.ref-actions { display: flex; flex: none; align-items: center; gap: 2px; }
+.ref-actions .btn { opacity: .65; }
+.ref-row:hover .ref-actions .btn, .ref-actions .btn:focus-visible { opacity: 1; }
+.ref-del:hover { color: var(--danger); background: var(--danger-soft); }
+.ref-row.highlight-flash { animation: ref-row-flash 1.8s ease; }
+@keyframes ref-row-flash {
+  0%, 45% { background: color-mix(in srgb, var(--primary) 18%, transparent); }
+  100% { background: transparent; }
+}
+.ref-empty { padding: 48px 24px; }
+.ref-empty p { max-width: 520px; }
+[dir="rtl"] .ref-num, [dir="rtl"] .ref-cited { letter-spacing: 0; }
+
+/* Add / edit dialog */
+.ref-form { display: flex; flex-direction: column; gap: 14px; }
+.ref-type .select { max-width: 320px; }
+.ref-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+.ref-fields .field.wide { grid-column: 1 / -1; }
+.ref-form .req { color: var(--danger); }
+.ref-form .textarea { min-height: 0; }
+.ref-preview {
+  /* stays in view while the fields above it are scrolled */
+  position: sticky; bottom: 0; z-index: 2; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+  box-shadow: 0 -10px 14px -8px rgba(16, 24, 40, .14);
+}
+.ref-preview-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+[dir="rtl"] .ref-preview-head { letter-spacing: 0; text-transform: none; }
+.ref-preview-head .badge { letter-spacing: 0; text-transform: none; }
+.ref-preview-body { font-family: var(--font-doc); font-size: 14.5px; line-height: 1.6; color: var(--text); overflow-wrap: anywhere; }
+.ref-preview-body em { font-style: italic; }
+.ref-preview-body.empty { font-family: inherit; font-size: 13px; color: var(--faint); }
+@media (max-width: 560px) {
+  .ref-fields { grid-template-columns: 1fr; }
+}
+
+/* BibTeX import dialog */
+.ref-import-help { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+.ref-bib { min-height: 190px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; white-space: pre; overflow: auto; }
+.ref-import-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.ref-import-summary { font-size: 13px; font-weight: 550; }
+.ref-import-preview { margin-top: 10px; }
+.ref-import-list {
+  max-height: 190px; overflow: auto; margin: 0 0 6px; padding: 10px 14px;
+  font-size: 13px; line-height: 1.5; list-style: decimal inside; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+}
+.ref-import-list li + li { margin-top: 7px; }
+
+/* Phones: entries stack under their number */
+@media (max-width: 640px) {
+  .ref-row { flex-wrap: wrap; gap: 8px 10px; padding: 12px 14px; }
+  .ref-main { flex: 1 1 100%; order: 2; }
+  .ref-num { order: 1; }
+  .ref-actions { order: 1; margin-inline-start: auto; }
+  .ref-actions .btn { opacity: 1; }
+  .ref-ctl { flex: 1 1 100%; }
+  .ref-ctl .select { flex: 1; max-width: none; }
+}
