@@ -12,7 +12,8 @@ export const sortAcronyms = (list) => [...list].sort((a, b) => compareText(a.acr
  * buildDocument(project) → {
  *   titlePage: { layout: 'classic'|'submission', name, type, description, university, college, department, supervisor,
  *                coSupervisor, students[] (lines as typed, e.g. "Ahmed Ali (443001234)"), studentNames[] (IDs stripped),
- *                academicYear, submissionDate, degreeStatement, logo (data URL or '') },
+ *                academicYear, submissionDate, degreeStatement, logo (university, data URL or ''),
+ *                projectLogo (the project's own logo, shown above the title; data URL or '') },
  *   front:   [{ id, kind, title, generated, blocks: [{type:'p'|'li', text}], wordLimit, signatures, signatureNote }]
  *            (only included items, in order; `signatures` → render one signature line per titlePage.studentNames)
  *   toc:     [{ id, kind: 'front'|'chapter'|'section'|'references', level: 1..4, number, title, text }]
@@ -135,7 +136,7 @@ export function buildDocument(project) {
       coSupervisor: project.coSupervisor || '',
       students, studentNames: students.map(studentName),
       academicYear: project.academicYear, submissionDate: project.submissionDate || '',
-      degreeStatement: project.degreeStatement || DEFAULT_DEGREE_STATEMENT, logo: project.logo || '',
+      degreeStatement: project.degreeStatement || DEFAULT_DEGREE_STATEMENT, logo: project.logo || '', projectLogo: project.projectLogo || '',
     },
     front, toc, figures, tables, acronyms: sortAcronyms(project.acronyms), body, references,
   };
