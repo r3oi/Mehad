@@ -129,7 +129,7 @@ def swell(e):
 def type_(e):
     t = tt(.12)
     s = .7 * bp(rng.standard_normal(len(t)), 1500, 7000) * np.exp(-t / .005) + np.sin(2 * np.pi * np.cumsum(180 + 120 * np.exp(-t / .01)) / SR) * np.exp(-t / .035)
-    place(norm(s), e["t"], -20, pan=e.get("pan", 0))
+    place(norm(s), e["t"], e.get("level", -20), pan=e.get("pan", 0))
 
 FX = {"scratch": scratch, "squeak": squeak, "zip": zip_, "whoosh": whoosh, "impact": impact, "pop": pop, "clicks": clicks,
       "thud": thud, "glitch": glitch, "riser": riser, "spin": spin, "flutter": flutter, "swell": swell, "type": type_}

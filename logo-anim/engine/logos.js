@@ -66,6 +66,41 @@ const LOGOS = {
       g.drawImage(this.I("logo_source"), 0, 0, this.src.w, this.src.h);
     },
     drawRough(g, k) { g.drawImage(this.I("rough_" + (k % 3)), 0, 0, this.src.w, this.src.h); },
+    /* the mark in any state, drawn through a layer so the knock-outs stay true holes.
+       g must carry the source→screen transform. letters: per-letter visibility 0..1,
+       dx: per-letter x offset (source px), wipe: letters cut only left of this x,
+       dark: white letter plate under the holes, mono: white translucent version
+       (overlap reads brighter), lens: overlap strength, r: circle radius */
+    drawMark(g, o = {}) {
+      const x1 = "x1" in o ? o.x1 : this.c1[0], x2 = "x2" in o ? o.x2 : this.c2[0], y = o.y ?? this.CY, r = o.r ?? this.R;
+      const letters = o.letters ?? [1, 1, 1], dx = o.dx ?? [0, 0, 0], wipe = o.wipe ?? Infinity, lens = o.lens ?? 1;
+      if (!this._lay) { this._lay = document.createElement("canvas"); }
+      const lay = this._lay; if (lay.width !== W || lay.height !== H) { lay.width = W; lay.height = H; }
+      const lg = lay.getContext("2d"); lg.setTransform(1, 0, 0, 1, 0, 0); lg.clearRect(0, 0, W, H); lg.setTransform(g.getTransform());
+      lg.imageSmoothingQuality = "high";
+      if (o.mono) {
+        lg.fillStyle = "#FFFFFF"; lg.globalAlpha = .74;
+        for (const x of [x1, x2]) if (x != null) { lg.beginPath(); lg.arc(x, y, r, 0, 7); lg.fill(); }
+        lg.globalAlpha = 1;
+      } else {
+        this.circles(lg, x1, null, y, { r }); this.circles(lg, null, x2, y, { r });
+        if (x1 != null && x2 != null && lens > 0) {
+          lg.save(); lg.globalAlpha = lens; lg.beginPath(); lg.arc(x1, y, r, 0, 7); lg.clip(); lg.beginPath(); lg.arc(x2, y, r, 0, 7); lg.clip();
+          lg.drawImage(this.I("deep_col"), 0, 0, 1, this.src.h, -this.src.w * 3, y - this.CY, this.src.w * 7, this.src.h); lg.restore();
+        }
+      }
+      const cut = (cg, i, op) => {
+        const a = letters[i]; if (a <= 0) return;
+        const [b0, b1, b2, b3] = this.G.letters[i];
+        cg.save(); cg.beginPath(); cg.rect(-1e5, -1e5, Math.min(wipe, 1e5) + 1e5, 2e5); cg.clip();
+        cg.translate(dx[i], 0); cg.beginPath(); cg.rect(b0 - 3, b1 - 3, b2 - b0 + 6, b3 - b1 + 6); cg.clip();
+        cg.globalAlpha = a * (op ? 1 : (o.alpha ?? 1)); if (op) cg.globalCompositeOperation = op;
+        cg.drawImage(this.I("letters"), 0, 0, this.src.w, this.src.h); cg.restore();
+      };
+      for (let i = 0; i < 3; i++) cut(lg, i, "destination-out");
+      if (o.dark) for (let i = 0; i < 3; i++) cut(g, i);
+      g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha *= o.alpha ?? 1; g.drawImage(lay, 0, 0); g.restore();
+    },
   },
 };
 
