@@ -57,6 +57,10 @@ export default {
       container.innerHTML = `<div class="page"><div class="empty-state"><div class="empty-icon">${icon('figure')}</div><h3>${t('Figure not found')}</h3><p>${t('It may have been deleted.')}</p><a class="btn btn-primary" href="${ctx.href('figures')}">${t('Back to Figures')}</a></div></div>`;
       return {};
     }
+    if (figure.type === 'gantt' && figure.gantt) { // a Gantt chart is edited as data (tasks and dates), not as shapes
+      location.replace(ctx.href('gantt', figureId));
+      return {};
+    }
     const project = () => store.project;
     let revisionMode = params.query?.revision === '1';
     let activeTab = 'design';

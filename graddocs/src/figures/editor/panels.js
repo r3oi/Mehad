@@ -297,7 +297,7 @@ export function figurePanelHTML(project, figure, editor) {
     <div class="ed-sec form-grid">
       <div class="field"><label for="fp-title">${t('Figure title')}</label><input id="fp-title" class="input input-sm" data-meta="title" value="${esc(figure.title)}"${AUTO}></div>
       <div class="field"><label for="fp-loc">${t('Location in report')}</label><select id="fp-loc" class="select select-sm" data-meta="location"><option value="">${t('Unassigned (numbered last)')}</option>${sectionOptions.join('')}</select></div>
-      <div class="field"><label for="fp-type">${t('Diagram type')}</label><select id="fp-type" class="select select-sm" data-meta="type">${figureTypes().map((ft) => `<option value="${ft.id}" ${ft.id === figure.type ? 'selected' : ''}>${esc(ft.name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="fp-type">${t('Diagram type')}</label><select id="fp-type" class="select select-sm" data-meta="type">${figureTypes().filter((ft) => !ft.dataDriven || ft.id === figure.type).map((ft) => `<option value="${ft.id}" ${ft.id === figure.type ? 'selected' : ''}>${esc(ft.name)}</option>`).join('')}</select></div>
       <div class="field"><label for="fp-desc">${t('Description')}</label><textarea id="fp-desc" class="textarea" rows="3" data-meta="description"${AUTO} placeholder="${t('Optional notes about this figure')}">${esc(figure.description || '')}</textarea></div>
     </div>
     <div class="ed-sec"><div class="ed-label">${t('Metadata')}</div>

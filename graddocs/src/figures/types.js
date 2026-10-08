@@ -4,6 +4,8 @@
 // English text prefilled as the title of a new figure (report content, never translated).
 import { t } from '../i18n/index.js';
 import * as T from './templates/index.js';
+import { ganttDiagram } from './gantt/gantt-model.js';
+import { sampleGantt } from './gantt/gantt-sample.js';
 
 const TYPES = new Map();
 
@@ -27,6 +29,9 @@ registerFigureType({ id: 'component', name: t('Component Diagram'), defaultTitle
 registerFigureType({ id: 'deployment', name: t('Deployment Diagram'), defaultTitle: 'Deployment Diagram', icon: 'tDeploy', description: t('Nodes, devices and deployed artifacts.'), template: T.deploymentTemplate, libraryGroups: ['UML', 'Architecture'] });
 registerFigureType({ id: 'fishbone', name: t('Fishbone Diagram'), defaultTitle: 'Fishbone Diagram', icon: 'tFishbone', description: t('Cause-and-effect / feature breakdown.'), template: T.fishboneTemplate, libraryGroups: ['Basic'] });
 registerFigureType({ id: 'hierarchy', name: t('Hierarchy / Organization'), defaultTitle: 'Hierarchy / Organization', icon: 'tHierarchy', description: t('Org charts, WBS and module trees.'), template: T.hierarchyTemplate, libraryGroups: ['Basic'] });
+// A Gantt chart is edited as data (tasks and dates, see figures/gantt/); figure.diagram is always rebuilt from figure.gantt.
+// `dataDriven` marks a type whose figures need that data: a drawing cannot be switched to it from the type menu of the drawing editor.
+registerFigureType({ id: 'gantt', name: t('Gantt Chart'), defaultTitle: 'Project Schedule (Gantt Chart)', icon: 'tTimeline', description: t('Project schedule you edit as a table of tasks and dates — phases, weeks and idle time are drawn for you.'), template: (fonts) => ganttDiagram(sampleGantt(), fonts), libraryGroups: ['Basic'], dataDriven: true });
 registerFigureType({ id: 'timeline', name: t('Timeline / Gantt'), defaultTitle: 'Timeline / Gantt', icon: 'tTimeline', description: t('Project schedule with tasks and months.'), template: T.timelineTemplate, libraryGroups: ['Basic'] });
 registerFigureType({ id: 'screenshot', name: t('Screenshot / Image'), defaultTitle: 'Screenshot', icon: 'tScreenshot', description: t('A UI screenshot or picture, ready to annotate with arrows and notes.'), template: T.screenshotTemplate, libraryGroups: ['Basic'] });
 registerFigureType({ id: 'generic', name: t('Generic Diagram'), defaultTitle: 'Generic Diagram', icon: 'tGeneric', description: t('Blank canvas — draw anything.'), template: T.genericTemplate, libraryGroups: ['Basic', 'Flowchart', 'UML', 'Context', 'Messages', 'ERD', 'Architecture'] });

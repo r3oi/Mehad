@@ -40,7 +40,7 @@ export default {
 
 Routes: `#/projects`, `#/p/<projectId>/<section>[/<itemId>][?query]` where section ∈
 dashboard, structure, word, chapters, figures, tables, acronyms, references, preview, export, settings.
-`figures/<id>` opens the figure editor, `tables/<id>` the table editor. Build links with `ctx.href('tables', id)`.
+`figures/<id>` opens the figure editor, `gantt/<id>` the Gantt editor (gantt figures redirect there), `tables/<id>` the table editor. Build links with `ctx.href('tables', id)`.
 `ctx.shell.setBreadcrumbs([{ label, href? }])` sets the crumbs after the project name.
 
 Views render with template strings (always escape user text with `esc()` from `ui/dom.js`) and wire
@@ -67,13 +67,14 @@ Never write to storage directly. Always mutate through `store.update` so numberi
 
 ```js
 Project { id, name, description, type, university, college, department, supervisor, coSupervisor, students, academicYear,
-          submissionDate, degreeStatement, logo (data URL), preset?, createdAt, updatedAt, frontMatter[], chapters[], figures[],
-          tables[], acronyms[], references[], settings, activity[], dismissedSuggestions[] }
+          submissionDate, degreeStatement, logo (university, data URL), projectLogo (data URL), preset?, inbox?,
+          createdAt, updatedAt, frontMatter[], chapters[], figures[], tables[], acronyms[], references[], settings, activity[],
+          dismissedSuggestions[] }
 FrontMatter { id, kind: declaration|acknowledgements|abstract|toc|lot|lof|loa|custom, title, include, body,
               hint?, wordLimit? (abstract: 150), signatures? + signatureNote? (declaration signature lines) }
 Chapter  { id, title, body, numbered (false = CONCLUSIONS-style unnumbered chapter), hint?, sections: Section[] }
 Section  { id, title, body, status: todo|draft|review|done, hint?, sections: Section[] }   // nested (1.4 → 1.4.2 → 1.4.2.1)
-Figure   { id, title, type, chapterId, sectionId, description, diagram, versions[], comments[], imagePool?, createdAt, updatedAt }
+Figure   { id, title, type, chapterId, sectionId, description, diagram, versions[], comments[], imagePool?, gantt?, createdAt, updatedAt }
 Table    { id, title, chapterId, sectionId, description, template, columns: [{ id, width(%) }],
            rows: Cell[][] (rows[0..headerRows-1] are header rows), headerRows,
            style: { headerFill, headerTextColor, fontSize, zebra, borders: 'all'|'horizontal' }, versions[], createdAt, updatedAt }
@@ -203,3 +204,19 @@ Design tokens live in styles/tokens.css (`var(--primary)`, `--surface`, `--borde
 `storage/adapters.js` — `LocalStorageAdapter` (default) and `IndexedDBAdapter`, both key/value with the same async API.
 `storage/repository.js` — `ProjectRepository` (projects, backups, meta). To move to Supabase/PostgreSQL implement the same
 interface (see `storage/supabase-repository.example.js`) and pass it to `new Store(repo)` in `core/store.js`.
+
+## Gantt charts (src/figures/gantt/)
+
+A figure of type `gantt` keeps its schedule as data in `figure.gantt` (`{ tasks: [{ id, name, start, end, level }],
+weekStart, color, showIdle, showWbs, showDates }`) and `figure.diagram` is **always rebuilt** from it with
+`ganttDiagram(gantt, figureFonts(project))` (gantt-model.js) after every edit, so previews and exports see an ordinary
+diagram. A task followed by deeper ones is a phase spanning its sub-tasks; WBS numbers and grey "no work" weeks are
+derived. gantt-editor.js is the table editor (paste from Excel, undo/redo); gantt-ops.js holds the pure row operations.
+
+## Updates from Claude (src/inbox/)
+
+The site reads `graddocs/inbox/inbox.json` from the repository (raw.githubusercontent.com, see inbox/README.md for the
+schema) when a project opens and every 10 minutes, matches items to the project by name, and offers them in a review
+dialog (top-bar pill, dashboard card). Applying sets `project.projectLogo` or adds/updates a figure by id (gantt items
+get their diagram generated); `project.inbox = { applied, dismissed }` remembers what was handled. Input is untrusted:
+inbox.js validates items and only accepts data:/https: images.

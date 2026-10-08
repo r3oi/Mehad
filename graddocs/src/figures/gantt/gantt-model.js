@@ -20,8 +20,15 @@ const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** 'YYYY-MM-DD' → UTC day number (no time zones involved). */
 export const dayOf = (iso) => Math.floor(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / DAY);
 export const isoOf = (day) => new Date(day * DAY).toISOString().slice(0, 10);
-export const todayISO = () => new Date().toISOString().slice(0, 10);
-const validISO = (s) => ISO_RE.test(String(s || '')) && !Number.isNaN(dayOf(s));
+/** Today in the user's own time zone as 'YYYY-MM-DD' (toISOString would be a day behind after midnight east of UTC). */
+export const todayISO = () => { const d = new Date(); return isoOf(Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY)); };
+/** A real calendar date in 'YYYY-MM-DD' form ('2025-02-31' is rejected: Date.UTC alone would roll it over to March). */
+export const isValidISO = (s) => ISO_RE.test(String(s || '')) && isoOf(dayOf(s)) === s;
+const validISO = isValidISO;
+/** 'YYYY-MM-DD' plus n days. */
+export const addDaysISO = (iso, n) => isoOf(dayOf(iso) + n);
+/** Inclusive length in days of a start/end pair. */
+export const durationDays = (start, end) => dayOf(end) - dayOf(start) + 1;
 
 export function createGanttTask(fields = {}) {
   const today = todayISO();

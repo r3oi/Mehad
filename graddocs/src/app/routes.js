@@ -32,6 +32,7 @@ export const VIEWS = {
   'figure-editor': () => import('../figures/editor/editor-view.js'),
   tables: () => import('../tables/tables-view.js'),
   'table-editor': () => import('../tables/table-editor-view.js'),
+  'gantt-editor': () => import('../figures/gantt/gantt-editor.js'),
   acronyms: () => import('../acronyms/acronyms-view.js'),
   references: () => import('../bibliography/references-view.js'),
   preview: () => import('../preview/preview-view.js'),
@@ -43,7 +44,7 @@ export const VIEWS = {
 /**
  * Parse location.hash → { view, projectId, params }.
  *   #/projects
- *   #/p/<projectId>/<section>[/<itemId>]   e.g. #/p/prj_x/figures/fig_y, #/p/prj_x/references/ref_z
+ *   #/p/<projectId>/<section>[/<itemId>]   e.g. #/p/prj_x/figures/fig_y, #/p/prj_x/gantt/fig_y, #/p/prj_x/references/ref_z
  *   Query string after "?" is exposed as params.query (e.g. ?focus=<id>).
  */
 export function parseHash(hash = location.hash) {
@@ -56,8 +57,9 @@ export function parseHash(hash = location.hash) {
     let view = section;
     if (section === 'figures' && itemId) view = 'figure-editor';
     if (section === 'tables' && itemId) view = 'table-editor';
+    if (section === 'gantt' && itemId) view = 'gantt-editor'; // #/p/<id>/gantt/<figureId>: a Gantt figure, listed under Figures
     if (!VIEWS[view]) view = 'dashboard';
-    return { view, section, projectId: parts[1], params: { id: itemId, query } };
+    return { view, section: view === 'gantt-editor' ? 'figures' : section, projectId: parts[1], params: { id: itemId, query } };
   }
   return { view: 'projects', section: 'projects', projectId: null, params: { query } };
 }

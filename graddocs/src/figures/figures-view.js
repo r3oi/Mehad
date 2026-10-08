@@ -16,6 +16,8 @@ import { IMAGE_ACCEPT, isImageFile, imageFromFile, titleFromFileName, lightDiagr
 import { addVersion, latestVersion, isDirty } from './versions.js';
 import { svgToPngBlob, copyPngToClipboard } from '../export/png.js';
 import { svgToPdfBlob } from '../export/pdf.js';
+import { ganttDiagram } from './gantt/gantt-model.js';
+import { sampleGantt } from './gantt/gantt-sample.js';
 import { prefs } from '../app/prefs.js';
 import { t, isRTL } from '../i18n/index.js';
 
@@ -159,6 +161,10 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
         title, type: selectedType, description: modal.$('#nf-desc').value.trim(),
         diagram: picture ? picture.diagram : generated ? generated.diagram : buildTemplate(selectedType, project), ...parseLocation(project, locEl.value),
       });
+      if (selectedType === 'gantt' && !picture && !generated) { // a Gantt chart keeps its schedule as data; the picture is rebuilt from it
+        figure.gantt = sampleGantt();
+        figure.diagram = ganttDiagram(figure.gantt, figureFonts(project));
+      }
       addVersion(figure, { force: true });
       store.update((p) => { p.figures.push(figure); }, { activity: { text: `Created figure “${title}”`, kind: 'create', targetId: figure.id } });
       created = figure.id;
@@ -236,16 +242,17 @@ export default {
         const openComments = f.comments.filter((c) => !c.resolved).length;
         const meta = `<span>${esc(info.location)}</span><span class="sep">·</span><span>${esc(t('Last modified: {time}', { time: relativeTime(f.updatedAt) }))}</span>`;
         const badges = `<span class="badge">${esc(getFigureType(f.type).name)}</span><span class="badge ${isDirty(f) ? 'badge-warning' : ''}" data-tip="${isDirty(f) ? t('Edited since the last saved version') : t('Latest version')}">v${last?.number ?? 0}${isDirty(f) ? '*' : ''}</span>${openComments ? `<span class="badge badge-warning">${icon('message')} ${openComments}</span>` : ''}`;
+        const link = editHref(f);
         const actions = `
-          <a class="btn btn-sm btn-primary" href="${ctx.href('figures', f.id)}">${icon('edit', 'icon-sm')} ${t('Open')}</a>
+          <a class="btn btn-sm btn-primary" href="${link}">${icon('edit', 'icon-sm')} ${t('Open')}</a>
           <button class="btn btn-sm" data-action="duplicate" data-id="${f.id}">${icon('duplicate', 'icon-sm')} ${t('Duplicate')}</button>
           <button class="btn btn-sm" data-action="export" data-id="${f.id}">${icon('export', 'icon-sm')} ${t('Export')}</button>
           <button class="btn btn-sm btn-ghost btn-icon" data-action="more" data-id="${f.id}" aria-label="${esc(t('More actions for {title}', { title: f.title }))}">${icon('more')}</button>`;
         if (view === 'grid') {
           return `<article class="card fig-card" data-fig="${f.id}">
-            <a class="thumb" href="${ctx.href('figures', f.id)}" aria-label="${esc(t('Open {title}', { title: f.title }))}">${thumbOf(f)}</a>
+            <a class="thumb" href="${link}" aria-label="${esc(t('Open {title}', { title: f.title }))}">${thumbOf(f)}</a>
             <div class="fig-card-body">
-              <div class="fig-card-title"><span class="fig-num">#${info.index}</span><a class="truncate" href="${ctx.href('figures', f.id)}">${esc(f.title)}</a></div>
+              <div class="fig-card-title"><span class="fig-num">#${info.index}</span><a class="truncate" href="${link}">${esc(f.title)}</a></div>
               <div class="fig-meta"><strong style="color:var(--text-2)">${esc(info.label)}</strong><span class="sep">·</span><span class="mono">${esc(info.code)}</span></div>
               <div class="fig-meta">${meta}</div>
               <div class="row-wrap" style="gap:5px;margin-top:4px">${badges}</div>
@@ -254,9 +261,9 @@ export default {
           </article>`;
         }
         return `<div class="list-item fig-row" data-fig="${f.id}">
-          <a class="thumb" href="${ctx.href('figures', f.id)}" aria-label="${esc(t('Open {title}', { title: f.title }))}">${thumbOf(f)}</a>
+          <a class="thumb" href="${link}" aria-label="${esc(t('Open {title}', { title: f.title }))}">${thumbOf(f)}</a>
           <div class="grow" style="display:flex;flex-direction:column;gap:3px">
-            <div class="title"><span class="fig-num">#${info.index}</span> <a href="${ctx.href('figures', f.id)}">${esc(f.title)}</a></div>
+            <div class="title"><span class="fig-num">#${info.index}</span> <a href="${link}">${esc(f.title)}</a></div>
             <div class="fig-meta"><strong style="color:var(--text-2)">${esc(info.label)}</strong><span class="sep">·</span><span class="mono">${esc(info.code)}</span><span class="sep">·</span>${meta}</div>
             <div class="row-wrap" style="gap:5px">${badges}</div>
           </div>
@@ -298,10 +305,12 @@ export default {
       if (focusSearch) { search.focus(); search.setSelectionRange(search.value.length, search.value.length); focusSearch = false; }
     }
     let focusSearch = false;
+    /** Where a figure is edited: Gantt charts have their own editor (tasks and dates), everything else the canvas. */
+    const editHref = (f) => (f.type === 'gantt' && f.gantt ? ctx.href('gantt', f.id) : ctx.href('figures', f.id));
 
     async function createNew(sectionId = null, chapterId = null) {
       const id = await openNewFigureDialog(store, { sectionId, chapterId });
-      if (id) ctx.navigate(ctx.href('figures', id));
+      if (id) ctx.navigate(editHref(findFigure(store.project, id) || { id }));
     }
 
     function duplicate(id) {
@@ -374,9 +383,9 @@ export default {
           ]);
         } else if (action === 'more') {
           openMenu(el, [
-            { label: t('Open editor'), icon: 'edit', onClick: () => ctx.navigate(ctx.href('figures', id)) },
+            { label: t('Open editor'), icon: 'edit', onClick: () => ctx.navigate(editHref(f)) },
             { label: t('Edit details'), icon: 'settings', onClick: () => editDetails(id) },
-            { label: t('Revision mode'), icon: 'flag', onClick: () => ctx.navigate(ctx.href('figures', id, { revision: '1' })) },
+            ...(f.type === 'gantt' && f.gantt ? [] : [{ label: t('Revision mode'), icon: 'flag', onClick: () => ctx.navigate(ctx.href('figures', id, { revision: '1' })) }]),
             '-',
             { label: t('Move up'), icon: 'arrowUp', onClick: () => move(id, -1) },
             { label: t('Move down'), icon: 'arrowDown', onClick: () => move(id, 1) },
