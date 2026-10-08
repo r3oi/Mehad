@@ -103,7 +103,7 @@ def glitch(e):
         g *= np.hanning(L) * (1 - u) ** 1.2 * (rng.random() > .2)
         out[i:i + L] += g[:len(out) - i]; i += L
     if e.get("rev"): out = out[::-1]
-    place(norm(out), e["t"], -27, pan=e.get("pan", 0))
+    place(norm(out), e["t"], e.get("level", -27), pan=e.get("pan", 0))
 def riser(e):
     t = tt(e["d"]); u = t / t[-1]
     s = shaped(len(t), lambda fr: 400 + 5000 * np.interp(fr, t, u ** 2), .45) * u ** 2.2
