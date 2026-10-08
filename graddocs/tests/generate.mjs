@@ -16,7 +16,7 @@ globalThis.document = { createElement: () => ({ getContext: () => ({ set font(v)
 const { autoLayout, layoutUnsuitedReason, LAYOUT_UNSUITED_TYPES } = await import('../src/figures/layout.js');
 const { builder } = await import('../src/figures/templates/builder.js');
 const { flowchartTemplate, hierarchyTemplate, architectureTemplate, useCaseTemplate, erdTemplate, classTemplate, fishboneTemplate, sequenceTemplate } = await import('../src/figures/templates/index.js');
-const { normalizeSpec, parseJsonLoose, SpecError, SPEC_JSON_SCHEMA, buildChatPrompt, suggestTitle, compactSpec, SPEC_TYPES, NODE_KINDS, EDGE_KINDS } = await import('../src/figures/generate/spec.js');
+const { normalizeSpec, parseJsonLoose, SpecError, SPEC_JSON_SCHEMA, buildChatPrompt, buildImageChatPrompt, suggestTitle, compactSpec, SPEC_TYPES, NODE_KINDS, EDGE_KINDS } = await import('../src/figures/generate/spec.js');
 const { specToDiagram, buildDiagramFromSpec } = await import('../src/figures/generate/to-diagram.js');
 const { parseText, parseArrowList, parseOutline, parseMermaid, detectFormat } = await import('../src/figures/generate/text-parse.js');
 const ai = await import('../src/figures/generate/ai.js');
@@ -1002,6 +1002,40 @@ test('a 400 triggers one plain retry (no schema, no fallbacks, no beta header)',
   const g = fakeFetch(FAIL(400, 'bad'), FAIL(400, 'still bad'));
   await assert.rejects(ai.generateSpec('x', { config: CONFIG, fetchImpl: g }), (e) => e.code === 'bad-request' && /still bad/.test(e.message));
   assert.equal(g.calls.length, 2, 'only one retry');
+});
+test('from image: the picture goes as a base64 image block before the instructions', async () => {
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  const f = fakeFetch(OK(SPEC_JSON));
+  const r = await ai.generateSpecFromImage(png, { type: 'usecase', note: 'ignore the handwriting', config: CONFIG, fetchImpl: f });
+  assert.equal(r.spec.type, 'flowchart');
+  const [img, txt] = f.calls[0].body.messages[0].content;
+  assert.deepEqual(img, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' } });
+  assert.equal(txt.type, 'text');
+  assert.match(txt.text, /Diagram type: usecase/);
+  assert.match(txt.text, /exact text/);
+  assert.match(txt.text, /ignore the handwriting/);
+  assert.ok(f.calls[0].body.output_config?.format, 'structured output');
+  assert.match(f.calls[0].body.system, /JSON/);
+});
+test('from image: unusable pictures, a missing key and a 400 retry', async () => {
+  assert.deepEqual(ai.imageFromDataURL('data:image/jpg;base64,QUJD'), { mediaType: 'image/jpeg', data: 'QUJD' });
+  assert.equal(ai.imageFromDataURL('data:image/svg+xml;base64,PHN2Zz4='), null, 'SVG must be rasterised first');
+  await assert.rejects(ai.generateSpecFromImage('not an image', { config: CONFIG, fetchImpl: fakeFetch(OK(SPEC_JSON)) }), (e) => e.code === 'bad-request');
+  await assert.rejects(ai.generateSpecFromImage('data:image/png;base64,QUJD', { config: { apiKey: '', model: 'claude-sonnet-5-5' }, fetchImpl: fakeFetch(OK(SPEC_JSON)) }), (e) => e.code === 'no-key');
+  const big = `data:image/png;base64,${'A'.repeat(5 * 1024 * 1024 + 4)}`;
+  await assert.rejects(ai.generateSpecFromImage(big, { config: CONFIG, fetchImpl: fakeFetch(OK(SPEC_JSON)) }), (e) => e.code === 'bad-request' && /too large/.test(e.message));
+  const f = fakeFetch(FAIL(400, 'schema not supported'), OK(SPEC_JSON));
+  await ai.generateSpecFromImage('data:image/png;base64,QUJD', { config: CONFIG, fetchImpl: f });
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.calls[1].body.messages[0].content[0].type, 'image', 'the plain retry still sends the picture');
+  assert.ok(!f.calls[1].body.output_config);
+});
+test('from image: the copy-paste prompt asks to recreate the attached diagram', () => {
+  const p = buildImageChatPrompt('erd', 'it is an ERD of a shop');
+  assert.match(p, /Diagram type: erd/);
+  assert.match(p, /image is attached/);
+  assert.match(p, /it is an ERD of a shop/);
+  assert.match(p, /Reply with the JSON object only/);
 });
 test('a usable answer that fails validation is reported by the spec checker, not swallowed', async () => {
   const r = await ai.generateSpec('x', { config: CONFIG, fetchImpl: fakeFetch(OK(JSON.stringify({ type: 'flowchart', nodes: [{ id: 'a', label: 'A' }], edges: [{ from: 'a', to: 'ghost' }] }))) });

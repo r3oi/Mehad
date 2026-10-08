@@ -431,6 +431,20 @@ STYLE
 - Choose "type" from the description. Typical size: 5-25 nodes. Do not invent features the user did not mention, but do complete obvious steps (start, end, error paths) when the user asks for a complete flow.`;
 
 /** Text a student can paste into any chatbot (ChatGPT, Claude…) together with their description. */
+/** What to do with an attached picture of a diagram (API request and the copy-paste prompt). */
+export const IMAGE_TASK = `The attached image shows an existing diagram: a screenshot, a scan, a photo or a hand drawing. Recreate it as the JSON diagram spec.
+- Keep the same diagram type and every element in it: each shape with its exact text (same language, spelling and line breaks), each connector with its direction, arrowhead style and label, and every grouping box, boundary, swimlane or package as a boundary node.
+- Use the node and edge kinds that match what is drawn (decision diamonds, actors, use-case ovals, classes with their fields and methods, entities, lifelines and messages, inheritance or crow's-foot ends …).
+- Do not add anything that is not in the picture and do not "improve" it. If some text cannot be read, write your best reading followed by " (?)".
+- Ignore the picture's colours, fonts, exact positions and any page decoration around the diagram.`;
+
+/** The prompt for a chatbot when the student has no API key: the student attaches the image next to it. */
+export function buildImageChatPrompt(type = 'auto', note = '') {
+  const hint = type && type !== 'auto' ? `Diagram type: ${type}.\n` : '';
+  const extra = String(note || '').trim() ? `\nNOTE FROM THE STUDENT:\n${String(note).trim()}\n` : '';
+  return `${SPEC_INSTRUCTIONS}\n\n${hint}${IMAGE_TASK}\n(The image is attached to this message.)\n${extra}\nReply with the JSON object only.`;
+}
+
 export function buildChatPrompt(description, type = 'auto') {
   const hint = type && type !== 'auto' ? `Diagram type: ${type}.\n` : '';
   return `${SPEC_INSTRUCTIONS}\n\n${hint}DESCRIPTION:\n${String(description || '').trim() || '(write what the diagram should show here)'}\n\nReply with the JSON object only.`;

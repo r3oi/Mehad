@@ -169,6 +169,11 @@ ones (CONCLUSIONS, SUMMARY, FUTURE WORK …) come in with `numbered: false` (`wo
 - `figures/generate/`: `spec.js` (JSON diagram spec, validation, AI prompt), `to-diagram.js` (`specToDiagram`), `text-parse.js` (arrow lists, indented outlines, Mermaid subset), `ai.js` (Claude Messages API, browser-direct; key in `prefs.get('ai')`, never stored in projects), `generate-dialog.js`.
 - `types.js` also exports `figureFonts(project)`.
 
+
+From a picture: `generateSpecFromImage(dataURL, { type, note })` (ai.js) sends the image as a base64 `image` content block
+with `IMAGE_TASK` (spec.js) and the same structured-output schema; without a key `buildImageChatPrompt(type, note)` gives the
+prompt to paste next to the picture in any chatbot. The dialog's "From image" tab reads files, drops and Ctrl+V pastes
+through `imageFromFile` (editor/image-import.js), so SVGs are rasterised and large pictures downscaled before sending.
 ## Rendering APIs
 
 - `figures/render.js`: `renderFigureSVG(figureOrDiagram, { padding, background }) → { svg, width, height }` (standalone SVG string),

@@ -1,5 +1,6 @@
-// "Describe with AI": natural-language description (Arabic or English) → diagram spec, using the Claude
-// Messages API straight from the browser (no server in between).
+// "Describe with AI": natural-language description (Arabic or English) → diagram spec, and "From image": a picture
+// of a diagram (screenshot, scan, photo, sketch) → the same spec, using the Claude Messages API straight from the
+// browser (no server in between). Images go as base64 image content blocks next to the text.
 //
 //  • Request:  POST https://api.anthropic.com/v1/messages with the headers x-api-key, anthropic-version and
 //              anthropic-dangerous-direct-browser-access (the API's opt-in for browser CORS calls).
@@ -13,7 +14,7 @@
 //              Thinking stays on its adaptive default; output_config.effort keeps latency reasonable.
 import { prefs } from '../../app/prefs.js';
 import { t } from '../../i18n/index.js';
-import { SPEC_INSTRUCTIONS, SPEC_JSON_SCHEMA, parseJsonLoose, SpecError } from './spec.js';
+import { SPEC_INSTRUCTIONS, SPEC_JSON_SCHEMA, IMAGE_TASK, parseJsonLoose, SpecError } from './spec.js';
 
 export const API_URL = 'https://api.anthropic.com/v1/messages';
 export const API_VERSION = '2023-06-01';
@@ -21,6 +22,10 @@ export const KEYS_URL = 'https://console.anthropic.com/settings/keys';
 export const DEFAULT_MODEL = 'claude-sonnet-5-5';
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 const TIMEOUT_MS = 120000;
+const IMAGE_TIMEOUT_MS = 180000; // reading a picture takes longer
+/** Image types the Messages API accepts (others are converted to PNG/JPEG before sending). */
+export const AI_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const MAX_IMAGE_BASE64 = 5 * 1024 * 1024; // per-image limit of the API
 
 /** Models the student can choose in Settings → AI. `effort` is the thinking depth we ask for. */
 export const AI_MODELS = [
@@ -107,6 +112,38 @@ export function buildRequest(description, { type = 'auto', model = DEFAULT_MODEL
   return body;
 }
 
+/** "data:image/png;base64,…" → { mediaType, data }; null when it is not a usable base64 image. */
+export function imageFromDataURL(src) {
+  const m = /^data:(image\/[a-z+.-]+);base64,(.+)$/i.exec(String(src || ''));
+  if (!m) return null;
+  const mediaType = m[1].toLowerCase().replace('image/jpg', 'image/jpeg');
+  return AI_IMAGE_TYPES.includes(mediaType) ? { mediaType, data: m[2] } : null;
+}
+
+/** The Messages API request body for a picture of a diagram (exported for tests). image: { mediaType, data } */
+export function buildImageRequest(image, { type = 'auto', note = '', model = DEFAULT_MODEL, plain = false } = {}) {
+  const info = modelInfo(model);
+  const hint = type && type !== 'auto' ? `Diagram type: ${type}.\n\n` : '';
+  const extra = String(note || '').trim() ? `\n\nNOTE FROM THE STUDENT:\n${String(note).trim()}` : '';
+  const body = {
+    model: info.id,
+    max_tokens: 16000,
+    system: SPEC_INSTRUCTIONS,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } },
+        { type: 'text', text: `${hint}${IMAGE_TASK}${extra}\n\nReply with the JSON diagram spec only.` },
+      ],
+    }],
+  };
+  if (!plain) {
+    body.output_config = { effort: info.effort, format: { type: 'json_schema', schema: SPEC_JSON_SCHEMA } };
+    if (info.fallback) body.fallbacks = 'default';
+  }
+  return body;
+}
+
 function headers(apiKey, { beta = false } = {}) {
   const h = {
     'content-type': 'application/json',
@@ -118,10 +155,10 @@ function headers(apiKey, { beta = false } = {}) {
   return h;
 }
 
-async function post(body, { apiKey, signal, fetchImpl }) {
+async function post(body, { apiKey, signal, fetchImpl, timeout = TIMEOUT_MS }) {
   const ctl = new AbortController();
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, TIMEOUT_MS);
+  const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, timeout);
   const onAbort = () => ctl.abort();
   if (signal) { if (signal.aborted) ctl.abort(); else signal.addEventListener('abort', onAbort, { once: true }); }
   let res;
@@ -150,16 +187,32 @@ async function post(body, { apiKey, signal, fetchImpl }) {
 export async function generateSpec(description, { type = 'auto', config = getAIConfig(), signal, fetchImpl } = {}) {
   const text = String(description ?? '').trim();
   if (!text) throw new AIError('bad-request', t('Describe the diagram first.'));
+  return requestSpec((plain) => buildRequest(text, { type, model: config.model, plain }), { config, signal, fetchImpl });
+}
+
+/**
+ * Ask Claude to recreate the diagram in a picture.
+ * image: a data URL ("data:image/png;base64,…") or { mediaType, data }.
+ * → { spec, model, usage }; options as generateSpec plus `note` (optional hint from the student).
+ */
+export async function generateSpecFromImage(image, { type = 'auto', note = '', config = getAIConfig(), signal, fetchImpl } = {}) {
+  const img = typeof image === 'string' ? imageFromDataURL(image) : image;
+  if (!img?.data) throw new AIError('bad-request', t('Choose a picture of the diagram first.'));
+  if (img.data.length > MAX_IMAGE_BASE64) throw new AIError('bad-request', t('This picture is too large to send. Crop it or use a smaller image.'));
+  return requestSpec((plain) => buildImageRequest(img, { type, note, model: config.model, plain }), { config, signal, fetchImpl, timeout: IMAGE_TIMEOUT_MS });
+}
+
+async function requestSpec(makeBody, { config, signal, fetchImpl, timeout }) {
   if (!config.apiKey) throw new AIError('no-key', t('No API key yet. Add yours in Settings → AI, or use “Copy prompt” with ChatGPT or Claude.'));
   const doFetch = fetchImpl || ((...args) => fetch(...args));
-  const ctx = { apiKey: config.apiKey, signal, fetchImpl: doFetch };
+  const ctx = { apiKey: config.apiKey, signal, fetchImpl: doFetch, timeout };
 
   let data;
   try {
-    data = await post(buildRequest(text, { type, model: config.model }), ctx);
+    data = await post(makeBody(false), ctx);
   } catch (err) {
     // The schema / fallback parts are newer than the rest: if the API refuses them, ask once more in plain form.
-    if (err instanceof AIError && err.code === 'bad-request' && err.status === 400) data = await post(buildRequest(text, { type, model: config.model, plain: true }), ctx);
+    if (err instanceof AIError && err.code === 'bad-request' && err.status === 400) data = await post(makeBody(true), ctx);
     else throw err;
   }
 

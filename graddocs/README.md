@@ -47,6 +47,7 @@ npm test                # both
 - **Figure editor:**
   - 16 diagram types with fully editable templates: flowchart, context diagram, use case, activity, sequence (synchronous / asynchronous / return messages), class, state, ERD, architecture, component, deployment, fishbone, hierarchy, timeline/Gantt, screenshot/image and generic.
   - Screenshots as figures: upload, paste (Ctrl+V) or drop an image; it gets a numbered caption like any figure.
+  - **Editable diagram from a picture:** give it a screenshot, scan, photo or hand drawing of a diagram and it is rebuilt as real shapes and connectors you can edit — automatically with your Claude API key (Settings → AI), or without a key by copying the prompt into ChatGPT / Claude together with the picture and pasting the JSON answer back.
   - A 40+ shape library and smart connectors (straight, orthogonal or curved) with UML and crow's-foot arrowheads.
   - Drag, resize, smart guides and grid snap; inline text editing; fonts, borders and fills; align and distribute; z-order.
   - Undo/redo, copy/paste, zoom/pan/fit, version history (view and restore), revision mode and comments attached to elements.

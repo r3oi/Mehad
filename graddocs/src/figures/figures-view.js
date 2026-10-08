@@ -74,6 +74,7 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
         <div class="col" style="gap:14px">
           <div class="nf-sources">
             <button type="button" class="btn btn-soft nf-generate" data-generate>${icon('sparkles', 'icon-sm')} ${t('Generate from description')}</button>
+            <button type="button" class="btn btn-soft nf-generate" data-convert>${icon('wand', 'icon-sm')} ${t('Editable diagram from a picture')}</button>
             <button type="button" class="btn btn-soft nf-generate" data-image>${icon('image', 'icon-sm')} ${t('From image (screenshot)')}</button>
           </div>
           <div><div class="section-title" data-preview-title>${t('Template preview')}</div><div class="new-fig-preview" data-preview></div></div>
@@ -115,14 +116,17 @@ export function openNewFigureDialog(store, { sectionId = null, chapterId = null,
       generated = null; picture = null;
       refresh();
     });
-    modal.$('[data-generate]').addEventListener('click', async () => {
+    // "Generate from description" / "Editable diagram from a picture": both open the generator (text or image tab).
+    const generate = async (tab) => {
       const { openGenerateDialog } = await import('./generate/generate-dialog.js');
-      const result = await openGenerateDialog({ project, mode: 'new' });
+      const result = await openGenerateDialog({ project, mode: 'new', tab });
       if (!result) return;
       generated = result; picture = null;
       selectedType = result.type;
       refresh();
-    });
+    };
+    modal.$('[data-generate]').addEventListener('click', () => generate('ai'));
+    modal.$('[data-convert]').addEventListener('click', () => generate('image'));
     // Screenshot / image: pick a file (or drop one on the preview) → a figure that is one picture.
     const usePicture = async (file) => {
       if (!file) return;

@@ -1,4 +1,5 @@
-// "Generate a diagram" dialog: describe it with AI, type text / Mermaid, or paste JSON — with a live preview.
+// "Generate a diagram" dialog: describe it with AI, rebuild it from a picture, type text / Mermaid, or paste JSON —
+// with a live preview. A picture is read by Claude (with an API key) or by any chatbot through a copied prompt.
 //
 //   openGenerateDialog({ project, mode: 'new' | 'insert', hasContent }) → Promise<null | result>
 //   result = { diagram, spec, type (figure type id), title, mode: 'replace' | 'add' }
@@ -14,9 +15,11 @@ import { figureTypes, figureFonts } from '../types.js';
 import { href } from '../../app/routes.js';
 import { t, isRTL, lang } from '../../i18n/index.js';
 import { buildDiagramFromSpec } from './to-diagram.js';
-import { SpecError, SPEC_TYPES, figureTypeOf, suggestTitle, buildChatPrompt, compactSpec } from './spec.js';
+import { SpecError, SPEC_TYPES, figureTypeOf, suggestTitle, buildChatPrompt, buildImageChatPrompt, compactSpec } from './spec.js';
 import { parseText } from './text-parse.js';
-import { generateSpec, getAIConfig, modelName, AIError, KEYS_URL } from './ai.js';
+import { generateSpec, generateSpecFromImage, getAIConfig, modelName, AIError, KEYS_URL } from './ai.js';
+import { imageFromFile, isImageFile, titleFromFileName, IMAGE_ACCEPT } from '../editor/image-import.js';
+import { pickFile } from '../../core/utils.js';
 
 const AUTO = isRTL ? ' dir="auto"' : '';
 
@@ -85,10 +88,14 @@ async function copyText(text) {
   } catch { return false; }
 }
 
+const TAB_ORDER = ['ai', 'image', 'text', 'json'];
+const AI_TABS = new Set(['ai', 'image']);
+
 export function openGenerateDialog({ project, mode = 'insert', hasContent = false, tab: startTab = 'ai' } = {}) {
   const fonts = figureFonts(project);
-  const inputs = { ai: '', text: '', json: '' };
-  const results = { ai: null, text: null, json: null };
+  const inputs = { ai: '', text: '', json: '', note: '' };
+  const results = { ai: null, image: null, text: null, json: null };
+  let picture = null; // { src, width, height, name } for the "From image" tab
   let tab = startTab;
   let type = 'auto';
   let insertMode = hasContent ? 'add' : 'replace';
@@ -110,11 +117,19 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
   ];
   const jsonExamples = [{ label: t('Flowchart'), text: JSON_FLOW }, { label: t('Sequence Diagram'), text: JSON_SEQ }];
   const examplesOf = { ai: EXAMPLES.ai, text: textExamples, json: jsonExamples };
+  const keyStatus = '<div data-key-status></div>';
+  const aiButtons = (act) => `
+            <div class="gen-actions">
+              <button type="button" class="btn btn-primary" data-act="${act}">${icon(act === 'convert' ? 'wand' : 'sparkles', 'icon-sm')}<span data-generate-label>${act === 'convert' ? t('Convert with AI') : t('Generate with AI')}</span></button>
+              <button type="button" class="btn btn-ghost" data-act="stop" hidden>${t('Stop')}</button>
+              <button type="button" class="btn" data-act="${act === 'convert' ? 'copy-image-prompt' : 'copy-prompt'}">${icon('copy', 'icon-sm')}${t('Copy prompt for ChatGPT / Claude')}</button>
+            </div>`;
 
   const body = `
     <div class="gen">
       <div class="tabs gen-tabs" role="tablist" aria-label="${t('How to describe the diagram')}">
         <button type="button" class="tab" role="tab" data-tab="ai" id="gen-tab-ai">${icon('sparkles', 'icon-sm')}${t('Describe with AI')}</button>
+        <button type="button" class="tab" role="tab" data-tab="image" id="gen-tab-image">${icon('image', 'icon-sm')}${t('From image')}</button>
         <button type="button" class="tab" role="tab" data-tab="text" id="gen-tab-text">${icon('type', 'icon-sm')}${t('Text or Mermaid')}</button>
         <button type="button" class="tab" role="tab" data-tab="json" id="gen-tab-json">${icon('fileText', 'icon-sm')}${t('Paste JSON')}</button>
       </div>
@@ -126,13 +141,19 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
             <div class="field"><label for="gen-ai">${t('Describe the diagram')}</label>
               <textarea id="gen-ai" class="textarea gen-textarea" rows="7" data-input="ai"${AUTO} placeholder="${esc(t('For example: a login flowchart — the user enters a username and password; if the credentials are valid show the dashboard, otherwise show an error and try again. Arabic or English.'))}"></textarea></div>
             ${chips(EXAMPLES.ai)}
-            <div data-key-status></div>
-            <div class="gen-actions">
-              <button type="button" class="btn btn-primary" data-act="generate">${icon('sparkles', 'icon-sm')}<span data-generate-label>${t('Generate with AI')}</span></button>
-              <button type="button" class="btn btn-ghost" data-act="stop" hidden>${t('Stop')}</button>
-              <button type="button" class="btn" data-act="copy-prompt">${icon('copy', 'icon-sm')}${t('Copy prompt for ChatGPT / Claude')}</button>
-            </div>
+            ${keyStatus}
+            ${aiButtons('generate')}
             <p class="hint gen-hint">${t('No API key? Copy the prompt, paste it into ChatGPT or Claude, then paste the JSON answer in the “Paste JSON” tab.')} <button type="button" class="gen-link" data-act="goto-json">${t('Open “Paste JSON”')}</button></p>
+          </section>
+
+          <section class="gen-panel" data-panel="image" role="tabpanel" aria-labelledby="gen-tab-image" hidden>
+            <div class="field"><label>${t('Picture of the diagram')}</label>
+              <div class="gen-drop" data-drop tabindex="0" role="button" aria-label="${esc(t('Choose a picture of the diagram'))}"></div></div>
+            <div class="field"><label for="gen-note">${t('Notes for the AI (optional)')}</label>
+              <textarea id="gen-note" class="textarea" rows="2" data-note${AUTO} placeholder="${esc(t('For example: it is a use case diagram; ignore the handwritten notes at the bottom.'))}"></textarea></div>
+            ${keyStatus}
+            ${aiButtons('convert')}
+            <p class="hint gen-hint">${t('No API key? Copy the prompt, open ChatGPT or Claude, attach the picture and paste the prompt, then paste the JSON answer in the “Paste JSON” tab.')} <button type="button" class="gen-link" data-act="goto-json">${t('Open “Paste JSON”')}</button></p>
           </section>
 
           <section class="gen-panel" data-panel="text" role="tabpanel" aria-labelledby="gen-tab-text" hidden>
@@ -183,9 +204,18 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
     // ------------------------------------------------------------ rendering
     function renderKeyStatus() {
       const cfg = getAIConfig();
-      $('[data-key-status]').innerHTML = cfg.apiKey
+      const html = cfg.apiKey
         ? `<div class="gen-key ok">${icon('checkCircle', 'icon-sm')}<span>${t('Using {model}. Your key stays in this browser.', { model: `<bdi>${esc(modelName(cfg.model))}</bdi>` })}</span></div>`
         : `<div class="callout callout-info gen-key-missing">${icon('info')}<div>${t('No API key yet. Add yours in Settings → AI to generate directly, or copy the prompt and use any chatbot.')} <a class="gen-link" href="${settingsHref}">${t('Open Settings')}</a></div></div>`;
+      root.querySelectorAll('[data-key-status]').forEach((el) => { el.innerHTML = html; });
+    }
+
+    function renderDrop() {
+      const drop = $('[data-drop]');
+      drop.classList.toggle('has-image', !!picture);
+      drop.innerHTML = picture
+        ? `<img src="${picture.src}" alt=""><div class="gen-drop-bar"><span class="truncate"${AUTO}>${esc(picture.name || t('Pasted picture'))}</span><span class="gen-link">${t('Change picture')}</span></div>`
+        : `${icon('upload')}<strong>${t('Choose a picture of the diagram')}</strong><span>${t('A screenshot, scan, photo or hand drawing — drop it here or paste it with Ctrl+V')}</span>`;
     }
 
     function render() {
@@ -194,7 +224,7 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
       root.querySelectorAll('[data-insert]').forEach((b) => { const on_ = b.dataset.insert === insertMode; b.classList.toggle('active', on_); b.setAttribute('aria-pressed', on_); });
       const r = results[tab];
       const preview = $('[data-gen-preview]');
-      preview.innerHTML = r?.ok ? previewSVG(r.diagram) : `<div class="gen-empty">${icon(tab === 'ai' ? 'sparkles' : 'diagram')}<span>${busy ? t('Asking Claude…') : t('The preview appears here.')}</span></div>`;
+      preview.innerHTML = r?.ok ? previewSVG(r.diagram) : `<div class="gen-empty">${icon(tab === 'ai' ? 'sparkles' : tab === 'image' ? 'image' : 'diagram')}<span>${busy ? (tab === 'image' ? t('Claude is reading the picture…') : t('Asking Claude…')) : t('The preview appears here.')}</span></div>`;
       preview.classList.toggle('busy', busy);
       const n = r?.ok ? r.diagram.elements : [];
       $('[data-meta]').textContent = r?.ok ? shapesConnectors(n.filter((e) => e.type === 'node').length, n.filter((e) => e.type === 'edge').length) : '';
@@ -202,13 +232,16 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
       if (r && !r.ok) msgs.push(`<div class="callout callout-danger" role="alert">${icon('alert')}<div>${r.errors.map((e) => `<div${AUTO}>${esc(e)}</div>`).join('')}</div></div>`);
       if (r?.ok && r.warnings?.length) msgs.push(`<div class="callout callout-warning">${icon('info')}<div>${r.warnings.slice(0, 5).map((e) => `<div${AUTO}>${esc(e)}</div>`).join('')}${r.warnings.length > 5 ? `<div>${t('…and {n} more notes', { n: r.warnings.length - 5 })}</div>` : ''}</div></div>`);
       $('[data-messages]').innerHTML = msgs.join('');
-      root.querySelector('[data-act="edit-json"]').hidden = !(tab === 'ai' && r?.ok);
+      root.querySelector('[data-act="edit-json"]').hidden = !(AI_TABS.has(tab) && r?.ok);
       const detected = $('[data-detected]');
       detected.textContent = tab === 'text' && r?.ok && r.format ? t('Detected: {format}', { format: formatName(r.format) }) : '';
       applyBtn.disabled = !r?.ok || busy;
-      $('[data-act="generate"]').disabled = busy;
-      $('[data-act="stop"]').hidden = !busy;
-      $('[data-generate-label]').textContent = busy ? t('Generating…') : t('Generate with AI');
+      for (const act of ['generate', 'convert']) $(`[data-act="${act}"]`).disabled = busy;
+      root.querySelectorAll('[data-act="stop"]').forEach((b) => { b.hidden = !busy; });
+      root.querySelectorAll('[data-generate-label]').forEach((el) => {
+        const convert = !!el.closest('[data-act="convert"]');
+        el.textContent = busy ? (convert ? t('Reading the picture…') : t('Generating…')) : (convert ? t('Convert with AI') : t('Generate with AI'));
+      });
     }
 
     const formatName = (f) => ({ arrows: t('Arrow list'), outline: t('Indented outline'), mermaid: t('Mermaid'), steps: t('List of steps') }[f] || f);
@@ -269,6 +302,47 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
       }
     }
 
+    async function runImage() {
+      if (busy) return;
+      if (!picture) { toast(t('Choose a picture of the diagram first.'), { type: 'info' }); return; }
+      const cfg = getAIConfig();
+      if (!cfg.apiKey) {
+        toast(t('No API key yet. Add yours in Settings → AI, or use “Copy prompt” with ChatGPT or Claude.'), { type: 'error', title: t('AI generation failed'), duration: 7000 });
+        renderKeyStatus();
+        return;
+      }
+      busy = true; controller = new AbortController(); results.image = null; render();
+      try {
+        const { spec } = await generateSpecFromImage(picture.src, { type, note: inputs.note, config: cfg, signal: controller.signal });
+        const built = buildDiagramFromSpec(spec, { ...fonts, type: type === 'auto' ? undefined : type });
+        results.image = { ok: true, ...built, description: titleFromFileName(picture.name) };
+        inputs.json = JSON.stringify(compactSpec(built.spec), null, 2);
+        results.json = null;
+      } catch (err) {
+        if (err instanceof AIError && err.code === 'aborted') results.image = null;
+        else {
+          const messages = err instanceof SpecError ? [t('Claude returned a diagram that could not be drawn:'), ...err.messages] : [err.message];
+          results.image = { ok: false, errors: messages };
+          if (!(err instanceof AIError) && !(err instanceof SpecError)) console.error(err);
+          toast(messages[messages.length > 1 ? 1 : 0], { type: 'error', title: t('AI generation failed'), duration: 7000 });
+        }
+      } finally {
+        busy = false; controller = null;
+        if (root.isConnected) render();
+      }
+    }
+
+    async function usePicture(file) {
+      if (!file) return;
+      if (!isImageFile(file)) { toast(t('Choose an image file (PNG, JPG, WebP, GIF or SVG).'), { type: 'warning' }); return; }
+      try {
+        picture = await imageFromFile(file);
+        if (!picture.name) picture.name = file.name || '';
+        results.image = null;
+        renderDrop(); render();
+      } catch (err) { toast(err.message || t('Could not read the image'), { type: 'error' }); }
+    }
+
     // ------------------------------------------------------------ actions
     function apply() {
       const r = results[tab];
@@ -282,11 +356,17 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
 
     const actions = {
       generate: runAI,
+      convert: runImage,
       stop: () => controller?.abort(),
       apply,
       async 'copy-prompt'() {
         const ok = await copyText(buildChatPrompt(inputs.ai, type));
         if (ok) toast(t('Prompt copied — paste it into ChatGPT or Claude, then paste the JSON answer in the “Paste JSON” tab.'), { type: 'success', duration: 6000 });
+        else toast(t('Could not copy to the clipboard.'), { type: 'error' });
+      },
+      async 'copy-image-prompt'() {
+        const ok = await copyText(buildImageChatPrompt(type, inputs.note));
+        if (ok) toast(t('Prompt copied — attach the picture in ChatGPT or Claude, paste the prompt, then paste the JSON answer in the “Paste JSON” tab.'), { type: 'success', duration: 7000 });
         else toast(t('Could not copy to the clipboard.'), { type: 'error' });
       },
       'goto-json': () => switchTab('json'),
@@ -295,15 +375,17 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
 
     function switchTab(next) {
       tab = next;
-      if (inputs[next] !== undefined && $(`[data-input="${next}"]`).value !== inputs[next]) $(`[data-input="${next}"]`).value = inputs[next];
-      if (next !== 'ai' && inputs[next].trim() && !results[next]) compute(next);
+      const area = $(`[data-input="${next}"]`);
+      if (area && area.value !== inputs[next]) area.value = inputs[next];
+      if (!AI_TABS.has(next) && inputs[next].trim() && !results[next]) compute(next);
       render();
-      $(`[data-input="${next}"]`).focus();
+      (area || $('[data-drop]'))?.focus();
     }
 
     root.addEventListener('click', (e) => {
       const tabBtn = e.target.closest('[data-tab]');
       if (tabBtn) { switchTab(tabBtn.dataset.tab); return; }
+      if (e.target.closest('[data-drop]')) { pickFile(IMAGE_ACCEPT).then(usePicture); return; }
       const ins = e.target.closest('[data-insert]');
       if (ins) { insertMode = ins.dataset.insert; render(); return; }
       const ex = e.target.closest('[data-example]');
@@ -312,7 +394,7 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
         inputs[tab] = sample.text;
         const area = $(`[data-input="${tab}"]`);
         area.value = sample.text;
-        if (tab !== 'ai') compute(tab); else results.ai = null;
+        if (!AI_TABS.has(tab)) compute(tab); else results.ai = null;
         render();
         area.focus();
         return;
@@ -321,6 +403,7 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
       if (act && actions[act.dataset.act]) actions[act.dataset.act]();
     });
     root.addEventListener('input', (e) => {
+      if (e.target.matches('[data-note]')) { inputs.note = e.target.value; return; }
       const area = e.target.closest('[data-input]');
       if (area) {
         const which = area.dataset.input;
@@ -341,16 +424,34 @@ export function openGenerateDialog({ project, mode = 'insert', hasContent = fals
         e.preventDefault();
         if (tab === 'ai') runAI(); else apply();
       }
+      if (e.target.matches('[data-drop]') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pickFile(IMAGE_ACCEPT).then(usePicture); }
       if (e.target.matches('[data-tab]') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
-        const order = ['ai', 'text', 'json'];
+        const order = TAB_ORDER;
         const step = (e.key === 'ArrowRight') === !isRTL ? 1 : -1;
         switchTab(order[(order.indexOf(tab) + step + order.length) % order.length]);
         $(`[data-tab="${tab}"]`).focus();
       }
     });
 
+    // A picture can also be pasted (Ctrl+V) anywhere in the dialog, or dropped on the drop zone.
+    root.addEventListener('paste', (e) => {
+      const file = [...(e.clipboardData?.files || [])].find(isImageFile);
+      if (!file) return;
+      e.preventDefault();
+      if (tab !== 'image') switchTab('image');
+      usePicture(file);
+    });
+    const drop = $('[data-drop]');
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', (e) => {
+      e.preventDefault(); drop.classList.remove('over');
+      usePicture([...(e.dataTransfer?.files || [])].find(isImageFile) || e.dataTransfer?.files?.[0]);
+    });
+
     renderKeyStatus();
+    renderDrop();
     render();
-    requestAnimationFrame(() => $(`[data-input="${tab}"]`)?.focus());
+    requestAnimationFrame(() => ($(`[data-input="${tab}"]`) || $('[data-drop]'))?.focus());
   });
 }

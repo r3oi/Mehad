@@ -82,3 +82,19 @@
   .ai-model { min-width: 280px; }
 .ai-status { text-align: start; }
 }
+
+/* "From image" tab: the picture of the diagram to rebuild. */
+.gen-drop {
+  min-block-size: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 14px; text-align: center; cursor: pointer;
+  color: var(--muted); background: var(--surface-2); border: 1.5px dashed var(--border-strong); border-radius: var(--radius);
+  transition: border-color .12s, background .12s, color .12s;
+}
+.gen-drop:hover, .gen-drop:focus-visible, .gen-drop.over { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-text); outline: none; }
+.gen-drop > svg { inline-size: 28px; block-size: 28px; color: var(--primary); }
+.gen-drop strong { font-size: 13.5px; color: var(--text); }
+.gen-drop > span { font-size: 12px; line-height: 1.35; }
+.gen-drop.has-image { padding: 8px; gap: 8px; border-style: solid; background: var(--surface); }
+.gen-drop.has-image img { max-inline-size: 100%; max-block-size: 220px; object-fit: contain; border-radius: calc(var(--radius) - 4px); background: #fff; }
+.gen-drop-bar { inline-size: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--text-2); }
+.gen-drop-bar .truncate { min-inline-size: 0; }
