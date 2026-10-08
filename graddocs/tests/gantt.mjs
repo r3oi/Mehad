@@ -164,6 +164,27 @@ test('a schedule without gaps has no idle weeks; two gaps are two runs', () => {
   assert.equal(idleRuns(gaps).length, 2);
 });
 
+test('drawUntil: kept when it is a real date, dropped otherwise; empty by default', () => {
+  assert.equal(normalizeGantt({ tasks: [], drawUntil: '2026-10-10' }).drawUntil, '2026-10-10');
+  assert.equal(normalizeGantt({ tasks: [], drawUntil: '2026-02-30' }).drawUntil, '');
+  assert.equal(normalizeGantt({ tasks: [] }).drawUntil, '');
+});
+test('drawUntil: later bars are not drawn, a bar across it is cut there, no grey weeks after it', () => {
+  const bars = (g) => ganttDiagram(g).elements.filter((e) => e.shape === 'roundRect' && e.h === 14 && e.style.fill === g.color);
+  const g = createGantt({ tasks: [task('a', '2025-01-05', '2025-01-11'), task('b', '2025-01-12', '2025-01-21'), task('c', '2025-03-09', '2025-03-15')] });
+  const all = bars(g);
+  assert.equal(all.length, 3);
+  assert.equal(idleRuns(g).length, 1);
+  const cut = { ...g, drawUntil: '2025-01-18' };
+  const some = bars(cut);
+  assert.equal(some.length, 2); // c starts after the date
+  assert.equal(some[0].w, all[0].w); // a ends before it
+  assert.ok(Math.abs(some[1].w - all[1].w * 7 / 10) < 0.5); // b: 7 of its 10 days
+  assert.deepEqual(idleRuns(cut), []); // the gap before c is after the date: white, not grey
+  assert.equal(weekRange(cut).count, weekRange(g).count); // the timeline keeps its length
+  assert.equal(ganttDiagram(cut).elements.some((e) => /No work scheduled/.test(e.text || '')), false);
+});
+
 console.log('task operations');
 const tree = () => [task('A', '2025-01-01', '2025-01-05'), task('a1', '2025-01-01', '2025-01-02', 1), task('a2', '2025-01-03', '2025-01-05', 1), task('B', '2025-02-01', '2025-02-05'), task('C', '2025-03-01', '2025-03-05')];
 test('blockEnd covers a task and its sub-tasks', () => {

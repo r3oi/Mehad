@@ -5,13 +5,14 @@
 //   figure.gantt = {
 //     tasks: [{ id, name, start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' (inclusive), level: 0 | 1 | 2 }],
 //     weekStart: 0 (Sunday) | 1 (Monday), color, showIdle (grey weeks with no task), showWbs, showDates,
+//     drawUntil: '' | 'YYYY-MM-DD' (bars and grey weeks stop at this day; the rest of the timeline stays white),
 //   }
 // A task followed by deeper tasks is a phase: its dates are the span of its sub-tasks and it is drawn as a
 // summary bar. WBS numbers (1, 2, 6.1 …) come from the levels; nothing derived is stored.
 import { uid } from '../../core/utils.js';
 import { builder } from '../templates/builder.js';
 
-export const GANTT_DEFAULTS = { weekStart: 0, color: '#0891B2', showIdle: true, showWbs: true, showDates: true };
+export const GANTT_DEFAULTS = { weekStart: 0, color: '#0891B2', showIdle: true, showWbs: true, showDates: true, drawUntil: '' };
 const IDLE = '#E3E6EA'; const GRID = '#E5E7EB'; const GRID_STRONG = '#C7CCD3';
 const INK = '#111827'; const INK2 = '#4B5563'; const MUTED = '#6B7280';
 const DAY = 86400000;
@@ -45,6 +46,7 @@ export function normalizeGantt(input) {
   g.weekStart = Number(g.weekStart) === 1 ? 1 : 0;
   g.color = /^#[0-9a-f]{6}$/i.test(String(g.color || '')) ? g.color : GANTT_DEFAULTS.color;
   for (const k of ['showIdle', 'showWbs', 'showDates']) g[k] = g[k] !== false;
+  g.drawUntil = validISO(g.drawUntil) ? g.drawUntil : '';
   let prev = -1;
   g.tasks = (Array.isArray(g.tasks) ? g.tasks : []).filter((t) => t && typeof t === 'object').map((t) => {
     const start = validISO(t.start) ? t.start : todayISO();
@@ -96,14 +98,19 @@ export function weekRange(gantt) {
 // 1970-01-01 was a Thursday: (day + 4) % 7 is 0 on Sundays.
 const weekStartOf = (day, weekStart) => day - (((day + 4 - weekStart) % 7) + 7) % 7;
 
-/** Runs of consecutive weeks in which no task is scheduled: [{ from, to }] (week indexes). */
+/** The last day drawn on the timeline (drawUntil), or Infinity when the whole plan is drawn. */
+export const lastDrawnDay = (gantt) => (validISO(gantt.drawUntil) ? dayOf(gantt.drawUntil) : Infinity);
+
+/** Runs of consecutive weeks in which no task is scheduled: [{ from, to }] (week indexes). Weeks after drawUntil are never idle. */
 export function idleRuns(gantt) {
   const { first, count } = weekRange(gantt);
   const spans = effectiveSpans(gantt.tasks);
+  const until = lastDrawnDay(gantt);
   const runs = [];
   for (let w = 0; w < count; w += 1) {
     const a = first + w * 7; const b = a + 6;
-    const busy = spans.some(([s, e]) => s <= b && e >= a);
+    if (a > until) break;
+    const busy = spans.some(([s, e]) => s <= Math.min(b, until) && e >= a);
     if (busy) continue;
     if (runs.length && runs[runs.length - 1].to === w - 1) runs[runs.length - 1].to = w;
     else runs.push({ from: w, to: w });
@@ -121,6 +128,7 @@ export function ganttDiagram(input, fonts = {}) {
   const tasks = g.tasks;
   const wbs = wbsNumbers(tasks);
   const spans = effectiveSpans(tasks);
+  const until = lastDrawnDay(g);
   const COL = count > 52 ? 22 : count > 40 ? 28 : 34;
   const ROW = 30; const TOP = 8; const HEAD = 64;
   const xWbs = 16; const xName = g.showWbs ? 64 : 16;
@@ -180,7 +188,8 @@ export function ganttDiagram(input, fonts = {}) {
       label(xStart, y, 100, ROW, isoOf(spans[i][0]), { fontSize: 12.5, textColor: INK2 });
       label(xEnd, y, 100, ROW, isoOf(spans[i][1]), { fontSize: 12.5, textColor: INK2 });
     }
-    const x0 = xOfDay(spans[i][0]); const x1 = xOfDay(spans[i][1] + 1);
+    if (spans[i][0] > until) return; // after drawUntil: the timeline stays white
+    const x0 = xOfDay(spans[i][0]); const x1 = xOfDay(Math.min(spans[i][1], until) + 1);
     if (phase) {
       // Summary bar: a slim bar with a short block at each end.
       box('rect', x0, y + ROW / 2 - 7, x1 - x0, 7, g.color);
@@ -208,7 +217,7 @@ export function ganttDiagram(input, fonts = {}) {
   box('rect', xWbs + 100, legendY + 1, 4, 11, g.color);
   box('rect', xWbs + 122, legendY + 1, 4, 11, g.color);
   label(xWbs + 134, legendY - 6, 180, 24, 'Phase (group of tasks)');
-  if (g.showIdle) {
+  if (g.showIdle && idleRuns(g).length) {
     b.node('rect', xWbs + 330, legendY - 1, 26, 14, '', { fill: IDLE, stroke: GRID_STRONG, strokeWidth: 1 });
     label(xWbs + 364, legendY - 6, 240, 24, 'Week with no scheduled work');
   }

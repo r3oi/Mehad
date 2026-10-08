@@ -90,4 +90,10 @@ export default {
   'Full screen': 'ملء الشاشة',
   'Gantt chart, full screen': 'مخطط جانت بملء الشاشة',
   'Whole chart': 'المخطط كاملًا',
+
+  // ---- Draw bars up to ----
+  'Draw bars up to': 'رسم الأشرطة حتى تاريخ',
+  'The timeline stays white after this date. Leave it empty to draw the whole plan.': 'يبقى المخطط أبيض بعد هذا التاريخ. اتركه فارغًا لرسم الخطة كاملة.',
+  'Today': 'اليوم',
+  'Clear': 'مسح',
 };

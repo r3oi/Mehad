@@ -844,14 +844,14 @@
    }
   },
   {
-   "id": "meyar-gantt-v2",
+   "id": "meyar-gantt-v3",
    "project": "Meyar",
    "kind": "figure",
-   "createdAt": "2026-10-08T11:48:11.000Z",
+   "createdAt": "2026-10-08T12:41:24.805Z",
    "title": "Project schedule (Gantt chart)",
    "titleAr": "الجدول الزمني (Gantt Chart)",
-   "description": "The team schedule moved to start on 7 September 2026 (until June 2027), in one colour, with grey weeks where no work is scheduled. Every task keeps its length and weekday. Edit the tasks and dates in the Gantt editor.",
-   "descriptionAr": "جدول الفريق بعد نقله ليبدأ من 7 سبتمبر 2026 (إلى يونيو 2027)، بلون واحد والأسابيع اللي ما فيها شغل بالرمادي. كل مهمة محافظة على مدتها ونفس يومها في الأسبوع. تعدّل المهام والتواريخ من محرر الـ Gantt.",
+   "description": "The schedule from 7 September 2026, drawn up to the end of Background / Existing Work (12 October 2026). The rest of the timeline, to June 2027, stays white. Change or clear the date under Chart settings > Draw bars up to.",
+   "descriptionAr": "الجدول من 7 سبتمبر 2026، مرسوم لين نهاية مهمة Background / Existing Work (12 أكتوبر 2026)، وباقي المخطط لين يونيو 2027 أبيض. تقدر تغيّر التاريخ أو تمسحه من إعدادات المخطط ← رسم الأشرطة حتى تاريخ.",
    "figure": {
     "id": "fig_claude_gantt",
     "title": "Project Schedule (Gantt Chart)",
@@ -868,7 +868,7 @@
        "id": "gt_meyar_1",
        "name": "Create Team",
        "start": "2026-09-07",
-       "end": "2026-09-14",
+       "end": "2026-09-13",
        "level": 0
       },
       {
@@ -1025,7 +1025,8 @@
        "end": "2027-06-07",
        "level": 0
       }
-     ]
+     ],
+     "drawUntil": "2026-10-12"
     }
    },
    "place": {

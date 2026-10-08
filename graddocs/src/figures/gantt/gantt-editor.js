@@ -23,7 +23,7 @@ import { History } from '../editor/history.js';
 import { exportFigure, locationOptions, parseLocation } from '../figures-view.js';
 import {
   normalizeGantt, ganttDiagram, isPhase, wbsNumbers, effectiveSpans, weekRange,
-  isoOf, dayOf, isValidISO, durationDays,
+  isoOf, dayOf, isValidISO, durationDays, todayISO,
 } from './gantt-model.js';
 import * as ops from './gantt-ops.js';
 import { parseTaskRows } from './gantt-ops.js';
@@ -158,6 +158,15 @@ export default {
                     ${COLORS.map((c) => `<button type="button" class="gt-swatch" style="--c:${c}" data-color="${c}" data-tip="${c}" aria-label="${c}"></button>`).join('')}
                     <label class="gt-custom" data-tip="${esc(t('Custom colour'))}"><input type="color" data-custom-color aria-label="${esc(t('Custom colour'))}"></label>
                   </div>
+                </div>
+                <div class="field gt-untilfield">
+                  <label for="gt-until">${t('Draw bars up to')}</label>
+                  <div class="gt-until">
+                    <input type="date" class="input" id="gt-until" data-until min="${MIN_DATE}" max="${MAX_DATE}">
+                    <button type="button" class="btn btn-sm" data-until-today>${t('Today')}</button>
+                    <button type="button" class="btn btn-sm" data-until-clear>${t('Clear')}</button>
+                  </div>
+                  <div class="hint">${t('The timeline stays white after this date. Leave it empty to draw the whole plan.')}</div>
                 </div>
                 <div class="gt-flags">
                   <label class="switch"><input type="checkbox" data-flag="showIdle"><span class="track"></span><span>${t('Show grey weeks with no work')}</span></label>
@@ -340,6 +349,9 @@ export default {
       if (custom.value !== color) custom.value = color;
       $('.gt-custom').classList.toggle('active', !COLORS.some((c) => c.toLowerCase() === color));
       root.querySelectorAll('[data-flag]').forEach((cb) => { cb.checked = draft[cb.dataset.flag] !== false; });
+      const until = $('[data-until]');
+      if (document.activeElement !== until && until.value !== draft.drawUntil) until.value = draft.drawUntil || '';
+      $('[data-until-clear]').disabled = !draft.drawUntil;
       root.querySelectorAll('[data-zoom]').forEach((b) => { const on = b.dataset.zoom === zoom; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on); });
       previewEl.dataset.zoom = zoom;
     }
@@ -647,6 +659,10 @@ export default {
       renderSettings(); scheduleCommit(200);
     });
     D.add(on(root, 'click', '[data-zoom]', (e, el) => { zoom = el.dataset.zoom; prefs.set('ganttZoom', zoom); renderSettings(); }));
+    const setUntil = (v) => { if (v && !inRange(v)) return; change((d) => ({ ...d, drawUntil: v }), { quiet: true }); renderSettings(); };
+    D.listen($('[data-until]'), 'change', (e) => setUntil(e.target.value));
+    D.add(on(root, 'click', '[data-until-today]', () => setUntil(todayISO())));
+    D.add(on(root, 'click', '[data-until-clear]', () => setUntil('')));
     D.add(on(root, 'click', '[data-big-open]', openBig));
     D.add(on(previewEl, 'click', '.gt-paper', openBig));
     D.add(on(bigEl, 'click', '[data-big-close]', closeBig));
