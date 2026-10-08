@@ -101,14 +101,14 @@
     if (!isM) ICONS.forEach((ic, j) => { const p = clamp((n - j * 2) / 2); if (p > 0) icon(ic, p, seed + 40 + j * 13, C.pen, false); });
   }
 
-  // AIM: makeup and clothes around the mark — fine-liner drawings tinted with the pen colour
+  // AIM: makeup and clothes (women's and men's) around the mark — fine-liner drawings tinted with the pen colour
   // (default) or realistic product cut-outs (?v=real), both from Higgsfield sheets (tools/icons.py).
   // at: logo source coords; px: largest side in px at 1920 wide, scaled with the mark.
   const REAL = QS.get("v") === "real";
   const ICONS = [{ name: "lipstick", at: [-160, 650], px: 82, tilt: -.05 }, { name: "hanger", at: [1000, -125], px: 108, tilt: .03 },
                  { name: "dress", at: [2165, 660], px: 96, tilt: .05 }, { name: "brush", at: REAL ? [470, 1535] : [520, 1475], px: 100, tilt: 0 }];
-  const ICONS_DARK = [{ name: "handbag", at: [1000, -140], px: 96, tilt: -.03 }, { name: "polish", at: [-187, 732], px: 80, tilt: .06 },
-                      { name: "heel", at: [2186, 624], px: 104, tilt: -.04 }, { name: REAL ? "compact" : "lips", at: [1030, 1474], px: REAL ? 84 : 104, tilt: .04 }];
+  const ICONS_DARK = [{ name: "handbag", at: REAL ? [1000, -170] : [1000, -140], px: 96, tilt: -.03 }, { name: "watch", at: [-187, 732], px: 84, tilt: .06 },     // hers and his
+                      { name: "heel", at: [2186, 624], px: 104, tilt: -.04 }, { name: "bowtie", at: [1030, 1474], px: REAL ? 84 : 100, tilt: .04 }];
   const iconImg = {};
   async function loadIcons() {
     for (const ic of [...ICONS, ...ICONS_DARK]) {

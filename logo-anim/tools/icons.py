@@ -4,7 +4,7 @@
   real sheets → product cut-outs from the sheets after Higgsfield's background remover
                 (RGBA), cropped per quadrant; stray specks dropped
 
-usage: python3 tools/icons.py <line_a.png> <line_b.png> <real_a_cut.png> <real_b_cut.png>
+usage: python3 tools/icons.py <dir with line_{a,b,c}.png and real_{a,b,c}_cut.png>
 writes assets/aim/icons/{line,real}_<name>.png
 """
 import sys, os
@@ -16,8 +16,10 @@ from skimage.morphology import skeletonize, disk
 OUT = os.path.join(os.path.dirname(__file__), "..", "assets", "aim", "icons")
 os.makedirs(OUT, exist_ok=True)
 # display size (max dimension, px at 1920 wide) of each icon, by sheet and quadrant
-LINE = [["lipstick", 82, "brush", 100, "hanger", 108, "dress", 96], ["handbag", 96, "polish", 80, "heel", 104, "lips", 104]]
-REAL = [["lipstick", 86, "brush", 108, "hanger", 112, "dress", 100], ["handbag", 100, "polish", 84, "heel", 108, "compact", 84]]
+LINE = {"a": ["lipstick", 82, "brush", 100, "hanger", 108, "dress", 96], "b": ["handbag", 96, "polish", 80, "heel", 104, "lips", 104],
+        "c": ["watch", 84, "bowtie", 100, "necktie", 96, "oxford", 104]}
+REAL = {"a": ["lipstick", 86, "brush", 108, "hanger", 112, "dress", 100], "b": ["handbag", 100, "polish", 84, "heel", 108, "compact", 84],
+        "c": ["watch", 92, "bowtie", 100, "necktie", 96, "oxford", 108]}
 PEN = 2.1          # target stroke width at display size (px)
 SS = 4             # icons are stored at SS × display size
 
@@ -48,6 +50,8 @@ def line_icon(c, name, size):
 
 def real_icon(c, name, size):
     a = c[..., 3] / 255
+    h, w = a.shape; yy, xx = np.mgrid[:h, :w]                       # anything running off the cell (a watch strap) fades out
+    a = a * np.clip(np.minimum.reduce([yy, h - 1 - yy, xx, w - 1 - xx]) / 110, 0, 1) ** .8
     lab, n = ndi.label(a > .5)                                    # keep the object (and its sizeable parts)
     if n > 1:
         sizes = ndi.sum(a > .5, lab, range(1, n + 1)); keep = np.isin(lab, 1 + np.nonzero(sizes > sizes.max() * .02)[0])
@@ -59,8 +63,8 @@ def real_icon(c, name, size):
     im.save(os.path.join(OUT, f"real_{name}.png"))
     print(f"real_{name}: {im.size[0]}x{im.size[1]}")
 
-la, lb, ra, rb = sys.argv[1:5]
-for sheet, spec in ((la, LINE[0]), (lb, LINE[1])):
-    for q, c in enumerate(cells(sheet)): line_icon(c, spec[q * 2], spec[q * 2 + 1])
-for sheet, spec in ((ra, REAL[0]), (rb, REAL[1])):
-    for q, c in enumerate(cells(sheet, "RGBA")): real_icon(c, spec[q * 2], spec[q * 2 + 1])
+D = sys.argv[1]
+for k, spec in LINE.items():
+    for q, c in enumerate(cells(os.path.join(D, f"line_{k}.png"))): line_icon(c, spec[q * 2], spec[q * 2 + 1])
+for k, spec in REAL.items():
+    for q, c in enumerate(cells(os.path.join(D, f"real_{k}_cut.png"), "RGBA")): real_icon(c, spec[q * 2], spec[q * 2 + 1])
