@@ -164,8 +164,10 @@ export function edgeGeometry(edge, nodes) {
 
   if (routing === 'curved') {
     const L = dist(pA, pB);
+    // Round shapes leave radially (a connector anchored at 1 o'clock heads off at 1 o'clock), boxes from their side.
+    const round = (node) => node && (node.shape === 'circle' || node.shape === 'ellipse');
     const normalOf = (info, p, other) => {
-      if (info.side) return DIRS[info.side];
+      if (info.side && !round(info.node)) return DIRS[info.side];
       if (info.node) { const c = center(info.node); const d = dist(c, p) || 1; return { x: (p.x - c.x) / d, y: (p.y - c.y) / d }; }
       const d = dist(p, other) || 1; return { x: (other.x - p.x) / d, y: (other.y - p.y) / d };
     };

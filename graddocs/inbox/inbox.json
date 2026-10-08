@@ -1,0 +1,1041 @@
+{
+ "version": 1,
+ "items": [
+  {
+   "id": "meyar-project-logo-v1",
+   "project": "Meyar",
+   "kind": "projectLogo",
+   "createdAt": "2026-10-08T11:09:18.793Z",
+   "title": "Meyar logo on the title page",
+   "titleAr": "شعار Meyar في صفحة الغلاف",
+   "description": "The chosen Meyar logo (teal, with the Arabic name), shown above the project title.",
+   "descriptionAr": "شعار Meyar المختار (الفيروزي مع الاسم العربي) فوق عنوان المشروع.",
+   "asset": "assets/meyar-logo.png"
+  },
+  {
+   "id": "meyar-agile-method-v1",
+   "project": "Meyar",
+   "kind": "figure",
+   "createdAt": "2026-10-08T11:09:18.793Z",
+   "title": "Agile development methodology",
+   "titleAr": "مخطط منهجية Agile",
+   "description": "Iterative cycle Plan → Design → Develop → Test → Review, with the product backlog, weekly meetings and supervisor feedback. Every shape and arrow is editable.",
+   "descriptionAr": "دورة متكررة: تخطيط ← تصميم ← تطوير ← اختبار ← مراجعة، مع قائمة المتطلبات والاجتماع الأسبوعي وملاحظات المشرف. كل شكل وسهم قابل للتعديل.",
+   "figure": {
+    "id": "fig_claude_agile",
+    "title": "Agile Development Methodology",
+    "type": "generic",
+    "description": "The iterative Agile cycle followed by the Meyar team.",
+    "diagram": {
+     "width": 1770,
+     "height": 675,
+     "background": "#ffffff",
+     "defaults": {
+      "fontFamily": "Arial",
+      "fontSize": 14
+     },
+     "elements": [
+      {
+       "id": "agile_plan",
+       "type": "node",
+       "shape": "circle",
+       "x": 545,
+       "y": 290.00000000000006,
+       "w": 140,
+       "h": 140,
+       "text": "",
+       "style": {
+        "fill": "#0891B2",
+        "stroke": "#ffffff",
+        "strokeWidth": 4
+       }
+      },
+      {
+       "id": "n_28a054c02e18",
+       "type": "node",
+       "shape": "text",
+       "x": 545,
+       "y": 326.00000000000006,
+       "w": 140,
+       "h": 18,
+       "text": "1",
+       "style": {
+        "fontSize": 13,
+        "textColor": "#D9F3F8",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_69e961958315",
+       "type": "node",
+       "shape": "text",
+       "x": 545,
+       "y": 342.00000000000006,
+       "w": 140,
+       "h": 28,
+       "text": "Plan",
+       "style": {
+        "fontSize": 21,
+        "textColor": "#ffffff",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_13a8278a613c",
+       "type": "node",
+       "shape": "text",
+       "x": 551,
+       "y": 370.00000000000006,
+       "w": 128,
+       "h": 34,
+       "text": "Pick backlog items\nand set the goal",
+       "style": {
+        "fontSize": 11.5,
+        "textColor": "#E6F7FA"
+       }
+      },
+      {
+       "id": "agile_design",
+       "type": "node",
+       "shape": "circle",
+       "x": 714.2908363781379,
+       "y": 56.991153507687386,
+       "w": 140,
+       "h": 140,
+       "text": "",
+       "style": {
+        "fill": "#0891B2",
+        "stroke": "#ffffff",
+        "strokeWidth": 4
+       }
+      },
+      {
+       "id": "n_bc51e67e0b5e",
+       "type": "node",
+       "shape": "text",
+       "x": 714.2908363781379,
+       "y": 92.99115350768739,
+       "w": 140,
+       "h": 18,
+       "text": "2",
+       "style": {
+        "fontSize": 13,
+        "textColor": "#D9F3F8",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_bf32df61e65e",
+       "type": "node",
+       "shape": "text",
+       "x": 714.2908363781379,
+       "y": 108.99115350768739,
+       "w": 140,
+       "h": 28,
+       "text": "Design",
+       "style": {
+        "fontSize": 21,
+        "textColor": "#ffffff",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_a125eb5733bf",
+       "type": "node",
+       "shape": "text",
+       "x": 720.2908363781379,
+       "y": 136.9911535076874,
+       "w": 128,
+       "h": 34,
+       "text": "UML models\nand UI mockups",
+       "style": {
+        "fontSize": 11.5,
+        "textColor": "#E6F7FA"
+       }
+      },
+      {
+       "id": "agile_develop",
+       "type": "node",
+       "shape": "circle",
+       "x": 988.209163621862,
+       "y": 145.99261318834402,
+       "w": 140,
+       "h": 140,
+       "text": "",
+       "style": {
+        "fill": "#0891B2",
+        "stroke": "#ffffff",
+        "strokeWidth": 4
+       }
+      },
+      {
+       "id": "n_31c1192e9906",
+       "type": "node",
+       "shape": "text",
+       "x": 988.209163621862,
+       "y": 181.99261318834402,
+       "w": 140,
+       "h": 18,
+       "text": "3",
+       "style": {
+        "fontSize": 13,
+        "textColor": "#D9F3F8",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_1bb868ea7cd6",
+       "type": "node",
+       "shape": "text",
+       "x": 988.209163621862,
+       "y": 197.99261318834402,
+       "w": 140,
+       "h": 28,
+       "text": "Develop",
+       "style": {
+        "fontSize": 21,
+        "textColor": "#ffffff",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_5f3442b9b68f",
+       "type": "node",
+       "shape": "text",
+       "x": 994.209163621862,
+       "y": 225.99261318834402,
+       "w": 128,
+       "h": 34,
+       "text": "Build the\nfeatures",
+       "style": {
+        "fontSize": 11.5,
+        "textColor": "#E6F7FA"
+       }
+      },
+      {
+       "id": "agile_test",
+       "type": "node",
+       "shape": "circle",
+       "x": 988.2091636218622,
+       "y": 434.0073868116559,
+       "w": 140,
+       "h": 140,
+       "text": "",
+       "style": {
+        "fill": "#0891B2",
+        "stroke": "#ffffff",
+        "strokeWidth": 4
+       }
+      },
+      {
+       "id": "n_1b73a7bf7205",
+       "type": "node",
+       "shape": "text",
+       "x": 988.2091636218622,
+       "y": 470.0073868116559,
+       "w": 140,
+       "h": 18,
+       "text": "4",
+       "style": {
+        "fontSize": 13,
+        "textColor": "#D9F3F8",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_745007423e6d",
+       "type": "node",
+       "shape": "text",
+       "x": 988.2091636218622,
+       "y": 486.0073868116559,
+       "w": 140,
+       "h": 28,
+       "text": "Test",
+       "style": {
+        "fontSize": 21,
+        "textColor": "#ffffff",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_815891b83719",
+       "type": "node",
+       "shape": "text",
+       "x": 994.2091636218622,
+       "y": 514.0073868116559,
+       "w": 128,
+       "h": 34,
+       "text": "Verify every\nfeature",
+       "style": {
+        "fontSize": 11.5,
+        "textColor": "#E6F7FA"
+       }
+      },
+      {
+       "id": "agile_review",
+       "type": "node",
+       "shape": "circle",
+       "x": 714.2908363781379,
+       "y": 523.0088464923126,
+       "w": 140,
+       "h": 140,
+       "text": "",
+       "style": {
+        "fill": "#0891B2",
+        "stroke": "#ffffff",
+        "strokeWidth": 4
+       }
+      },
+      {
+       "id": "n_9136eac17ab7",
+       "type": "node",
+       "shape": "text",
+       "x": 714.2908363781379,
+       "y": 559.0088464923126,
+       "w": 140,
+       "h": 18,
+       "text": "5",
+       "style": {
+        "fontSize": 13,
+        "textColor": "#D9F3F8",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_0acf32171751",
+       "type": "node",
+       "shape": "text",
+       "x": 714.2908363781379,
+       "y": 575.0088464923126,
+       "w": 140,
+       "h": 28,
+       "text": "Review",
+       "style": {
+        "fontSize": 21,
+        "textColor": "#ffffff",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_d2cdd46c4669",
+       "type": "node",
+       "shape": "text",
+       "x": 720.2908363781379,
+       "y": 603.0088464923126,
+       "w": 128,
+       "h": 34,
+       "text": "Demo to the\nsupervisor",
+       "style": {
+        "fontSize": 11.5,
+        "textColor": "#E6F7FA"
+       }
+      },
+      {
+       "id": "e_227448dd7f25",
+       "type": "edge",
+       "source": {
+        "id": "agile_plan",
+        "anchor": {
+         "x": 0.579,
+         "y": -0.021
+        }
+       },
+       "target": {
+        "id": "agile_design",
+        "anchor": {
+         "x": 0.029,
+         "y": 0.736
+        }
+       },
+       "routing": "curved",
+       "text": "",
+       "style": {
+        "stroke": "#0891B2",
+        "strokeWidth": 4,
+        "endArrow": "triangle"
+       }
+      },
+      {
+       "id": "e_96d108062074",
+       "type": "edge",
+       "source": {
+        "id": "agile_design",
+        "anchor": {
+         "x": 1.02,
+         "y": 0.414
+        }
+       },
+       "target": {
+        "id": "agile_develop",
+        "anchor": {
+         "x": 0.13,
+         "y": 0.125
+        }
+       },
+       "routing": "curved",
+       "text": "",
+       "style": {
+        "stroke": "#0891B2",
+        "strokeWidth": 4,
+        "endArrow": "triangle"
+       }
+      },
+      {
+       "id": "e_c1171f0659be",
+       "type": "edge",
+       "source": {
+        "id": "agile_develop",
+        "anchor": {
+         "x": 0.742,
+         "y": 0.968
+        }
+       },
+       "target": {
+        "id": "agile_test",
+        "anchor": {
+         "x": 0.742,
+         "y": 0.032
+        }
+       },
+       "routing": "curved",
+       "text": "",
+       "style": {
+        "stroke": "#0891B2",
+        "strokeWidth": 4,
+        "endArrow": "triangle"
+       }
+      },
+      {
+       "id": "e_55370bb7a006",
+       "type": "edge",
+       "source": {
+        "id": "agile_test",
+        "anchor": {
+         "x": 0.13,
+         "y": 0.875
+        }
+       },
+       "target": {
+        "id": "agile_review",
+        "anchor": {
+         "x": 1.02,
+         "y": 0.586
+        }
+       },
+       "routing": "curved",
+       "text": "",
+       "style": {
+        "stroke": "#0891B2",
+        "strokeWidth": 4,
+        "endArrow": "triangle"
+       }
+      },
+      {
+       "id": "e_45fa53f2ccee",
+       "type": "edge",
+       "source": {
+        "id": "agile_review",
+        "anchor": {
+         "x": 0.029,
+         "y": 0.264
+        }
+       },
+       "target": {
+        "id": "agile_plan",
+        "anchor": {
+         "x": 0.579,
+         "y": 1.021
+        }
+       },
+       "routing": "curved",
+       "text": "",
+       "style": {
+        "stroke": "#0891B2",
+        "strokeWidth": 4,
+        "endArrow": "triangle"
+       }
+      },
+      {
+       "id": "n_832e3c910bf7",
+       "type": "node",
+       "shape": "text",
+       "x": 690,
+       "y": 298,
+       "w": 340,
+       "h": 42,
+       "text": "AGILE",
+       "style": {
+        "fontSize": 34,
+        "textColor": "#111827",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_a5b0d457537e",
+       "type": "node",
+       "shape": "text",
+       "x": 690,
+       "y": 340,
+       "w": 340,
+       "h": 22,
+       "text": "Iterative cycle · 2–4 weeks each",
+       "style": {
+        "fontSize": 15,
+        "textColor": "#6B7280"
+       }
+      },
+      {
+       "id": "n_522f53429ad2",
+       "type": "node",
+       "shape": "text",
+       "x": 690,
+       "y": 382,
+       "w": 340,
+       "h": 22,
+       "text": "Weekly team meeting",
+       "style": {
+        "fontSize": 15,
+        "textColor": "#111827",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_dd48ef44a4d9",
+       "type": "node",
+       "shape": "text",
+       "x": 690,
+       "y": 404,
+       "w": 340,
+       "h": 20,
+       "text": "progress, blockers, next steps",
+       "style": {
+        "fontSize": 13,
+        "textColor": "#6B7280"
+       }
+      },
+      {
+       "id": "n_300aa132da4f",
+       "type": "node",
+       "shape": "text",
+       "x": 479.43015660313995,
+       "y": 517.5187969033549,
+       "w": 130,
+       "h": 22,
+       "text": "Next iteration",
+       "style": {
+        "fontSize": 13.5,
+        "textColor": "#0891B2",
+        "fontWeight": "bold",
+        "align": "right"
+       }
+      },
+      {
+       "id": "n_337f45720c2e",
+       "type": "node",
+       "shape": "roundRect",
+       "x": 80,
+       "y": 270,
+       "w": 270,
+       "h": 140,
+       "text": "",
+       "style": {
+        "fill": "#ffffff",
+        "stroke": "#BFE6EF",
+        "strokeWidth": 2,
+        "radius": 10
+       }
+      },
+      {
+       "id": "n_4b53ffa9ede2",
+       "type": "node",
+       "shape": "roundRect",
+       "x": 70,
+       "y": 280,
+       "w": 270,
+       "h": 140,
+       "text": "",
+       "style": {
+        "fill": "#ffffff",
+        "stroke": "#BFE6EF",
+        "strokeWidth": 2,
+        "radius": 10
+       }
+      },
+      {
+       "id": "agile_backlog",
+       "type": "node",
+       "shape": "roundRect",
+       "x": 60,
+       "y": 290,
+       "w": 270,
+       "h": 140,
+       "text": "",
+       "style": {
+        "fill": "#ffffff",
+        "stroke": "#0891B2",
+        "strokeWidth": 2.5,
+        "radius": 10
+       }
+      },
+      {
+       "id": "n_cbb2965204ae",
+       "type": "node",
+       "shape": "text",
+       "x": 60,
+       "y": 316,
+       "w": 270,
+       "h": 28,
+       "text": "Product Backlog",
+       "style": {
+        "fontSize": 20,
+        "textColor": "#111827",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_e96f632dac61",
+       "type": "node",
+       "shape": "text",
+       "x": 60,
+       "y": 352,
+       "w": 270,
+       "h": 44,
+       "text": "Requirements and features\nordered by priority",
+       "style": {
+        "fontSize": 14,
+        "textColor": "#4B5563"
+       }
+      },
+      {
+       "id": "e_294cf2c76222",
+       "type": "edge",
+       "source": {
+        "id": "agile_backlog",
+        "anchor": {
+         "x": 1,
+         "y": 0.5
+        }
+       },
+       "target": {
+        "id": "agile_plan",
+        "anchor": {
+         "x": 0,
+         "y": 0.5
+        }
+       },
+       "routing": "straight",
+       "text": "Selected tasks",
+       "style": {
+        "stroke": "#0891B2",
+        "strokeWidth": 4,
+        "endArrow": "triangle",
+        "textColor": "#0891B2",
+        "fontWeight": "bold",
+        "fontSize": 13.5
+       }
+      },
+      {
+       "id": "e_5f99632c8fc8",
+       "type": "edge",
+       "source": {
+        "id": "agile_review",
+        "anchor": {
+         "x": 0.017,
+         "y": 0.629
+        }
+       },
+       "target": {
+        "id": "agile_backlog",
+        "anchor": {
+         "x": 0.5,
+         "y": 1
+        }
+       },
+       "routing": "curved",
+       "text": "",
+       "style": {
+        "stroke": "#4B5563",
+        "strokeWidth": 2.5,
+        "dash": "dashed",
+        "endArrow": "triangle"
+       }
+      },
+      {
+       "id": "n_b9cd87e592a1",
+       "type": "node",
+       "shape": "text",
+       "x": 270,
+       "y": 637,
+       "w": 420,
+       "h": 22,
+       "text": "Supervisor feedback updates the backlog",
+       "style": {
+        "fontSize": 14,
+        "textColor": "#4B5563",
+        "align": "left"
+       }
+      },
+      {
+       "id": "agile_increment",
+       "type": "node",
+       "shape": "roundRect",
+       "x": 1200,
+       "y": 295,
+       "w": 250,
+       "h": 130,
+       "text": "",
+       "style": {
+        "fill": "#ffffff",
+        "stroke": "#0891B2",
+        "strokeWidth": 2.5,
+        "radius": 10
+       }
+      },
+      {
+       "id": "n_8fc273aaa583",
+       "type": "node",
+       "shape": "text",
+       "x": 1200,
+       "y": 316,
+       "w": 250,
+       "h": 28,
+       "text": "Working Increment",
+       "style": {
+        "fontSize": 20,
+        "textColor": "#111827",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_a93ee117b46b",
+       "type": "node",
+       "shape": "text",
+       "x": 1200,
+       "y": 350,
+       "w": 250,
+       "h": 44,
+       "text": "Tested, usable part\nof the system",
+       "style": {
+        "fontSize": 14,
+        "textColor": "#4B5563"
+       }
+      },
+      {
+       "id": "e_4178cf955753",
+       "type": "edge",
+       "source": {
+        "x": 1117,
+        "y": 360
+       },
+       "target": {
+        "id": "agile_increment",
+        "anchor": {
+         "x": 0,
+         "y": 0.5
+        }
+       },
+       "routing": "straight",
+       "text": "",
+       "style": {
+        "stroke": "#0891B2",
+        "strokeWidth": 4,
+        "endArrow": "triangle"
+       }
+      },
+      {
+       "id": "agile_release",
+       "type": "node",
+       "shape": "roundRect",
+       "x": 1510,
+       "y": 295,
+       "w": 220,
+       "h": 130,
+       "text": "",
+       "style": {
+        "fill": "#0891B2",
+        "stroke": "#0891B2",
+        "strokeWidth": 2,
+        "radius": 10
+       }
+      },
+      {
+       "id": "n_cb5589725fcc",
+       "type": "node",
+       "shape": "text",
+       "x": 1510,
+       "y": 336,
+       "w": 220,
+       "h": 28,
+       "text": "Final Release",
+       "style": {
+        "fontSize": 20,
+        "textColor": "#ffffff",
+        "fontWeight": "bold"
+       }
+      },
+      {
+       "id": "n_0199187048a8",
+       "type": "node",
+       "shape": "text",
+       "x": 1510,
+       "y": 366,
+       "w": 220,
+       "h": 24,
+       "text": "Meyar",
+       "style": {
+        "fontSize": 15,
+        "textColor": "#E6F7FA"
+       }
+      },
+      {
+       "id": "e_10d462ce4a2f",
+       "type": "edge",
+       "source": {
+        "id": "agile_increment",
+        "anchor": {
+         "x": 1,
+         "y": 0.5
+        }
+       },
+       "target": {
+        "id": "agile_release",
+        "anchor": {
+         "x": 0,
+         "y": 0.5
+        }
+       },
+       "routing": "straight",
+       "text": "",
+       "style": {
+        "stroke": "#0891B2",
+        "strokeWidth": 4,
+        "endArrow": "triangle"
+       }
+      },
+      {
+       "id": "n_7a5276bd55d4",
+       "type": "node",
+       "shape": "text",
+       "x": 1180,
+       "y": 439,
+       "w": 290,
+       "h": 22,
+       "text": "Repeat iterations until all features are done",
+       "style": {
+        "fontSize": 13.5,
+        "textColor": "#6B7280"
+       }
+      }
+     ]
+    }
+   },
+   "place": {
+    "sectionTitles": [
+     "Project Methodology",
+     "Methodology",
+     "Software Development Methodology",
+     "Development Methodology"
+    ],
+    "chapterTitles": [
+     "Planning Phase"
+    ]
+   }
+  },
+  {
+   "id": "meyar-gantt-v1",
+   "project": "Meyar",
+   "kind": "figure",
+   "createdAt": "2026-10-08T11:09:18.793Z",
+   "title": "Project schedule (Gantt chart)",
+   "titleAr": "الجدول الزمني (Gantt Chart)",
+   "description": "The team schedule from September 2025 to June 2026 in one colour, with grey weeks where no work is scheduled. Edit the tasks and dates in the Gantt editor.",
+   "descriptionAr": "جدول الفريق من سبتمبر 2025 إلى يونيو 2026 بلون واحد، والأسابيع اللي ما فيها شغل بالرمادي. تعدّل المهام والتواريخ من محرر الـ Gantt.",
+   "figure": {
+    "id": "fig_claude_gantt",
+    "title": "Project Schedule (Gantt Chart)",
+    "type": "gantt",
+    "description": "Project schedule of the Meyar graduation project.",
+    "gantt": {
+     "weekStart": 0,
+     "color": "#0891B2",
+     "showIdle": true,
+     "showWbs": true,
+     "showDates": true,
+     "tasks": [
+      {
+       "id": "gt_meyar_1",
+       "name": "Create Team",
+       "start": "2025-09-01",
+       "end": "2025-09-08",
+       "level": 0
+      },
+      {
+       "id": "gt_meyar_2",
+       "name": "Project Idea",
+       "start": "2025-09-09",
+       "end": "2025-09-16",
+       "level": 0
+      },
+      {
+       "id": "gt_meyar_3",
+       "name": "Project Overview",
+       "start": "2025-09-17",
+       "end": "2025-09-18",
+       "level": 0
+      },
+      {
+       "id": "gt_meyar_4",
+       "name": "Introduction",
+       "start": "2025-09-19",
+       "end": "2025-09-26",
+       "level": 0
+      },
+      {
+       "id": "gt_meyar_5",
+       "name": "Background / Existing Work",
+       "start": "2025-09-29",
+       "end": "2025-10-06",
+       "level": 0
+      },
+      {
+       "id": "gt_meyar_6",
+       "name": "Software Requirements Specification",
+       "start": "2025-10-07",
+       "end": "2025-10-15",
+       "level": 0
+      },
+      {
+       "id": "gt_meyar_7",
+       "name": "Introduction",
+       "start": "2025-10-07",
+       "end": "2025-10-07",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_8",
+       "name": "Overall Description",
+       "start": "2025-10-07",
+       "end": "2025-10-08",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_9",
+       "name": "External Interface Requirements",
+       "start": "2025-10-08",
+       "end": "2025-10-09",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_10",
+       "name": "System Features",
+       "start": "2025-10-09",
+       "end": "2025-10-10",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_11",
+       "name": "Other Non-functional Requirements",
+       "start": "2025-10-10",
+       "end": "2025-10-10",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_12",
+       "name": "Performance Requirements",
+       "start": "2025-10-10",
+       "end": "2025-10-10",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_13",
+       "name": "Safety Requirements",
+       "start": "2025-10-10",
+       "end": "2025-10-10",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_14",
+       "name": "Security Requirements",
+       "start": "2025-10-10",
+       "end": "2025-10-10",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_15",
+       "name": "Software Quality Attributes",
+       "start": "2025-10-10",
+       "end": "2025-10-13",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_16",
+       "name": "Business Rules",
+       "start": "2025-10-13",
+       "end": "2025-10-14",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_17",
+       "name": "Other Requirements",
+       "start": "2025-10-14",
+       "end": "2025-10-15",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_18",
+       "name": "Software Design",
+       "start": "2025-10-16",
+       "end": "2025-10-24",
+       "level": 0
+      },
+      {
+       "id": "gt_meyar_19",
+       "name": "Design Overview",
+       "start": "2025-10-16",
+       "end": "2025-10-20",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_20",
+       "name": "Interfaces and Data Stores",
+       "start": "2025-10-20",
+       "end": "2025-10-21",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_21",
+       "name": "Structural Design",
+       "start": "2025-10-21",
+       "end": "2025-10-24",
+       "level": 1
+      },
+      {
+       "id": "gt_meyar_22",
+       "name": "System Implementation & Validation",
+       "start": "2026-01-26",
+       "end": "2026-05-20",
+       "level": 0
+      },
+      {
+       "id": "gt_meyar_23",
+       "name": "Conclusion and Future Work",
+       "start": "2026-05-21",
+       "end": "2026-06-01",
+       "level": 0
+      }
+     ]
+    }
+   },
+   "place": {
+    "sectionTitles": [
+     "Project Schedule",
+     "Gantt Chart",
+     "Project Plan"
+    ],
+    "chapterTitles": [
+     "Planning Phase"
+    ]
+   }
+  }
+ ]
+}
