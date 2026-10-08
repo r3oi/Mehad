@@ -21,8 +21,8 @@ const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromi
 const [w, h] = format === "1x1" ? [1080, 1080] : [1920, 1080];
 const page = await browser.newPage({ viewport: { width: w, height: h } });
 page.on("pageerror", e => console.error("PAGEERR:", e.message));
-const [idea, logo] = brand.split("-");   // idea stings: mash-mehad, risk-aim, …
-await page.goto(`http://127.0.0.1:${port}/engine/index.html?render&brand=${idea}&format=${format}${logo ? "&logo=" + logo : ""}`);
+const [idea, logo, variant] = brand.split("-");   // idea stings: mash-mehad, risk-aim, … (+ a variant: mash-aim-real)
+await page.goto(`http://127.0.0.1:${port}/engine/index.html?render&brand=${idea}&format=${format}${logo ? "&logo=" + logo : ""}${variant ? "&v=" + variant : ""}`);
 await page.waitForFunction(() => window.READY || window.BOOT_ERROR, null, { timeout: 60000 });
 const err = await page.evaluate(() => window.BOOT_ERROR); if (err) { console.error(err); process.exit(1); }
 const total = await page.evaluate(() => FRAMES());

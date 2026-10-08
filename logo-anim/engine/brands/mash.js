@@ -15,6 +15,7 @@
     await loadImg("paper", "../assets/shared/paper.png");
     await Promise.all([0, 1, 2].map(i => loadImg("brush" + i, `../assets/shared/brush_${i}.png`)));
     await LOGO.load();
+    if (!isM) await loadIcons();
     await Promise.all(["500 30px Caveat", "700 30px Caveat", '400 30px "Aref Ruqaa"', '700 30px "Aref Ruqaa"'].map(f => document.fonts.load(f, "abc خيط")));
     P = place(LOGO, C.width[FORMAT]);
     S = (x, y) => [P.x + x * P.L, P.y + y * P.L];
@@ -97,37 +98,42 @@
       (g, p) => { const [x, y] = S(1000, 1334); handArrow(g, [[x + 120 * sc, y + 60 * sc], [x + 50 * sc, y + 40 * sc], [x + 8 * sc, y + 8 * sc]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "clothes ✓", x + 135 * sc, y + 62 * sc, { font: F(28), color: C.pen, seed }); },
     ];
     items.forEach((f, i) => { const p = clamp((n - i * 2 + 1) / 2); if (p > 0) f(ctx, p); });
-    if (!isM) ICONS.forEach((ic, j) => { const p = clamp((n - j * 2) / 2); if (p > 0) doodle(ic, p, { ...o, w: 2.2 * sc, seed: seed + 40 + j * 13 }); });
+    if (!isM) ICONS.forEach((ic, j) => { const p = clamp((n - j * 2) / 2); if (p > 0) icon(ic, p, seed + 40 + j * 13, C.pen, false); });
   }
 
-  // AIM: tiny pen doodles of makeup and clothes around the mark (logo source coords; u = half-size)
-  const rotPts = (pts, a) => pts.map(([u, v]) => [u * Math.cos(a) - v * Math.sin(a), u * Math.sin(a) + v * Math.cos(a)]);
-  const ICONS = [
-    { at: [-160, 650], u: 95, strokes: [                                                             // lipstick
-      [[-.36, .15], [.36, .15], [.36, 1], [-.36, 1], [-.36, .15]], [[-.36, .42], [.36, .42]], [[-.24, .15], [-.24, -.62], [.24, -.92], [.24, .15]]] },
-    { at: [1000, -125], u: 100, strokes: [                                                           // hanger
-      [[0, -.12], [0, -.32], [.08, -.42], [.14, -.55], [.1, -.7], [-.02, -.76], [-.13, -.7], [-.15, -.6]],
-      [[0, -.12], [-.96, .4], [-.92, .5], [.92, .5], [.96, .4], [0, -.12]]] },
-    { at: [2165, 660], u: 110, strokes: [                                                            // dress
-      [[-.18, -1], [-.24, -.55], [-.3, -.22], [-.72, .95], [.72, .95], [.3, -.22], [.24, -.55], [.18, -1], [0, -.8], [-.18, -1]], [[-.3, -.22], [.3, -.22]]] },
-    { at: [520, 1475], u: 85, strokes: [                                                             // makeup brush
-      [[-1.15, -.05], [-.1, -.1]], [[-1.15, .05], [-.1, .1]], [[-1.15, -.05], [-1.18, 0], [-1.15, .05]], [[-.1, -.12], [.22, -.13], [.22, .13], [-.1, .12], [-.1, -.12]], [[.08, -.13], [.08, .13]],
-      [[.22, -.13], [.5, -.24], [.82, -.36], [.95, -.2], [1, 0], [.95, .2], [.82, .36], [.5, .24], [.22, .13]], [[.35, -.06], [.85, -.14]], [[.35, .06], [.85, .14]]].map(st => rotPts(st, -.5)) },
-  ];
-  const ICONS_DARK = [                                          // on the dark page: different ones
-    { at: [1000, -140], u: 110, strokes: [                                                           // handbag
-      [[-.8, -.15], [.8, -.15], [.95, .75], [-.95, .75], [-.8, -.15]], [[-.42, -.15], [-.4, -.55], [-.2, -.78], [.2, -.78], [.4, -.55], [.42, -.15]], [[-.8, .1], [0, .3], [.8, .1]], [[0, .3], [0, .44]]] },
-    { at: [-187, 732], u: 85, strokes: [                                                             // nail polish
-      [[-.55, -.1], [.55, -.1], [.62, .2], [.62, .9], [-.62, .9], [-.62, .2], [-.55, -.1]], [[-.25, -.1], [-.25, -.25], [.25, -.25], [.25, -.1]], [[-.3, -.25], [-.3, -1], [.3, -1], [.3, -.25]], [[-.35, .2], [-.35, .6]]] },
-    { at: [2186, 624], u: 120, strokes: [                                                            // high heel
-      [[-.78, -.5], [-.82, -.05], [-.7, 0], [-.66, .78], [-.58, .78], [-.5, .08], [-.2, .28], [.2, .52], [.6, .68], [.98, .72], [1.02, .58]],
-      [[1.02, .58], [.82, .42], [.5, .32], [.15, .18], [-.25, 0], [-.55, -.38], [-.78, -.5]]] },
-    { at: [1030, 1474], u: 120, strokes: [                                                           // lips
-      [[-1, .05], [-.6, -.25], [-.25, -.4], [0, -.22], [.25, -.4], [.6, -.25], [1, .05]], [[-1, .05], [-.55, .4], [0, .5], [.55, .4], [1, .05]], [[-.85, .06], [-.4, .02], [0, .1], [.4, .02], [.85, .06]]] },
-  ];
-  function doodle(ic, p, o) {                                  // strokes drawn one after another
-    const K = ic.strokes.length;
-    ic.strokes.forEach((st, k) => { const q = clamp(p * K - k); if (q > 0) hand(ctx, st.map(([u, v]) => S(ic.at[0] + u * ic.u, ic.at[1] + v * ic.u)), { ...o, p: q, seed: o.seed + k * 7 }); });
+  // AIM: makeup and clothes around the mark — fine-liner drawings tinted with the pen colour
+  // (default) or realistic product cut-outs (?v=real), both from Higgsfield sheets (tools/icons.py).
+  // at: logo source coords; px: largest side in px at 1920 wide, scaled with the mark.
+  const REAL = QS.get("v") === "real";
+  const ICONS = [{ name: "lipstick", at: [-160, 650], px: 82, tilt: -.05 }, { name: "hanger", at: [1000, -125], px: 108, tilt: .03 },
+                 { name: "dress", at: [2165, 660], px: 96, tilt: .05 }, { name: "brush", at: REAL ? [470, 1535] : [520, 1475], px: 100, tilt: 0 }];
+  const ICONS_DARK = [{ name: "handbag", at: [1000, -140], px: 96, tilt: -.03 }, { name: "polish", at: [-187, 732], px: 80, tilt: .06 },
+                      { name: "heel", at: [2186, 624], px: 104, tilt: -.04 }, { name: REAL ? "compact" : "lips", at: [1030, 1474], px: REAL ? 84 : 104, tilt: .04 }];
+  const iconImg = {};
+  async function loadIcons() {
+    for (const ic of [...ICONS, ...ICONS_DARK]) {
+      const key = (REAL ? "real_" : "line_") + ic.name; await loadImg(key, `../assets/aim/icons/${key}.png`);
+      if (REAL) { iconImg[ic.name] = IMG[key]; continue; }
+      iconImg[ic.name] = {};
+      for (const col of [C.pen, C.note]) {                     // ink tinted once per colour
+        const im = IMG[key], cv = Object.assign(document.createElement("canvas"), { width: im.width, height: im.height }), g = cv.getContext("2d");
+        g.drawImage(im, 0, 0); g.globalCompositeOperation = "source-in"; g.fillStyle = col; g.fillRect(0, 0, cv.width, cv.height); iconImg[ic.name][col] = cv;
+      }
+    }
+  }
+  function icon(ic, p, seed, col, dark) {
+    const im = REAL ? iconImg[ic.name] : iconImg[ic.name][col], k = ic.px * (REAL ? 1.25 : 1) / Math.max(im.width, im.height) * P.L / .38;   // photos read smaller than ink
+    const w = im.width * k, h = im.height * k, [x, y] = S(...ic.at);
+    ctx.save(); ctx.translate(x, y);
+    if (REAL) {                                               // lands: a step small, then settles; soft shadow on paper
+      const s = p < 1 ? .86 : 1; ctx.rotate(ic.tilt); ctx.scale(s, s);
+      if (!dark) { ctx.shadowColor = "rgba(20,40,38,.22)"; ctx.shadowBlur = 16 * sc; ctx.shadowOffsetY = 6 * sc; }
+      ctx.drawImage(im, -w / 2, -h / 2, w, h);
+    } else {                                                  // drawn on top → bottom, boiling slightly with the notes
+      ctx.translate(hash(seed) * 1.1 * sc, hash(seed + 1) * 1.1 * sc); ctx.rotate(ic.tilt * .4 + hash(seed + 2) * .012);
+      ctx.beginPath(); ctx.rect(-w / 2 - 4, -h / 2 - 4, w + 8, (h + 8) * p); ctx.clip(); ctx.drawImage(im, -w / 2, -h / 2, w, h);
+    }
+    ctx.restore();
   }
 
   function doodles(st, seed) {
@@ -144,7 +150,7 @@
       () => handEllipse(ctx, x1 + m * .9, y1 - m * .1, 6 * sc, 6 * sc, { ...o, w: 2 * sc }),
     ];
     items.forEach((f, i) => { if (n >= i) f(); });
-    if (!isM) ICONS_DARK.forEach((ic, j) => { const p = clamp((n - 5 - j) / 2); if (p > 0) doodle(ic, p, { ...o, w: 2.2 * sc, seed: seed + 70 + j * 11 }); });
+    if (!isM) ICONS_DARK.forEach((ic, j) => { const p = clamp((n - 5 - j) / 2); if (p > 0) icon(ic, p, seed + 70 + j * 11, C.note, true); });
   }
 
   const mask = Object.assign(document.createElement("canvas"), { width: 10, height: 10 });
@@ -217,6 +223,6 @@
     return { dur: T.dur, events: ev };
   }
 
-  window.BRAND_DEF = { name: "mash-" + LOGO_NAME, load, draw, cues, blur: [] };
+  window.BRAND_DEF = { name: "mash-" + LOGO_NAME + (REAL ? "-real" : ""), load, draw, cues, blur: [] };
   TIMING.dur = T.dur;
 })();
