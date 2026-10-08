@@ -6,7 +6,7 @@
 // inbox.json (version 1):
 //   { "version": 1, "items": [ {
 //       "id": "unique-string", "project": "Meyar" (name, trimmed, case-insensitive; "*" = any project),
-//       "kind": "projectLogo" | "figure",
+//       "kind": "projectLogo" | "projectIcon" | "figure",
 //       "title": "...", "titleAr": "...", "description": "...", "descriptionAr": "...", "createdAt": "ISO date-time",
 //       "asset": "assets/meyar-logo.png"                      // projectLogo: relative to the inbox.json URL
 //       "figure": { "id", "title", "type", "description", "diagram" | "gantt" },   // figure ('gantt' type: figure.gantt)
@@ -43,6 +43,9 @@ const MAX_ITEMS = 100;
 const MAX_ELEMENTS = 5000;
 const MAX_ASSET_BYTES = 6_000_000;
 const PROJECT_LOGO_MAX_PX = 1200;
+const PROJECT_ICON_MAX_PX = 256;
+/** Image items and the project field each one fills. */
+const IMAGE_KINDS = { projectLogo: 'projectLogo', projectIcon: 'projectIcon' };
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -123,7 +126,7 @@ export function normalizeItem(raw, inboxUrl = '') {
   if (!isObj(raw)) return null;
   const id = str(raw.id, 200);
   const project = str(raw.project, 200);
-  if (!id || !project || (raw.kind !== 'projectLogo' && raw.kind !== 'figure')) return null;
+  if (!id || !project || (!IMAGE_KINDS[raw.kind] && raw.kind !== 'figure')) return null;
   const created = Date.parse(typeof raw.createdAt === 'string' ? raw.createdAt : '');
   const item = {
     id, project, kind: raw.kind,
@@ -132,11 +135,11 @@ export function normalizeItem(raw, inboxUrl = '') {
     createdAt: Number.isFinite(created) ? new Date(created).toISOString() : '',
     createdMs: Number.isFinite(created) ? created : 0,
   };
-  if (item.kind === 'projectLogo') {
+  if (IMAGE_KINDS[item.kind]) {
     item.asset = str(raw.asset, 2000);
     item.assetUrl = resolveAssetUrl(raw.asset, inboxUrl);
     if (!item.assetUrl) return null;
-    item.title = item.title || 'Project logo';
+    item.title = item.title || (item.kind === 'projectIcon' ? 'Project icon' : 'Project logo');
   } else {
     item.figure = cleanFigure(raw.figure);
     if (!item.figure) return null;
@@ -230,6 +233,7 @@ export function findPlacement(project, place) {
  */
 export function describeDestination(project, item) {
   if (item.kind === 'projectLogo') return { kind: 'titlePage' };
+  if (item.kind === 'projectIcon') return { kind: 'appIcon' };
   const existing = project.figures.find((f) => f.id === item.figure.id);
   if (existing) return { kind: 'update', figure: existing, chapterId: existing.chapterId || null, sectionId: existing.sectionId || null };
   const place = findPlacement(project, item.place);
@@ -292,11 +296,11 @@ const assetOf = (assets, item) => (assets instanceof Map ? assets.get(item.id) :
  */
 export function applyItem(project, item, assets = {}, { now = Date.now() } = {}) {
   let result;
-  if (item.kind === 'projectLogo') {
+  if (IMAGE_KINDS[item.kind]) {
     const dataUrl = assetOf(assets, item);
     if (typeof dataUrl !== 'string' || !IMAGE_DATA_URL.test(dataUrl)) throw new Error('The logo image is missing.');
-    project.projectLogo = dataUrl;
-    result = { kind: 'projectLogo' };
+    project[IMAGE_KINDS[item.kind]] = dataUrl;
+    result = { kind: item.kind };
   } else if (item.kind === 'figure') {
     result = applyFigure(project, item, now);
   } else throw new Error('Unknown kind of update.');
@@ -318,6 +322,7 @@ export function takeSnapshot(project, items) {
   return {
     projectId: project.id,
     logo: items.some((i) => i.kind === 'projectLogo') ? (project.projectLogo || '') : undefined,
+    icon: items.some((i) => i.kind === 'projectIcon') ? (project.projectIcon || '') : undefined,
     marks: items.map((i) => ({ id: i.id, applied: project.inbox?.applied?.[i.id], dismissed: project.inbox?.dismissed?.[i.id] })),
     figures: ids.map((id) => {
       const index = project.figures.findIndex((f) => f.id === id);
@@ -329,6 +334,7 @@ export function takeSnapshot(project, items) {
 /** Inverse of applying: call inside store.update. */
 export function restoreSnapshot(project, snapshot) {
   if (snapshot.logo !== undefined) project.projectLogo = snapshot.logo;
+  if (snapshot.icon !== undefined) project.projectIcon = snapshot.icon;
   for (const f of snapshot.figures) {
     const i = project.figures.findIndex((x) => x.id === f.id);
     if (f.before) {
@@ -353,7 +359,7 @@ export async function applyItems(store, items, { getAsset = loadAsset, now = Dat
   const failed = [];
   const assets = new Map();
   for (const item of items) {
-    if (item.kind !== 'projectLogo') continue;
+    if (!IMAGE_KINDS[item.kind]) continue;
     try { assets.set(item.id, await getAsset(item)); } catch (error) { failed.push({ item, error }); }
   }
   if (store.project?.id !== project.id) throw new Error('The project changed while the update was being prepared.');
@@ -434,7 +440,7 @@ export async function fetchInbox(urls = INBOX_URLS, { fetchImpl = globalThis.fet
 
 const assetCache = new Map();
 
-/** The image of a projectLogo item as a data: URL (PNG; SVG kept), scaled to at most 1200 px. Cached per item version. */
+/** The image of a projectLogo / projectIcon item as a data: URL (PNG; SVG kept), scaled to at most 1200 / 256 px. Cached per item version. */
 export function loadAsset(item, { fetchImpl = globalThis.fetch?.bind(globalThis) } = {}) {
   const key = `${item.assetUrl}|${item.createdMs}`;
   if (!assetCache.has(key)) {
@@ -443,7 +449,7 @@ export function loadAsset(item, { fetchImpl = globalThis.fetch?.bind(globalThis)
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       if (blob.size > MAX_ASSET_BYTES) throw new Error('The image is too large.');
-      return logoDataURL(blob, { max: PROJECT_LOGO_MAX_PX });
+      return logoDataURL(blob, { max: item.kind === 'projectIcon' ? PROJECT_ICON_MAX_PX : PROJECT_LOGO_MAX_PX });
     })();
     assetCache.set(key, job);
     job.catch(() => assetCache.delete(key));

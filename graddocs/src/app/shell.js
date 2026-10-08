@@ -8,6 +8,7 @@ import { closeMenu, openMenu } from '../ui/menu.js';
 import { closeAllModals } from '../ui/modal.js';
 import { formatBytes, relativeTime, modLabel } from '../core/utils.js';
 import { prefs } from './prefs.js';
+import { projectIconSrc } from '../core/model.js';
 import { t, lang, setLanguage } from '../i18n/index.js';
 
 export class Shell {
@@ -164,17 +165,31 @@ export class Shell {
     this.current = null;
   }
 
+  /** The browser tab shows the open project's icon, and the GradDocs icon otherwise. */
+  #syncFavicon(src) {
+    const link = document.querySelector('link[rel="icon"]');
+    if (!link) return;
+    this.defaultFavicon ??= { href: link.getAttribute('href'), type: link.getAttribute('type') || '' };
+    const href = src || this.defaultFavicon.href;
+    if (link.getAttribute('href') === href) return;
+    link.setAttribute('href', href);
+    const type = src ? src.slice(5, src.search(/[;,]/)) : this.defaultFavicon.type;
+    if (type) link.setAttribute('type', type); else link.removeAttribute('type');
+  }
+
   #renderSidebar(section = this.current?.section) {
     const project = this.store.project;
+    this.#syncFavicon(this.app.classList.contains('no-project') ? '' : projectIconSrc(project));
     if (!project) { this.sidebar.innerHTML = ''; return; }
     const initials = project.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+    const iconSrc = projectIconSrc(project);
     this.sidebar.innerHTML = `
       <div class="sidebar-brand">
         <div class="brand-mark">${icon('graduation')}</div>
         <div><div class="brand-name">GradDocs</div><div class="brand-sub">${t('Documentation Builder')}</div></div>
       </div>
       <button class="project-switcher" data-action="switch-project" aria-label="${t('Switch project')}">
-        <span class="project-avatar">${esc(initials || 'P')}</span>
+        <span class="project-avatar${iconSrc ? ' has-img' : ''}">${iconSrc ? `<img src="${esc(iconSrc)}" alt="">` : esc(initials || 'P')}</span>
         <span class="grow"><div class="name truncate">${esc(project.name)}</div><div class="sub truncate">${esc(project.type || t('Graduation Project'))}</div></span>
         ${icon('chevronDown', 'icon-sm')}
       </button>

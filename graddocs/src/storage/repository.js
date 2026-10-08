@@ -16,6 +16,7 @@ export function projectSummary(p) {
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
     counts: { figures: p.figures.length, tables: p.tables.length, acronyms: p.acronyms.length, chapters: p.chapters.length },
+    icon: typeof p.projectIcon === 'string' && p.projectIcon.startsWith('data:image/') ? p.projectIcon : '',
   };
 }
 

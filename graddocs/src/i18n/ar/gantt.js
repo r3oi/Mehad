@@ -84,4 +84,10 @@ export default {
   'The start and end dates are missing.': 'تاريخا البداية والنهاية مفقودان.',
   'Import {n} tasks': 'استيراد {n} من المهام',
   'Imported {n} tasks': 'تم استيراد {n} من المهام',
+
+  // ---- Full screen ----
+  'Show the chart large': 'عرض المخطط بحجم كبير',
+  'Full screen': 'ملء الشاشة',
+  'Gantt chart, full screen': 'مخطط جانت بملء الشاشة',
+  'Whole chart': 'المخطط كاملًا',
 };

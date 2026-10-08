@@ -80,6 +80,7 @@ export function createProject(fields = {}) {
     degreeStatement: '', // '' = DEFAULT_DEGREE_STATEMENT
     logo: '', // data: URL shown at the top of the title page ('' = none), usually the university logo
     projectLogo: '', // data: URL of the project's own logo, shown above the project title ('' = none)
+    projectIcon: '', // data: URL of a square icon for the project in the app (sidebar, dashboard, project cards, tab)
     createdAt: ts,
     updatedAt: ts,
     frontMatter: defaultFrontMatter(),
@@ -176,6 +177,12 @@ export function createAcronym(fields = {}) {
  * "First Middle Last" or "Last, First". `custom`: when not blank it is used verbatim instead of the formatted text.
  * type: journal | conference | book | chapter | web | thesis | report | other (see bibliography.js).
  */
+/** The project's icon as an image URL for the app, or '' (only data: images are used). */
+export const projectIconSrc = (project) => {
+  const v = project?.projectIcon ?? project?.icon;
+  return typeof v === 'string' && v.startsWith('data:image/') ? v : '';
+};
+
 export function createReference(fields = {}) {
   return {
     id: uid('ref'), type: 'journal', authors: '', title: '', container: '', editors: '', publisher: '', place: '',
@@ -218,7 +225,7 @@ export function normalizeProject(input) {
   p.schemaVersion = SCHEMA_VERSION;
   p.id = p.id || uid('prj');
   p.name = String(p.name || 'Untitled Project');
-  for (const key of ['description', 'type', 'university', 'college', 'department', 'supervisor', 'coSupervisor', 'students', 'academicYear', 'submissionDate', 'degreeStatement', 'logo', 'projectLogo']) p[key] = String(p[key] ?? '');
+  for (const key of ['description', 'type', 'university', 'college', 'department', 'supervisor', 'coSupervisor', 'students', 'academicYear', 'submissionDate', 'degreeStatement', 'logo', 'projectLogo', 'projectIcon']) p[key] = String(p[key] ?? '');
   p.createdAt = Number(p.createdAt) || now();
   p.updatedAt = Number(p.updatedAt) || p.createdAt;
   p.frontMatter = Array.isArray(p.frontMatter) ? p.frontMatter.map((f) => ({ ...createFrontMatterItem(f.kind || 'custom'), ...f })) : defaultFrontMatter();

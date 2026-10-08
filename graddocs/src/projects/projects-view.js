@@ -6,7 +6,7 @@ import { icon } from '../ui/icons.js';
 import { openModal, confirmDialog, formDialog } from '../ui/modal.js';
 import { toast, toastError } from '../ui/toast.js';
 import { href } from '../app/routes.js';
-import { createChapter, createSection } from '../core/model.js';
+import { createChapter, createSection, projectIconSrc } from '../core/model.js';
 import { PRESETS, presetById, presetProjectFields } from '../core/presets.js';
 import { relativeTime, downloadText, slugify, pickFile, readFileAsText } from '../core/utils.js';
 import { t, isRTL } from '../i18n/index.js';
@@ -111,7 +111,7 @@ export default {
       return `
         <article class="card pj-card" data-id="${esc(p.id)}" style="--hue:${hueOf(p.name)}">
           <div class="pj-card-top">
-            <span class="pj-avatar">${esc(initialsOf(p.name))}</span>
+            ${projectIconSrc(p) ? `<span class="pj-avatar has-img"><img src="${esc(projectIconSrc(p))}" alt=""></span>` : `<span class="pj-avatar">${esc(initialsOf(p.name))}</span>`}
             <div class="grow">
               <h3 class="pj-name"><a href="${href(p.id, 'dashboard')}" class="truncate" title="${esc(p.name)}"><bdi>${esc(p.name)}</bdi></a></h3>
               <div class="pj-type"><bdi>${esc(p.type || t('Graduation project'))}</bdi>${p.academicYear ? ` · <bdi>${esc(p.academicYear)}</bdi>` : ''}</div>

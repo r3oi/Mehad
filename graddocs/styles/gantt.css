@@ -128,7 +128,20 @@
 .gt-preview[data-zoom="100"] .gt-paper { max-width: none; }
 .gt-preview[data-zoom="100"] .gt-paper svg { width: var(--w); max-width: none; }
 .gt-preview[data-zoom="fit"] .gt-paper { width: 100%; max-width: var(--w); }
+.gt-preview .gt-paper { cursor: zoom-in; }
 .gt-preview-empty { text-align: center; padding: 36px 16px; color: var(--muted); direction: inherit; }
+
+/* ---------- Full screen: the chart large, zoomable ---------- */
+.gt-big { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column; background: var(--canvas-bg); }
+.gt-big[hidden] { display: none; }
+.gt-big-bar { flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 16px; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-xs); }
+.gt-big-title { font-size: 14.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gt-big-bar .spacer { flex: 1; }
+.gt-big-zoom { display: inline-flex; align-items: center; gap: 2px; }
+.gt-big-pct { min-width: 48px; text-align: center; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.gt-big-scroll { position: relative; flex: 1; min-height: 0; overflow: auto; direction: ltr; padding: 24px; }
+.gt-big-scroll .gt-paper { max-width: none; margin: 0 auto; }
+.gt-big-scroll .gt-paper svg { width: 100%; max-width: none; height: auto; }
 .gt-preview-empty svg { width: 28px; height: 28px; color: var(--faint); }
 
 /* ---------- Paste dialog ---------- */
@@ -168,4 +181,9 @@
   .gt-card-head .btn span { display: none; }
   .gt-sub { display: none; }
   .gt-preview { padding: 8px; }
+}
+@media (max-width: 760px) { /* the full-screen view sits on <body>, outside the editor's size container */
+  .gt-big-bar { padding: 8px 10px; gap: 6px; }
+  .gt-big-title, .gt-big-bar .btn span { display: none; }
+  .gt-big-scroll { padding: 12px; }
 }

@@ -138,6 +138,7 @@ export default {
                   <button type="button" data-zoom="fit">${t('Fit')}</button>
                   <button type="button" data-zoom="100">100%</button>
                 </div>
+                <button type="button" class="btn btn-sm btn-primary" data-big-open data-tip="${esc(t('Show the chart large'))}">${icon('maximize', 'icon-sm')}<span>${t('Full screen')}</span></button>
               </div>
               <div class="gt-preview" data-preview></div>
             </div>
@@ -167,11 +168,33 @@ export default {
             </div>
           </section>
         </div>
+        <div class="gt-big" data-big hidden role="dialog" aria-modal="true" aria-label="${esc(t('Gantt chart, full screen'))}">
+          <div class="gt-big-bar">
+            <strong class="gt-big-title" data-big-title></strong>
+            <span class="spacer"></span>
+            <div class="gt-big-zoom" role="group" aria-label="${esc(t('Zoom'))}">
+              <button type="button" class="btn btn-ghost btn-icon btn-sm" data-big-step="-1" data-tip="${esc(t('Zoom out'))} (−)" aria-label="${esc(t('Zoom out'))}">${icon('zoomOut')}</button>
+              <span class="gt-big-pct" data-big-pct aria-live="polite"></span>
+              <button type="button" class="btn btn-ghost btn-icon btn-sm" data-big-step="1" data-tip="${esc(t('Zoom in'))} (+)" aria-label="${esc(t('Zoom in'))}">${icon('zoomIn')}</button>
+            </div>
+            <div class="segmented" role="group" aria-label="${esc(t('Zoom'))}">
+              <button type="button" data-big-fit="width">${t('Fit width')}</button>
+              <button type="button" data-big-fit="page">${t('Whole chart')}</button>
+              <button type="button" data-big-fit="1">100%</button>
+            </div>
+            <button type="button" class="btn btn-sm" data-big-close data-tip="Esc">${icon('x', 'icon-sm')}<span>${t('Close')}</span></button>
+          </div>
+          <div class="gt-big-scroll" data-big-scroll><div class="gt-paper" data-big-paper></div></div>
+        </div>
       </div>`;
 
     const $ = (sel) => container.querySelector(sel);
     const root = $('.gt'); const rowsEl = $('[data-rows]'); const scrollEl = $('[data-scroll]'); const emptyEl = $('[data-empty]');
     const footEl = $('.gt-card-foot'); const titleEl = $('[data-title]'); const locEl = $('[data-location]'); const noteEl = $('[data-note]'); const previewEl = $('[data-preview]');
+    const bigEl = $('[data-big]'); const bigScroll = $('[data-big-scroll]'); const bigPaper = $('[data-big-paper]');
+    const bigTitle = $('[data-big-title]'); const bigPct = $('[data-big-pct]');
+    // The full-screen view lives on <body>: the editor is a size container, which would keep a fixed element inside it.
+    document.body.append(bigEl); D.add(() => bigEl.remove());
 
     // ----- Store helpers ------------------------------------------------------------------------------------------
     const fonts = () => figureFonts(store.project);
@@ -330,6 +353,61 @@ export default {
       if (!g.tasks.length) { previewEl.innerHTML = `<div class="gt-preview-empty">${icon('tTimeline')}<p>${t('The chart appears here once you add a task.')}</p></div>`; return; }
       const { svg, width } = renderFigureSVG(ganttDiagram(g, fonts()));
       previewEl.innerHTML = `<div class="gt-paper" style="--w:${width}px">${svg}</div>`;
+      if (!bigEl.hidden) paintBig();
+    }
+
+    // ----- Full screen: the chart at a readable size, with zoom ------------------------------------------------------------------
+    const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+    let big = { w: 0, h: 0, scale: 1, fit: 'width' }; // fit: 'width' | 'page' | '' (a fixed scale)
+    let bigReturn = null;
+    function paintBig() {
+      const g = finalize(draft);
+      const { svg, width, height } = renderFigureSVG(ganttDiagram(g, fonts()));
+      big.w = width; big.h = height;
+      bigPaper.innerHTML = svg;
+      bigTitle.textContent = $('[data-label]').textContent + (titleEl.value.trim() ? ` · ${titleEl.value.trim()}` : '');
+      layoutBig();
+    }
+    function fitScale(mode) {
+      const pad = 48;
+      const sw = (bigScroll.clientWidth - pad) / big.w; const sh = (bigScroll.clientHeight - pad) / big.h;
+      return Math.max(0.1, Math.min(4, mode === 'page' ? Math.min(sw, sh) : sw));
+    }
+    function layoutBig(anchor) {
+      if (!big.w) return;
+      if (big.fit) big.scale = fitScale(big.fit);
+      // Keep the point under the cursor (or the centre) in place while zooming.
+      const a = anchor || { x: bigScroll.clientWidth / 2, y: bigScroll.clientHeight / 2 };
+      const oldW = bigPaper.offsetWidth || 1;
+      const fx = (bigScroll.scrollLeft + a.x - bigPaper.offsetLeft) / oldW; const fy = (bigScroll.scrollTop + a.y - bigPaper.offsetTop) / (bigPaper.offsetHeight || 1);
+      bigPaper.style.width = `${Math.round(big.w * big.scale)}px`;
+      bigScroll.scrollLeft = fx * bigPaper.offsetWidth + bigPaper.offsetLeft - a.x;
+      bigScroll.scrollTop = fy * bigPaper.offsetHeight + bigPaper.offsetTop - a.y;
+      bigPct.textContent = `${Math.round(big.scale * 100)}%`;
+      bigEl.querySelectorAll('[data-big-fit]').forEach((b) => {
+        const on = b.dataset.bigFit === big.fit || (!big.fit && Number(b.dataset.bigFit) === big.scale);
+        b.classList.toggle('active', on); b.setAttribute('aria-pressed', on);
+      });
+    }
+    function zoomBig(dir, anchor) {
+      const cur = big.scale;
+      const next = dir > 0 ? ZOOMS.find((z) => z > cur * 1.05) : [...ZOOMS].reverse().find((z) => z < cur / 1.05);
+      if (!next) return;
+      big.fit = ''; big.scale = next; layoutBig(anchor);
+    }
+    function openBig() {
+      flush();
+      bigReturn = document.activeElement;
+      bigEl.hidden = false;
+      big.fit = 'width';
+      paintBig();
+      bigScroll.scrollTop = 0; bigScroll.scrollLeft = 0;
+      bigEl.querySelector('[data-big-close]').focus({ preventScroll: true });
+    }
+    function closeBig() {
+      bigEl.hidden = true; bigPaper.innerHTML = ''; big.w = 0;
+      if (bigReturn && root.contains(bigReturn)) bigReturn.focus({ preventScroll: true });
+      bigReturn = null;
     }
 
     function refreshMeta() {
@@ -569,6 +647,30 @@ export default {
       renderSettings(); scheduleCommit(200);
     });
     D.add(on(root, 'click', '[data-zoom]', (e, el) => { zoom = el.dataset.zoom; prefs.set('ganttZoom', zoom); renderSettings(); }));
+    D.add(on(root, 'click', '[data-big-open]', openBig));
+    D.add(on(previewEl, 'click', '.gt-paper', openBig));
+    D.add(on(bigEl, 'click', '[data-big-close]', closeBig));
+    D.add(on(bigEl, 'click', '[data-big-step]', (e, el) => zoomBig(Number(el.dataset.bigStep))));
+    D.add(on(bigEl, 'click', '[data-big-fit]', (e, el) => {
+      const v = el.dataset.bigFit;
+      if (v === 'width' || v === 'page') big.fit = v; else { big.fit = ''; big.scale = Number(v); }
+      layoutBig();
+    }));
+    D.listen(bigScroll, 'wheel', (e) => { // Ctrl / ⌘ + wheel zooms around the pointer
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const r = bigScroll.getBoundingClientRect();
+      zoomBig(e.deltaY < 0 ? 1 : -1, { x: e.clientX - r.left, y: e.clientY - r.top });
+    }, { passive: false });
+    D.listen(window, 'resize', () => { if (!bigEl.hidden && big.fit) layoutBig(); });
+    D.listen(document, 'keydown', (e) => {
+      if (bigEl.hidden || document.querySelector('.modal-root, .palette-root')) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeBig(); return; }
+      if (modKey(e) || e.altKey) return;
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomBig(1); }
+      else if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomBig(-1); }
+      else if (e.key === '0') { e.preventDefault(); big.fit = 'width'; layoutBig(); }
+    }, true);
 
     // ----- Duplicate / convert / delete ---------------------------------------------------------------------------------------------
     function duplicateFigure() {
@@ -697,7 +799,7 @@ export default {
       if (!modKey(e) || e.altKey) return;
       const k = e.key.toLowerCase();
       if (k !== 'z' && k !== 'y') return;
-      if (e.target === titleEl) return; // the title field keeps its own text undo
+      if (e.target === titleEl || !bigEl.hidden) return; // the title field keeps its own text undo; nothing is edited in full screen
       if (document.querySelector('.modal-root, .palette-root') || (isTypingTarget(e.target) && !root.contains(e.target))) return;
       if (k === 'z' && !e.shiftKey) undo(); else redo();
       e.preventDefault(); e.stopPropagation();

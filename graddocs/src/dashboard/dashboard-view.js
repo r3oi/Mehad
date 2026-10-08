@@ -4,7 +4,7 @@ import { esc, on, Disposer } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { formDialog } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
-import { walkSections, SECTION_STATUSES } from '../core/model.js';
+import { walkSections, SECTION_STATUSES, projectIconSrc } from '../core/model.js';
 import { getNumbering } from '../core/numbering.js';
 import { findBrokenReferences, resolveText } from '../core/references.js';
 import { referenceShortLabel } from '../core/bibliography.js';
@@ -20,6 +20,7 @@ import { openInboxDialog, itemTexts, kindLabel, kindIcon } from '../inbox/inbox-
 
 const WEIGHT = Object.fromEntries(SECTION_STATUSES.map((s) => [s.value, s.weight]));
 const hueOf = (text) => { let h = 0; for (const ch of String(text)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
+const avatarHTML = (cls, src, initials) => (src ? `<span class="${cls} has-img"><img src="${esc(src)}" alt=""></span>` : `<span class="${cls}">${esc(initials)}</span>`);
 const initialsOf = (name) => String(name || '').split(/\s+/).map((w) => w.match(/[\p{L}\p{N}]/u)?.[0] || '').join('').slice(0, 2).toUpperCase() || 'P';
 const ACTIVITY_ICONS = { create: 'plus', revision: 'history', edit: 'edit', delete: 'trash', export: 'export' };
 
@@ -275,7 +276,7 @@ export default {
       <div class="page dash-page">
         <section class="card dash-hero" style="--hue:${hueOf(project.name)}">
           <div class="dash-hero-main">
-            <span class="dash-avatar">${esc(initialsOf(project.name))}</span>
+            ${avatarHTML('dash-avatar', projectIconSrc(project), initialsOf(project.name))}
             <div class="grow min0">
               <div class="dash-title-row">
                 <h1>${esc(project.name)}</h1>

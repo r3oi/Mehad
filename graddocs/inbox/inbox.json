@@ -844,14 +844,14 @@
    }
   },
   {
-   "id": "meyar-gantt-v1",
+   "id": "meyar-gantt-v2",
    "project": "Meyar",
    "kind": "figure",
-   "createdAt": "2026-10-08T11:09:18.793Z",
+   "createdAt": "2026-10-08T11:48:11.000Z",
    "title": "Project schedule (Gantt chart)",
    "titleAr": "الجدول الزمني (Gantt Chart)",
-   "description": "The team schedule from September 2025 to June 2026 in one colour, with grey weeks where no work is scheduled. Edit the tasks and dates in the Gantt editor.",
-   "descriptionAr": "جدول الفريق من سبتمبر 2025 إلى يونيو 2026 بلون واحد، والأسابيع اللي ما فيها شغل بالرمادي. تعدّل المهام والتواريخ من محرر الـ Gantt.",
+   "description": "The team schedule moved to start on 7 September 2026 (until June 2027), in one colour, with grey weeks where no work is scheduled. Every task keeps its length and weekday. Edit the tasks and dates in the Gantt editor.",
+   "descriptionAr": "جدول الفريق بعد نقله ليبدأ من 7 سبتمبر 2026 (إلى يونيو 2027)، بلون واحد والأسابيع اللي ما فيها شغل بالرمادي. كل مهمة محافظة على مدتها ونفس يومها في الأسبوع. تعدّل المهام والتواريخ من محرر الـ Gantt.",
    "figure": {
     "id": "fig_claude_gantt",
     "title": "Project Schedule (Gantt Chart)",
@@ -867,162 +867,162 @@
       {
        "id": "gt_meyar_1",
        "name": "Create Team",
-       "start": "2025-09-01",
-       "end": "2025-09-08",
+       "start": "2026-09-07",
+       "end": "2026-09-14",
        "level": 0
       },
       {
        "id": "gt_meyar_2",
        "name": "Project Idea",
-       "start": "2025-09-09",
-       "end": "2025-09-16",
+       "start": "2026-09-15",
+       "end": "2026-09-22",
        "level": 0
       },
       {
        "id": "gt_meyar_3",
        "name": "Project Overview",
-       "start": "2025-09-17",
-       "end": "2025-09-18",
+       "start": "2026-09-23",
+       "end": "2026-09-24",
        "level": 0
       },
       {
        "id": "gt_meyar_4",
        "name": "Introduction",
-       "start": "2025-09-19",
-       "end": "2025-09-26",
+       "start": "2026-09-25",
+       "end": "2026-10-02",
        "level": 0
       },
       {
        "id": "gt_meyar_5",
        "name": "Background / Existing Work",
-       "start": "2025-09-29",
-       "end": "2025-10-06",
+       "start": "2026-10-05",
+       "end": "2026-10-12",
        "level": 0
       },
       {
        "id": "gt_meyar_6",
        "name": "Software Requirements Specification",
-       "start": "2025-10-07",
-       "end": "2025-10-15",
+       "start": "2026-10-13",
+       "end": "2026-10-21",
        "level": 0
       },
       {
        "id": "gt_meyar_7",
        "name": "Introduction",
-       "start": "2025-10-07",
-       "end": "2025-10-07",
+       "start": "2026-10-13",
+       "end": "2026-10-13",
        "level": 1
       },
       {
        "id": "gt_meyar_8",
        "name": "Overall Description",
-       "start": "2025-10-07",
-       "end": "2025-10-08",
+       "start": "2026-10-13",
+       "end": "2026-10-14",
        "level": 1
       },
       {
        "id": "gt_meyar_9",
        "name": "External Interface Requirements",
-       "start": "2025-10-08",
-       "end": "2025-10-09",
+       "start": "2026-10-14",
+       "end": "2026-10-15",
        "level": 1
       },
       {
        "id": "gt_meyar_10",
        "name": "System Features",
-       "start": "2025-10-09",
-       "end": "2025-10-10",
+       "start": "2026-10-15",
+       "end": "2026-10-16",
        "level": 1
       },
       {
        "id": "gt_meyar_11",
        "name": "Other Non-functional Requirements",
-       "start": "2025-10-10",
-       "end": "2025-10-10",
+       "start": "2026-10-16",
+       "end": "2026-10-16",
        "level": 1
       },
       {
        "id": "gt_meyar_12",
        "name": "Performance Requirements",
-       "start": "2025-10-10",
-       "end": "2025-10-10",
+       "start": "2026-10-16",
+       "end": "2026-10-16",
        "level": 1
       },
       {
        "id": "gt_meyar_13",
        "name": "Safety Requirements",
-       "start": "2025-10-10",
-       "end": "2025-10-10",
+       "start": "2026-10-16",
+       "end": "2026-10-16",
        "level": 1
       },
       {
        "id": "gt_meyar_14",
        "name": "Security Requirements",
-       "start": "2025-10-10",
-       "end": "2025-10-10",
+       "start": "2026-10-16",
+       "end": "2026-10-16",
        "level": 1
       },
       {
        "id": "gt_meyar_15",
        "name": "Software Quality Attributes",
-       "start": "2025-10-10",
-       "end": "2025-10-13",
+       "start": "2026-10-16",
+       "end": "2026-10-19",
        "level": 1
       },
       {
        "id": "gt_meyar_16",
        "name": "Business Rules",
-       "start": "2025-10-13",
-       "end": "2025-10-14",
+       "start": "2026-10-19",
+       "end": "2026-10-20",
        "level": 1
       },
       {
        "id": "gt_meyar_17",
        "name": "Other Requirements",
-       "start": "2025-10-14",
-       "end": "2025-10-15",
+       "start": "2026-10-20",
+       "end": "2026-10-21",
        "level": 1
       },
       {
        "id": "gt_meyar_18",
        "name": "Software Design",
-       "start": "2025-10-16",
-       "end": "2025-10-24",
+       "start": "2026-10-22",
+       "end": "2026-10-30",
        "level": 0
       },
       {
        "id": "gt_meyar_19",
        "name": "Design Overview",
-       "start": "2025-10-16",
-       "end": "2025-10-20",
+       "start": "2026-10-22",
+       "end": "2026-10-26",
        "level": 1
       },
       {
        "id": "gt_meyar_20",
        "name": "Interfaces and Data Stores",
-       "start": "2025-10-20",
-       "end": "2025-10-21",
+       "start": "2026-10-26",
+       "end": "2026-10-27",
        "level": 1
       },
       {
        "id": "gt_meyar_21",
        "name": "Structural Design",
-       "start": "2025-10-21",
-       "end": "2025-10-24",
+       "start": "2026-10-27",
+       "end": "2026-10-30",
        "level": 1
       },
       {
        "id": "gt_meyar_22",
        "name": "System Implementation & Validation",
-       "start": "2026-01-26",
-       "end": "2026-05-20",
+       "start": "2027-02-01",
+       "end": "2027-05-26",
        "level": 0
       },
       {
        "id": "gt_meyar_23",
        "name": "Conclusion and Future Work",
-       "start": "2026-05-21",
-       "end": "2026-06-01",
+       "start": "2027-05-27",
+       "end": "2027-06-07",
        "level": 0
       }
      ]
@@ -1038,6 +1038,17 @@
      "Planning Phase"
     ]
    }
+  },
+  {
+   "id": "meyar-project-icon-v1",
+   "project": "Meyar",
+   "kind": "projectIcon",
+   "createdAt": "2026-10-08T11:48:11.000Z",
+   "title": "Meyar icon in the site",
+   "titleAr": "أيقونة معيار في الموقع",
+   "description": "The Meyar icon replaces the initials of the project in the sidebar, the dashboard and the projects page, and becomes the browser tab icon while the project is open.",
+   "descriptionAr": "أيقونة معيار تحل محل الحروف الأولى للمشروع في الشريط الجانبي ولوحة المعلومات وصفحة المشاريع، وتصير أيقونة تبويب المتصفح وقت ما يكون المشروع مفتوح.",
+   "asset": "assets/meyar-icon.png"
   }
  ]
 }

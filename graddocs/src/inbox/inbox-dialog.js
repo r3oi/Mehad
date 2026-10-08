@@ -27,10 +27,11 @@ export function itemTexts(item) {
 
 /** "Project logo" / the figure type's name ("Gantt Chart", "Flowchart" …). */
 export function kindLabel(item) {
+  if (item.kind === 'projectIcon') return t('Project icon');
   return item.kind === 'projectLogo' ? t('Project logo') : getFigureType(item.figure.type).name;
 }
 
-export const kindIcon = (item) => (item.kind === 'projectLogo' ? 'image' : 'figure');
+export const kindIcon = (item) => (item.kind === 'figure' ? 'figure' : 'image');
 
 const previews = new Map(); // item version → thumbnail markup or { error }
 function figurePreview(project, item) {
@@ -46,6 +47,7 @@ function figurePreview(project, item) {
 export function destinationText(project, item) {
   const d = describeDestination(project, item);
   if (d.kind === 'titlePage') return { label: t('Goes to'), value: t('Title page, above the project title') };
+  if (d.kind === 'appIcon') return { label: t('Goes to'), value: t('The project icon in the site (sidebar, dashboard, projects page and browser tab)') };
   const where = locationLabel(project, d.chapterId, d.sectionId);
   if (d.kind === 'update') {
     const number = getNumbering(project).figures.get(d.figure.id)?.label || t('Figure');
@@ -63,7 +65,7 @@ function itemHTML(project, item, { busy }) {
   const where = destinationText(project, item);
   let preview;
   let broken = false;
-  if (item.kind === 'projectLogo') {
+  if (item.kind !== 'figure') {
     preview = `<div class="ib-preview ib-preview-logo"><img src="${esc(item.assetUrl)}" alt="" loading="lazy"></div>`;
   } else {
     const p = figurePreview(project, item);
@@ -112,7 +114,7 @@ export async function applyWithFeedback(store, items) {
   for (const { item, error } of res.failed) {
     console.warn('[inbox] could not apply', item.id, error);
     const { title } = itemTexts(item);
-    toast(item.kind === 'projectLogo' ? t('Could not download the image for “{title}”.', { title: iso(title) }) : t('Could not apply “{title}”.', { title: iso(title) }), { type: 'error', duration: 7000 });
+    toast(item.kind !== 'figure' ? t('Could not download the image for “{title}”.', { title: iso(title) }) : t('Could not apply “{title}”.', { title: iso(title) }), { type: 'error', duration: 7000 });
   }
   if (res.applied.length) {
     const message = res.applied.length === 1 ? t('Applied “{title}”.', { title: iso(itemTexts(res.applied[0]).title) }) : t('{n} updates applied.', { n: res.applied.length });

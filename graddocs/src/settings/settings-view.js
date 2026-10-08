@@ -33,7 +33,9 @@ const SETTINGS_TABS = new Set(['document', 'captions', 'figures']);
 const FONTS = ['Times New Roman', 'Arial', 'Calibri', 'Cambria', 'Georgia'];
 const HEADING_FONTS = ['Arial', 'Calibri', 'Helvetica', 'Times New Roman', 'Cambria', 'Georgia'];
 const INDENTS = [0, 0.5, 1, 1.27]; // cm
-const LOGO_MAX = { logo: 600, projectLogo: 1200 }; // px, longest side of an uploaded raster logo (the project logo is often wide)
+const LOGO_MAX = { logo: 600, projectLogo: 1200, projectIcon: 256 }; // px, longest side of an uploaded raster logo (the project logo is often wide)
+const LOGO_FIELDS = ['logo', 'projectLogo', 'projectIcon'];
+const logoField = (el) => (LOGO_FIELDS.includes(el.dataset.logoField) ? el.dataset.logoField : 'logo');
 const SEPARATORS = [[':', t('Colon'), ':'], ['.', t('Period'), '.'], [' —', t('Em dash'), ' —'], [' -', t('Hyphen'), ' -']];
 // The example in brackets shows how the printed caption will look (report text, always left-to-right).
 const separatorOptions = (label) => SEPARATORS.map(([value, name, sep]) => [value, `${name}  ${ltr(`( ${label} 1${sep} Title )`)}`]);
@@ -284,6 +286,7 @@ export default {
     const LOGO_TEXT = {
       logo: () => ({ alt: t('University logo'), hint: t('PNG, JPG, SVG or WebP. Shown at the top of the title page.') }),
       projectLogo: () => ({ alt: t('Project logo'), hint: t('PNG, JPG, SVG or WebP. Shown above the project title, about 1.1 inch tall.') }),
+      projectIcon: () => ({ alt: t('Project icon'), hint: t('PNG, JPG, SVG or WebP. A square image works best.') }),
     };
     const logoControl = (project, field = 'logo') => {
       const src = project[field] || '';
@@ -425,6 +428,7 @@ export default {
           <div class="card-body pf-grid">${projectDetailFields(project).map(f).join('')}</div>
           <div class="card-footer"><button type="button" class="btn" data-action="reset-project">${t('Reset')}</button><button type="submit" class="btn btn-primary">${icon('check')}${t('Save changes')}</button></div>
         </form>
+        ${card(t('Project icon'), t('Shown instead of the project’s initials in the sidebar, the dashboard and the projects page, and as the browser tab icon while the project is open.'), `<div class="set-row"><div class="set-control"><div class="logo-ctl" data-logo="projectIcon">${logoControl(project, 'projectIcon')}</div></div></div>`)}
         <div data-inbox-card>${inboxCard()}</div>
         </div>`;
     };
@@ -684,22 +688,22 @@ export default {
         } catch (err) { toastError(err, t('Could not add the template structure')); }
       },
       async 'upload-logo'(el) {
-        const field = el.dataset.logoField === 'projectLogo' ? 'projectLogo' : 'logo';
+        const field = logoField(el);
         const file = await pickFile('.png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/svg+xml,image/webp');
         if (!file || !alive || !store.project) return;
         try {
           const dataUrl = await logoDataURL(file, { max: LOGO_MAX[field] });
           store.update((p) => { p[field] = dataUrl; }, { activity: 'Updated project details', source: 'settings' });
           refreshLogo(field);
-          toast(field === 'logo' ? t('Logo updated.') : t('Project logo updated.'), { type: 'success' });
+          toast({ logo: t('Logo updated.'), projectLogo: t('Project logo updated.'), projectIcon: t('Project icon updated.') }[field], { type: 'success' });
         } catch (err) { toastError(err, t('Could not use that image')); }
       },
       'remove-logo'(el) {
-        const field = el.dataset.logoField === 'projectLogo' ? 'projectLogo' : 'logo';
+        const field = logoField(el);
         if (!store.project?.[field]) return;
         store.update((p) => { p[field] = ''; }, { activity: 'Updated project details', source: 'settings' });
         refreshLogo(field);
-        toast(field === 'logo' ? t('Logo removed.') : t('Project logo removed.'), { type: 'success', duration: 2200 });
+        toast({ logo: t('Logo removed.'), projectLogo: t('Project logo removed.'), projectIcon: t('Project icon removed.') }[field], { type: 'success', duration: 2200 });
       },
       async 'switch-engine'(el) {
         const target = el.dataset.engine;

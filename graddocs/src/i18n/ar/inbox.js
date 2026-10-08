@@ -55,4 +55,10 @@ export default {
   '1 update from Claude is waiting.': 'يوجد تحديث واحد من Claude بانتظارك.',
   '{n} updates from Claude are waiting.': 'يوجد {n} تحديثات من Claude بانتظارك.',
   'No new updates from Claude.': 'لا توجد تحديثات جديدة من Claude.',
+  'Project icon': 'أيقونة المشروع',
+  'PNG, JPG, SVG or WebP. A square image works best.': 'PNG أو JPG أو SVG أو WebP. الأفضل أن تكون الصورة مربعة.',
+  'Shown instead of the project’s initials in the sidebar, the dashboard and the projects page, and as the browser tab icon while the project is open.': 'تظهر بدل الحروف الأولى من اسم المشروع في الشريط الجانبي ولوحة المعلومات وصفحة المشاريع، وكأيقونة تبويب المتصفح ما دام المشروع مفتوحًا.',
+  'Project icon updated.': 'تم تحديث أيقونة المشروع.',
+  'Project icon removed.': 'تمت إزالة أيقونة المشروع.',
+  'The project icon in the site (sidebar, dashboard, projects page and browser tab)': 'أيقونة المشروع في الموقع (الشريط الجانبي ولوحة المعلومات وصفحة المشاريع وتبويب المتصفح)',
 };
