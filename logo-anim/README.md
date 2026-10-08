@@ -62,7 +62,7 @@ python3 tools/rough.py mehad && python3 tools/rough.py aim     # رسم الفح
 ./render_ideas.sh                                               # كل النسخ الست ← out/<idea>-<logo>_{16x9,1x1}.mp4
 ```
 
-## تجارب AIM الخمس (Alterscope · Askly · Back Market · Broken Attitude · Globe-Trotter)
+## تجارب AIM (Alterscope · Askly · Back Market · Broken Attitude · Globe-Trotter · Slaace)
 
 | الملف | المدة | ما يحدث |
 |---|---|---|
@@ -70,10 +70,11 @@ python3 tools/rough.py mehad && python3 tools/rough.py aim     # رسم الفح
 | `askly.js` | 4.0s | بقع حبر متناثرة تلتف نحو الوسط، وكل بقعة تنفتح إلى قطعة من الشعار الرسمي حتى يكتمل |
 | `backm.js` | 8.0s | الشعار رمادي ثم يضيء، ثم غوص داخله: حروف عملاقة مرسومة بخط رفيع، ثم شرائح حروف صلبة. بعدها رجوع سريع، والحروف تنمسح، والدائرتان تندمجان في نقطة، ثم تنقلب الخلفية للفاتح والشعار يُبنى من جديد |
 | `broken.js` | 7.0s | بناء بالبكسلات بإيقاع Stop-motion، مع أعمدة ملونة وتشويش، ثم الدقة تزيد (28 ← 56 ← 112 ← 224 عمود) حتى الشعار الرسمي |
+| `slaace.js` | 3.2s | خط موجي يعبر من اليسار لليمين، وخلفه تتكوّن العلامة من شظايا سائلة ملونة تستقر خلال أجزاء من الثانية |
 | `globe.js` | 6.5s | جولة في نسخ الشعار: الحروف تنحذف واحدًا واحدًا، والدائرتان تندمجان في رمز صغير بجانبه «20 · 26»، ثم يكبر وينقسم والحروف تنكتب من جديد |
 
 `LOGOS.aim.drawMark()` في `engine/logos.js` يرسم العلامة في أي حالة: مواضع الدائرتين، نصف القطر، ظهور كل حرف وكشفه بمسحة، طبقة بيضاء خلف الحروف على الخلفيات الداكنة، ونسخة بيضاء شفافة للخلفيات الملونة.
 
 ```bash
-./render_ideas.sh alter-aim askly-aim backm-aim broken-aim globe-aim
+./render_ideas.sh alter-aim askly-aim backm-aim broken-aim globe-aim slaace-aim
 ```
