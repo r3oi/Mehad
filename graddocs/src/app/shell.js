@@ -31,6 +31,7 @@ export class Shell {
             ${icon('search')}<span class="label">${t('Search or jump to…')}</span>
             <span class="kbds"><kbd>${modLabel}</kbd><kbd>K</kbd></span>
           </button>
+          <button class="inbox-pill" data-action="inbox" hidden>${icon('sparkles', 'icon-sm')}<span class="inbox-pill-label">${t('Updates from Claude')}</span><span class="inbox-pill-n"></span></button>
           <span class="save-indicator" aria-live="polite"></span>
           <button class="btn btn-ghost btn-sm lang-toggle" data-action="language" data-tip="${lang === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}" aria-label="${lang === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}" lang="${lang === 'ar' ? 'en' : 'ar'}">${lang === 'ar' ? 'EN' : 'عربي'}</button>
           <button class="btn btn-ghost btn-icon" data-action="theme" data-tip="${t('Toggle theme')}" aria-label="${t('Toggle theme')}">${icon('moon')}</button>
@@ -42,6 +43,7 @@ export class Shell {
     this.main = this.root.querySelector('#main');
     this.breadcrumbsEl = this.root.querySelector('.breadcrumbs');
     this.saveEl = this.root.querySelector('.save-indicator');
+    this.inboxPill = this.root.querySelector('.inbox-pill');
 
     on(this.root, 'click', '[data-action]', (e, el) => this.#onAction(e, el));
     on(this.root, 'click', '.nav-item', () => this.app.classList.remove('nav-open'));
@@ -66,6 +68,19 @@ export class Shell {
   }
 
   href(section, itemId, query) { return href(this.store.project?.id, section, itemId, query); }
+
+  /** "Updates from Claude (N)" notice in the top bar (inbox/inbox.js calls this; 0 hides it). */
+  setInboxCount(n) {
+    const pill = this.inboxPill;
+    if (!pill) return;
+    const count = this.store.project ? Math.max(0, Number(n) || 0) : 0;
+    pill.hidden = count === 0;
+    if (pill.dataset.count === String(count)) return;
+    pill.dataset.count = String(count);
+    pill.querySelector('.inbox-pill-n').textContent = String(count);
+    pill.setAttribute('aria-label', t('Updates from Claude ({n})', { n: count }));
+    pill.dataset.tip = t('Review the updates Claude left in your repository');
+  }
 
   /** Views call this to set breadcrumb trail: [{ label, href? }] */
   setBreadcrumbs(crumbs) {
@@ -224,6 +239,7 @@ export class Shell {
     else if (action === 'close-nav') this.app.classList.remove('nav-open');
     else if (action === 'theme') this.toggleTheme();
     else if (action === 'language') { await this.store.flush(); setLanguage(lang === 'ar' ? 'en' : 'ar'); }
+    else if (action === 'inbox') (await import('../inbox/inbox-dialog.js')).openInboxDialog({ store: this.store, shell: this });
     else if (action === 'palette') (await import('./command-palette.js')).openPalette(this);
     else if (action === 'shortcuts') (await import('./shortcuts.js')).showShortcutsHelp();
     else if (action === 'switch-project') {

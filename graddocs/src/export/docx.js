@@ -1,7 +1,7 @@
 // Word (.docx) export: builds a real Office Open XML package from the linear document model
 // (core/document.js) and the project settings, with native styles, Heading 1-4 (so Word's TOC
 // picks them up), SEQ / REF / TOC fields, native tables, inline PNG figures, the university title page
-// (logo), declaration signatures and the References page.
+// (logo), the project's own logo above the title, declaration signatures and the References page.
 import { buildDocument } from '../core/document.js';
 import { getNumbering } from '../core/numbering.js';
 import { REF_RE, refInfo } from '../core/references.js';
@@ -219,6 +219,7 @@ export async function buildDocx(project, { figureImages } = {}) {
   const sp = (n) => Math.round(n * fit);
 
   const logo = doc.titlePage.layout === 'submission' ? await logoPicture(doc.titlePage.logo) : null;
+  const projectLogo = await logoPicture(doc.titlePage.projectLogo); // the project's own logo, above the title (both layouts)
 
   const upperHeadings = chapterCfg.style === 'upper';
   const frontHeading = (title) => (upperHeadings ? String(title || '').toUpperCase() : String(title || ''));
@@ -430,6 +431,20 @@ export async function buildDocx(project, { figureImages } = {}) {
     }));
   }
 
+  /** The project's own logo, centred just above the title: about 1.1 inch tall, at most 4.5 inch wide, aspect ratio kept. */
+  function projectLogoSize() {
+    if (!projectLogo) return null;
+    let cy = 1005840; // 1.1 inch (EMU)
+    let cx = Math.round((cy * projectLogo.width) / projectLogo.height);
+    const maxW = Math.min(4114800, textW * 635); // 4.5 inch, and never wider than the text
+    if (cx > maxW) { cy = Math.round((cy * maxW) / cx); cx = Math.round(maxW); }
+    return { cx: Math.max(1, cx), cy: Math.max(1, cy), twips: Math.round(cy / 635) };
+  }
+  function projectLogoParagraph(size, { before, after }) {
+    const entry = addMedia(projectLogo.data, projectLogo.ext);
+    return para(drawingRun(entry, size.cx, size.cy, ''), { jc: 'center', keepNext: true, spacing: { before, after, line: 240, lineRule: 'auto' } });
+  }
+
   /** Classic layout: name between big gaps, "Prepared by" / "Supervised by" / academic year. */
   function classicTitlePage() {
     const t = doc.titlePage;
@@ -440,20 +455,30 @@ export async function buildDocx(project, { figureImages } = {}) {
     top(t.university, { size: 18, bold: true, after: 80 });
     top(t.college, { size: 16, bold: true, after: 80 });
     top(t.department, { size: 14, after: 80 });
-    line(t.name, { style: 'Title', size: 28, bold: true, before: sp(first ? 4800 : 3600), after: sp(240) });
+    const nameGap = sp(first ? 4800 : 3600);
+    const logoSize = projectLogoSize();
+    let squeeze = 0; // height the logo needs beyond the gap above the title (taken from the gaps further down)
+    if (logoSize) {
+      // The picture sits in the gap above the title, so the page keeps its length.
+      const after = 200;
+      const before = Math.max(120, nameGap - logoSize.twips - after);
+      squeeze = before + logoSize.twips + after - nameGap;
+      out.push(projectLogoParagraph(logoSize, { before, after }));
+    }
+    line(t.name, { style: 'Title', size: 28, bold: true, before: logoSize ? 0 : nameGap, after: sp(240) });
     line(t.type, { size: 15, italic: true, after: sp(240) });
     if (t.students.length) {
-      line('Prepared by', { size: 12, italic: true, before: sp(2200), after: 80 });
+      line('Prepared by', { size: 12, italic: true, before: Math.max(300, sp(2200) - squeeze), after: 80 });
       t.students.forEach((s) => line(s, { size: 14, bold: true, after: 40 }));
     }
-    if (t.supervisor) line(`Supervised by: ${t.supervisor}`, { size: 13, before: sp(t.students.length ? 500 : 2200), after: 80 });
+    if (t.supervisor) line(`Supervised by: ${t.supervisor}`, { size: 13, before: t.students.length ? sp(500) : Math.max(300, sp(2200) - squeeze), after: 80 });
     if (t.academicYear) line(t.academicYear, { size: 13, before: sp(700), after: 0 });
     return out;
   }
 
   /**
    * Submission layout (university template): logo (about 1 inch tall), university / college / department in bold, the
-   * project title, the degree statement in italic, "by" and the students as typed, "Supervised by" and the supervisors,
+   * project's own logo (when set), the project title, the degree statement in italic, "by" and the students as typed, "Supervised by" and the supervisors,
    * the month and year at the bottom. The gaps shrink when there are many students so it stays on one page.
    */
   function submissionTitlePage() {
@@ -465,7 +490,8 @@ export async function buildDocx(project, { figureImages } = {}) {
     const wrapped = (text, pt) => Math.max(1, Math.ceil((String(text).length * pt * 10.4) / textW));
     const lineH = (pt) => Math.round(pt * 26.4);
     const block = (list, pt, extra) => list.reduce((sum, text) => sum + wrapped(text, pt) * lineH(pt) + extra, 0);
-    const fixed = (logo ? 1600 : 0) + lineH(13) + 2 * lineH(12) + 120
+    const logoSize = projectLogoSize();
+    const fixed = (logo ? 1600 : 0) + (logoSize ? logoSize.twips + 160 : 0) + lineH(13) + 2 * lineH(12) + 120
       + wrapped(t.name, 18) * lineH(18) + 360 + wrapped(t.degreeStatement, 12) * lineH(12)
       + (t.students.length ? lineH(12) + 60 + block(t.students, 12, 40) : 0)
       + (supervisors.length ? lineH(12) + 60 + block(supervisors, 12, 40) : 0) + lineH(12);
@@ -484,7 +510,8 @@ export async function buildDocx(project, { figureImages } = {}) {
     titleLine(out, t.university, { ...tight, size: 13, bold: true });
     titleLine(out, orgName(t.college, 'college'), { ...tight, bold: true });
     titleLine(out, orgName(t.department, 'department'), { ...tight, bold: true });
-    titleLine(out, t.name, { ...tight, style: 'Title', size: 18, bold: true, before: gap('name'), after: 0 });
+    if (logoSize) out.push(projectLogoParagraph(logoSize, { before: gap('name'), after: 160 })); // just above the title
+    titleLine(out, t.name, { ...tight, style: 'Title', size: 18, bold: true, before: logoSize ? 0 : gap('name'), after: 0 });
     titleLine(out, t.degreeStatement, { ...tight, italic: true, before: 360, after: 0 });
     if (t.students.length) {
       titleLine(out, 'by', { ...tight, bold: true, before: gap('by'), after: 60 });

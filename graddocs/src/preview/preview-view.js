@@ -198,6 +198,26 @@ function withPrefix(value, kind) {
 /** Logos are data: URLs of an image (anything else is ignored, never put into the page). */
 const safeLogo = (src) => (/^data:image\/(png|jpe?g|gif|webp|svg\+xml|bmp)[;,]/i.test(String(src || '')) ? String(src) : '');
 
+/**
+ * The project's own logo (settings → Title page), centred just above the project title: about 1.1 inch tall, at most
+ * 4.5 inch wide, aspect ratio kept (fitProjectLogo shrinks the height of very wide logos once the picture has loaded).
+ */
+const PROJECT_LOGO_H = 1.1; // inch
+const PROJECT_LOGO_W = 4.5; // inch
+const projectLogoHTML = (tp) => {
+  const src = safeLogo(tp.projectLogo);
+  return src ? `<img class="pv-project-logo" src="${esc(src)}" alt="">` : '';
+};
+function fitProjectLogo(root) {
+  root?.querySelectorAll?.('img.pv-project-logo').forEach((img) => {
+    const fit = () => {
+      const ratio = img.naturalWidth / img.naturalHeight;
+      if (ratio > 0 && Number.isFinite(ratio)) img.style.height = `${Math.min(PROJECT_LOGO_H, PROJECT_LOGO_W / ratio).toFixed(3)}in`;
+    };
+    if (img.complete && img.naturalWidth) fit(); else img.addEventListener('load', fit, { once: true });
+  });
+}
+
 /** 'submission' layout: logo, university / college / department, title, degree statement, "by", students, supervisors, date. */
 function submissionTitleHTML(tp) {
   const logo = safeLogo(tp.logo);
@@ -211,6 +231,7 @@ function submissionTitleHTML(tp) {
     ${college ? `<div class="pv-ts-org">${esc(college)}</div>` : ''}
     ${department ? `<div class="pv-ts-org">${esc(department)}</div>` : ''}
     <div class="pv-ts-gap g1"></div>
+    ${projectLogoHTML(tp)}
     <div class="pv-ts-name">${esc(tp.name)}</div>
     ${tp.degreeStatement ? `<div class="pv-ts-degree">${esc(tp.degreeStatement)}</div>` : ''}
     <div class="pv-ts-gap g2"></div>
@@ -239,6 +260,7 @@ function titlePageHTML(tp) {
     <div class="pv-title-top">${top}</div>
     <div class="pv-title-mid">
       <div class="pv-rule"></div>
+      ${projectLogoHTML(tp)}
       <div class="pv-project">${esc(tp.name)}</div>
       ${tp.type ? `<div class="pv-ptype">${esc(tp.type)}</div>` : ''}
       <div class="pv-rule"></div>
@@ -251,6 +273,12 @@ const toNode = (html) => {
   const tpl = document.createElement('template');
   tpl.innerHTML = html.trim();
   return tpl.content.firstElementChild;
+};
+/** The title page as a DOM node (its logos are sized once they have loaded). */
+const titlePageNode = (tp) => {
+  const node = toNode(titlePageHTML(tp));
+  fitProjectLogo(node);
+  return node;
 };
 
 // ---------------------------------------------------------------------------
@@ -400,7 +428,7 @@ class PreviewView {
 
       const show = this.state.show;
       const pages = [];
-      if (show.title) pages.push({ kind: 'title', label: '', node: toNode(titlePageHTML(doc.titlePage)) });
+      if (show.title) pages.push({ kind: 'title', label: '', node: titlePageNode(doc.titlePage) });
       const frontBase = pages.length;
       if (show.front) front.pages.forEach((p, i) => pages.push({ kind: 'front', label: frontLabel(i), items: p.items }));
       const bodyBase = pages.length;

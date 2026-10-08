@@ -12,8 +12,11 @@ import { DEFAULT_DEGREE_STATEMENT } from '../core/model.js';
 import { PRESETS, presetById, applyPresetFormatting, mergePresetStructure } from '../core/presets.js';
 import { formatBytes, formatDateTime, downloadText, slugify, pickFile, clone } from '../core/utils.js';
 import { t, isRTL, lang, LANGUAGES, setLanguage } from '../i18n/index.js';
-import { projectDetailFields, iso, strong, tHTML } from '../projects/projects-view.js';
+import { projectDetailFields, iso, strong, tHTML, count } from '../projects/projects-view.js';
 import { getAIConfig, setAIConfig, AI_MODELS, modelLabel, maskKey, KEYS_URL } from '../figures/generate/ai.js';
+import { logoDataURL } from '../inbox/logo-image.js';
+import { inboxState, inboxEvents, isInboxEnabled, setInboxEnabled, checkInbox, pendingItems } from '../inbox/inbox.js';
+import { openInboxDialog } from '../inbox/inbox-dialog.js';
 
 /** Forces left-to-right order for a snippet of report text inside Arabic UI text (no-op in English). */
 const ltr = (s) => (isRTL ? `\u2066${s}\u2069` : String(s));
@@ -30,7 +33,7 @@ const SETTINGS_TABS = new Set(['document', 'captions', 'figures']);
 const FONTS = ['Times New Roman', 'Arial', 'Calibri', 'Cambria', 'Georgia'];
 const HEADING_FONTS = ['Arial', 'Calibri', 'Helvetica', 'Times New Roman', 'Cambria', 'Georgia'];
 const INDENTS = [0, 0.5, 1, 1.27]; // cm
-const LOGO_MAX = 600; // px, longest side of an uploaded raster logo
+const LOGO_MAX = { logo: 600, projectLogo: 1200 }; // px, longest side of an uploaded raster logo (the project logo is often wide)
 const SEPARATORS = [[':', t('Colon'), ':'], ['.', t('Period'), '.'], [' —', t('Em dash'), ' —'], [' -', t('Hyphen'), ' -']];
 // The example in brackets shows how the printed caption will look (report text, always left-to-right).
 const separatorOptions = (label) => SEPARATORS.map(([value, name, sep]) => [value, `${name}  ${ltr(`( ${label} 1${sep} Title )`)}`]);
@@ -138,42 +141,6 @@ function confirmList({ title, intro, items = [], outro = '', confirmText }) {
     });
     modal.$('[data-ok]').addEventListener('click', () => { result = true; modal.close(); });
   });
-}
-
-// ----- Logo ---------------------------------------------------------------------
-const readDataURL = (blob) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => resolve(String(reader.result));
-  reader.onerror = () => reject(reader.error || new Error('read'));
-  reader.readAsDataURL(blob);
-});
-const loadImage = (src) => new Promise((resolve, reject) => {
-  const img = new Image();
-  img.onload = () => resolve(img);
-  img.onerror = () => reject(new Error('decode'));
-  img.src = src;
-});
-
-/** Uploaded logo file → data: URL. SVG is kept as is; PNG / JPG / WebP are downscaled to LOGO_MAX px and stored as PNG. */
-async function logoDataURL(file) {
-  const name = String(file.name || '');
-  if (/svg/i.test(file.type) || /\.svg$/i.test(name)) {
-    if (file.size > 1_500_000) throw new Error(t('That SVG file is too large (the limit is 1.5 MB).'));
-    const text = await file.text();
-    if (!/<svg[\s>]/i.test(text)) throw new Error(t('That file is not a valid SVG image.'));
-    return readDataURL(new Blob([text], { type: 'image/svg+xml' }));
-  }
-  if (!/^image\/(png|jpeg|webp)$/i.test(file.type) && !/\.(png|jpe?g|webp)$/i.test(name)) throw new Error(t('Choose a PNG, JPG, SVG or WebP image.'));
-  let img;
-  try { img = await loadImage(await readDataURL(file)); } catch { throw new Error(t('That image could not be read.')); }
-  const scale = Math.min(1, LOGO_MAX / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-  const g = canvas.getContext('2d');
-  g.imageSmoothingQuality = 'high';
-  g.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/png');
 }
 
 // ----- Previews -------------------------------------------------------------
@@ -312,13 +279,23 @@ export default {
         </section>`;
     };
 
-    const logoControl = (project) => `
-      <div class="logo-thumb ${project.logo ? '' : 'empty'}" aria-hidden="${project.logo ? 'false' : 'true'}">${project.logo ? `<img src="${esc(project.logo)}" alt="${esc(t('Logo'))}">` : icon('image', 'icon-lg')}</div>
+    // The two title-page logos: the university's (project.logo, top of the university page) and the project's own
+    // (project.projectLogo, centred above the project title in both layouts). One control, told apart by data-logo-field.
+    const LOGO_TEXT = {
+      logo: () => ({ alt: t('University logo'), hint: t('PNG, JPG, SVG or WebP. Shown at the top of the title page.') }),
+      projectLogo: () => ({ alt: t('Project logo'), hint: t('PNG, JPG, SVG or WebP. Shown above the project title, about 1.1 inch tall.') }),
+    };
+    const logoControl = (project, field = 'logo') => {
+      const src = project[field] || '';
+      const text = LOGO_TEXT[field]();
+      return `
+      <div class="logo-thumb ${src ? '' : 'empty'}" aria-hidden="${src ? 'false' : 'true'}">${src ? `<img src="${esc(src)}" alt="${esc(text.alt)}">` : icon('image', 'icon-lg')}</div>
       <div class="logo-actions">
-        <button type="button" class="btn btn-sm" data-action="upload-logo">${icon('upload')}${project.logo ? t('Replace logo') : t('Upload logo')}</button>
-        ${project.logo ? `<button type="button" class="btn btn-sm" data-action="remove-logo">${icon('trash')}${t('Remove')}</button>` : ''}
-        <div class="hint">${t('PNG, JPG, SVG or WebP. Shown at the top of the title page.')}</div>
+        <button type="button" class="btn btn-sm" data-action="upload-logo" data-logo-field="${field}">${icon('upload')}${src ? t('Replace logo') : t('Upload logo')}</button>
+        ${src ? `<button type="button" class="btn btn-sm" data-action="remove-logo" data-logo-field="${field}">${icon('trash')}${t('Remove')}</button>` : ''}
+        <div class="hint">${text.hint}</div>
       </div>`;
+    };
 
     const titlePageCard = (project) => card(t('Title page'), t('Which title page the report opens with, and the details printed on it.'), `
       ${row(t('Layout'), t('Classic shows the name between rules. The university page adds the logo, degree statement, students, supervisors and date.'),
@@ -327,7 +304,8 @@ export default {
         `<textarea class="textarea" rows="3" data-field="degreeStatement" ${dirText} placeholder="${esc(DEFAULT_DEGREE_STATEMENT)}" aria-label="${esc(t('Degree statement'))}">${esc(project.degreeStatement)}</textarea>`, 'tpl-stack')}
       ${row(t('Submission date'), t('Shown on the title page (month and year)'), fieldInput('submissionDate', project.submissionDate, { placeholder: 'May 2026', label: t('Submission date') }))}
       ${row(t('Co-Supervisor (optional)'), '', fieldInput('coSupervisor', project.coSupervisor, { label: t('Co-Supervisor (optional)') }))}
-      ${row(t('Logo'), t('Your university’s logo is not included with GradDocs: upload your own copy.'), `<div class="logo-ctl" data-logo>${logoControl(project)}</div>`)}`, 'set-titlepage');
+      ${row(t('University logo'), t('Your university’s logo is not included with GradDocs: upload your own copy.'), `<div class="logo-ctl" data-logo="logo">${logoControl(project, 'logo')}</div>`)}
+      ${row(t('Project logo'), t('Your project’s own logo. It is centred just above the project title, in both title page layouts.'), `<div class="logo-ctl" data-logo="projectLogo">${logoControl(project, 'projectLogo')}</div>`)}`, 'set-titlepage');
 
     const referencesCard = (s) => card(t('References'), t('The bibliography printed at the end of the report. Add the entries in the References section.'), `
       ${row(t('Include References page'), '', toggle('references.include', s.references.include !== false, t('Include')))}
@@ -441,11 +419,37 @@ export default {
           ${def.hint ? `<div class="hint">${esc(def.hint)}</div>` : ''}<div class="error-text" data-error="${def.name}"></div></div>`;
       };
       return `
-        <form class="card set-card set-narrow" id="project-form" novalidate>
+        <div class="set-main set-narrow">
+        <form class="card set-card" id="project-form" novalidate>
           <div class="card-header"><div class="grow"><h3>${t('Project details')}</h3><div class="set-desc">${t('Shown on the title page and in the dashboard.')}</div></div></div>
           <div class="card-body pf-grid">${projectDetailFields(project).map(f).join('')}</div>
           <div class="card-footer"><button type="button" class="btn" data-action="reset-project">${t('Reset')}</button><button type="submit" class="btn btn-primary">${icon('check')}${t('Save changes')}</button></div>
-        </form>`;
+        </form>
+        <div data-inbox-card>${inboxCard()}</div>
+        </div>`;
+    };
+
+    // "Updates from Claude": whether GradDocs looks in the project's GitHub repository for new figures and logos (a browser preference).
+    const inboxStatus = () => {
+      if (inboxState.checking) return t('Checking…');
+      if (!inboxState.attemptedAt) return t('Not checked yet');
+      if (inboxState.reached === false) return t('Could not reach the repository (last tried {time}).', { time: iso(formatDateTime(inboxState.attemptedAt)) });
+      return t('Last checked {time}', { time: iso(formatDateTime(inboxState.checkedAt)) });
+    };
+    const inboxCard = () => {
+      const waiting = pendingItems(store.project).length;
+      return card(t('Updates from Claude'), t('Claude can leave new figures and logos in your project’s public GitHub repository. GradDocs shows them to you; nothing changes until you apply it.'), `
+        ${row(t('Look for updates'), t('Checked when a project opens and every 10 minutes while this tab is open.'),
+          `<label class="switch"><input type="checkbox" data-inbox-enabled ${isInboxEnabled() ? 'checked' : ''}><span class="track"></span><span>${esc(t('On'))}</span></label>`)}
+        ${row(t('Check for updates'), `<span data-inbox-status role="status">${esc(inboxStatus())}</span>`,
+          `<div class="ib-set-actions">
+            <button type="button" class="btn btn-sm" data-action="inbox-check" ${inboxState.checking ? 'disabled' : ''}>${icon('refresh', 'icon-sm')}${esc(t('Check now'))}</button>
+            ${waiting ? `<button type="button" class="btn btn-sm btn-primary" data-action="inbox-review">${icon('sparkles', 'icon-sm')}${esc(t('Review updates ({n})', { n: waiting }))}</button>` : ''}
+          </div>`)}`);
+    };
+    const refreshInbox = () => {
+      const box = panel.querySelector('[data-inbox-card]');
+      if (box && store.project) box.innerHTML = inboxCard();
     };
 
     const storageSkeleton = () => `
@@ -601,9 +605,9 @@ export default {
       el.value = el.value.trim();
       applyField(el.dataset.field, el.value);
     }));
-    const refreshLogo = () => {
-      const box = panel.querySelector('[data-logo]');
-      if (box && store.project) box.innerHTML = logoControl(store.project);
+    const refreshLogo = (field) => {
+      const box = panel.querySelector(`[data-logo="${field}"]`);
+      if (box && store.project) box.innerHTML = logoControl(store.project, field);
     };
 
     // ----- AI card (prefs, not project data) ----------------------------------------
@@ -614,6 +618,8 @@ export default {
       const clear = panel.querySelector('[data-action="ai-clear-key"]');
       if (clear) clear.disabled = !cfg.apiKey;
     };
+    d.add(on(panel, 'change', 'input[data-inbox-enabled]', (e, el) => setInboxEnabled(el.checked)));
+    d.add(inboxEvents.on('update', refreshInbox));
     d.add(on(panel, 'input', 'input[data-ai-key]', (e, el) => { setAIConfig({ apiKey: el.value }); refreshAIStatus(); }));
     d.add(on(panel, 'change', 'select[data-ai-model]', (e, el) => { setAIConfig({ model: el.value }); toast(t('Model changed.'), { type: 'success', duration: 1600 }); }));
 
@@ -677,21 +683,23 @@ export default {
           toast(added ? t('{chapters} chapters and {sections} sections added', result) : t('Nothing to add — the structure already matches'), { type: added ? 'success' : 'info' });
         } catch (err) { toastError(err, t('Could not add the template structure')); }
       },
-      async 'upload-logo'() {
+      async 'upload-logo'(el) {
+        const field = el.dataset.logoField === 'projectLogo' ? 'projectLogo' : 'logo';
         const file = await pickFile('.png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/svg+xml,image/webp');
         if (!file || !alive || !store.project) return;
         try {
-          const dataUrl = await logoDataURL(file);
-          store.update((p) => { p.logo = dataUrl; }, { activity: 'Updated project details', source: 'settings' });
-          refreshLogo();
-          toast(t('Logo updated.'), { type: 'success' });
+          const dataUrl = await logoDataURL(file, { max: LOGO_MAX[field] });
+          store.update((p) => { p[field] = dataUrl; }, { activity: 'Updated project details', source: 'settings' });
+          refreshLogo(field);
+          toast(field === 'logo' ? t('Logo updated.') : t('Project logo updated.'), { type: 'success' });
         } catch (err) { toastError(err, t('Could not use that image')); }
       },
-      'remove-logo'() {
-        if (!store.project?.logo) return;
-        store.update((p) => { p.logo = ''; }, { activity: 'Updated project details', source: 'settings' });
-        refreshLogo();
-        toast(t('Logo removed.'), { type: 'success', duration: 2200 });
+      'remove-logo'(el) {
+        const field = el.dataset.logoField === 'projectLogo' ? 'projectLogo' : 'logo';
+        if (!store.project?.[field]) return;
+        store.update((p) => { p[field] = ''; }, { activity: 'Updated project details', source: 'settings' });
+        refreshLogo(field);
+        toast(field === 'logo' ? t('Logo removed.') : t('Project logo removed.'), { type: 'success', duration: 2200 });
       },
       async 'switch-engine'(el) {
         const target = el.dataset.engine;
@@ -770,6 +778,13 @@ export default {
           ctx.navigate('#/projects');
         } catch (err) { toastError(err, t('Could not delete the project')); }
       },
+      async 'inbox-check'() {
+        const result = await checkInbox({ project: store.project });
+        if (!alive) return;
+        if (!result.reached) toast(t('Could not reach the repository right now. Try again later.'), { type: 'info' });
+        else toast(result.pending ? count(result.pending, '1 update from Claude is waiting.', '{n} updates from Claude are waiting.') : t('No new updates from Claude.'), { type: result.pending ? 'success' : 'info' });
+      },
+      'inbox-review'() { openInboxDialog({ store }); },
       'ai-toggle-key'(el) {
         const input = panel.querySelector('input[data-ai-key]');
         if (!input) return;

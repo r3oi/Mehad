@@ -36,6 +36,7 @@ async function boot() {
     }
     await shell.start();
     startWordWatcher(store, shell);
+    import('./inbox/inbox.js').then((m) => m.startInboxChecker(store, shell)).catch((err) => console.info('[graddocs] Updates from Claude are unavailable:', err?.message || err));
   } catch (err) {
     console.error(err);
     root.innerHTML = `<div style="padding:48px;font-family:system-ui"><h2>${t('GradDocs could not start')}</h2><p>${String(err.message || err)}</p></div>`;

@@ -225,12 +225,16 @@
 .pv-credit .pv-name { font-weight: 700; }
 .pv-credit > .pv-label + .pv-name { margin-top: .15em; }
 .pv-year { margin-top: .5em; font-size: 1.15em; }
+/* The project's own logo (settings.projectLogo): centred just above the project title, about 1.1 inch tall, at most 4.5 inch wide.
+   preview-view.js shrinks the height of very wide logos once the picture has loaded so the aspect ratio is kept. */
+.pv-project-logo { display: block; flex: none; height: 1.1in; width: auto; max-width: min(4.5in, 100%); margin-bottom: -.5em; object-fit: contain; }
 
 /* Submission layout (settings.titlePage.layout): logo, university / college / department, title, degree statement,
    "by" + students, "Supervised by" + supervisors and the month at the bottom (as many university templates). */
 .pv-ts { height: var(--ch); display: flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.4; }
 .pv-ts > * { flex: none; max-width: 100%; }
 .pv-ts-logo { display: block; height: 1in; width: auto; max-width: 100%; margin-bottom: 8pt; object-fit: contain; }
+.pv-ts > .pv-project-logo { max-width: min(4.5in, 100%); margin-bottom: 8pt; }
 .pv-ts-uni { font-weight: 700; font-size: 1.1em; overflow-wrap: break-word; }
 .pv-ts-org { font-weight: 700; overflow-wrap: break-word; }
 .pv-ts-gap { flex: 1 1 0; min-height: .8em; }

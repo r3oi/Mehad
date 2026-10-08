@@ -15,6 +15,8 @@ import { isDirty } from '../figures/versions.js';
 import { renderThumbnail } from '../figures/render.js';
 import { projectDetailFields, iso, count } from '../projects/projects-view.js';
 import { countWords } from '../structure/outline-ops.js';
+import { pendingItems, inboxEvents } from '../inbox/inbox.js';
+import { openInboxDialog, itemTexts, kindLabel, kindIcon } from '../inbox/inbox-dialog.js';
 
 const WEIGHT = Object.fromEntries(SECTION_STATUSES.map((s) => [s.value, s.weight]));
 const hueOf = (text) => { let h = 0; for (const ch of String(text)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
@@ -26,6 +28,7 @@ const ACTIVITY_ICONS = { create: 'plus', revision: 'history', edit: 'edit', dele
 // re-rendered in the interface language. Specific templates come before generic ones.
 export const ACTIVITY_TEMPLATES = [
   'Synced with Word: 1 change', 'Synced with Word: {n} changes', 'Linked to a Word file', 'Unlinked the Word file', 'Undid a Word sync',
+  'Applied an update from Claude: {title}', 'Applied {n} updates from Claude', 'Undid an update from Claude',
   'Created project', 'Updated project details', 'Updated {tab} settings', 'Applied {template} formatting', 'Added missing template chapters and sections', 'Reordered front matter', 'Reordered figures',
   'Added a table row', 'Deleted a table row', 'Added a table column', 'Deleted a table column', 'Merged table cells', 'Unmerged table cells', 'Duplicated a table',
   'Imported 1 acronym', 'Imported {n} acronyms', 'Added 1 detected acronym', 'Added {n} detected acronyms',
@@ -231,9 +234,32 @@ export default {
       <div class="dash-fact">${icon(ico)}<div class="min0"><div class="df-label">${esc(label)}</div>
       <div class="df-value ${value ? '' : 'muted'}">${value ? `<bdi>${esc(value)}</bdi>` : t('Not set')}</div></div></div>`;
 
+    /** Pending "Updates from Claude" (new figures and logos left in the project's GitHub repository). */
+    const inboxCard = (pending) => `
+        <section class="card dash-inbox" aria-label="${esc(t('Updates from Claude'))}">
+          <div class="card-header ib-card-head">
+            <span class="ib-card-ico">${icon('sparkles')}</span>
+            <div class="grow min0"><h2>${t('Updates from Claude')}</h2>
+              <div class="ib-card-sub">${t('Waiting in your project’s GitHub repository (public). Nothing changes until you apply it.')}</div></div>
+            <span class="badge badge-primary">${pending.length}</span>
+            <button type="button" class="btn btn-primary btn-sm" data-action="review-updates">${t('Review')}</button>
+          </div>
+          <div class="card-body ib-card-list">
+            ${pending.slice(0, 4).map((item) => `
+              <div class="ib-card-row">
+                <span class="ib-card-kind">${icon(kindIcon(item), 'icon-sm')}</span>
+                <span class="ib-card-title truncate" dir="auto">${esc(itemTexts(item).title)}</span>
+                <span class="badge"><bdi>${esc(kindLabel(item))}</bdi></span>
+                <span class="badge ${item.status === 'update' ? 'badge-info' : 'badge-success'}">${esc(item.status === 'update' ? t('Update') : t('New'))}</span>
+              </div>`).join('')}
+            ${pending.length > 4 ? `<div class="ib-card-more muted">${esc(t('+{n} more', { n: pending.length - 4 }))}</div>` : ''}
+          </div>
+        </section>`;
+
     const render = () => {
       const project = store.project;
       if (!alive || !project) return;
+      const pendingUpdates = pendingItems(project);
       const n = getNumbering(project);
       const progress = computeProgress(project);
       const suggestions = detectAcronymSuggestions(project);
@@ -268,6 +294,8 @@ export default {
             ${fact('layers', t('Department'), project.department)}
           </div>
         </section>
+
+        ${pendingUpdates.length ? inboxCard(pendingUpdates) : ''}
 
         <section class="dash-stats" aria-label="${esc(t('Project statistics'))}">
           ${statCard({ to: ctx.href('figures'), ico: 'figure', label: t('Total Figures'), value: project.figures.length, sub: unFigs ? t('{n} not assigned', { n: unFigs }) : (project.figures.length ? t('All assigned') : t('None yet')) })}
@@ -376,7 +404,9 @@ export default {
     };
 
     d.add(on(container, 'click', '[data-action="edit-details"]', () => editDetails()));
+    d.add(on(container, 'click', '[data-action="review-updates"]', () => openInboxDialog({ store })));
     d.add(store.on('change', render));
+    d.add(inboxEvents.on('update', render));
     ctx.shell.setBreadcrumbs([{ label: t('Dashboard') }]);
     render();
 
