@@ -97,6 +97,26 @@
       (g, p) => { const [x, y] = S(1000, 1334); handArrow(g, [[x + 120 * sc, y + 60 * sc], [x + 50 * sc, y + 40 * sc], [x + 8 * sc, y + 8 * sc]], { ...o, p: p, head: 12 * sc }); if (p >= 1) handText(g, "clothes ✓", x + 135 * sc, y + 62 * sc, { font: F(28), color: C.pen, seed }); },
     ];
     items.forEach((f, i) => { const p = clamp((n - i * 2 + 1) / 2); if (p > 0) f(ctx, p); });
+    if (!isM) ICONS.forEach((ic, j) => { const p = clamp((n - j * 2) / 2); if (p > 0) doodle(ic, p, { ...o, w: 2.2 * sc, seed: seed + 40 + j * 13 }); });
+  }
+
+  // AIM: tiny pen doodles of makeup and clothes around the mark (logo source coords; u = half-size)
+  const rotPts = (pts, a) => pts.map(([u, v]) => [u * Math.cos(a) - v * Math.sin(a), u * Math.sin(a) + v * Math.cos(a)]);
+  const ICONS = [
+    { at: [-160, 650], u: 95, strokes: [                                                             // lipstick
+      [[-.36, .15], [.36, .15], [.36, 1], [-.36, 1], [-.36, .15]], [[-.36, .42], [.36, .42]], [[-.24, .15], [-.24, -.62], [.24, -.92], [.24, .15]]] },
+    { at: [1000, -125], u: 100, strokes: [                                                           // hanger
+      [[0, -.12], [0, -.32], [.08, -.42], [.14, -.55], [.1, -.7], [-.02, -.76], [-.13, -.7], [-.15, -.6]],
+      [[0, -.12], [-.96, .4], [-.92, .5], [.92, .5], [.96, .4], [0, -.12]]] },
+    { at: [2165, 660], u: 110, strokes: [                                                            // dress
+      [[-.18, -1], [-.24, -.55], [-.3, -.22], [-.72, .95], [.72, .95], [.3, -.22], [.24, -.55], [.18, -1], [0, -.8], [-.18, -1]], [[-.3, -.22], [.3, -.22]]] },
+    { at: [520, 1475], u: 85, strokes: [                                                             // makeup brush
+      [[-1.15, -.05], [-.1, -.1]], [[-1.15, .05], [-.1, .1]], [[-1.15, -.05], [-1.18, 0], [-1.15, .05]], [[-.1, -.12], [.22, -.13], [.22, .13], [-.1, .12], [-.1, -.12]], [[.08, -.13], [.08, .13]],
+      [[.22, -.13], [.5, -.24], [.82, -.36], [.95, -.2], [1, 0], [.95, .2], [.82, .36], [.5, .24], [.22, .13]], [[.35, -.06], [.85, -.14]], [[.35, .06], [.85, .14]]].map(st => rotPts(st, -.5)) },
+  ];
+  function doodle(ic, p, o) {                                  // strokes drawn one after another
+    const K = ic.strokes.length;
+    ic.strokes.forEach((st, k) => { const q = clamp(p * K - k); if (q > 0) hand(ctx, st.map(([u, v]) => S(ic.at[0] + u * ic.u, ic.at[1] + v * ic.u)), { ...o, p: q, seed: o.seed + k * 7 }); });
   }
 
   function doodles(st, seed) {
@@ -176,6 +196,7 @@
     const st = t => smStep(t) / SM_FPS, ev = [];
     for (let t = 0; t < T.clean; t += 1 / SM_FPS) ev.push({ type: "scratch", t: st(t + 1e-4), level: t < T.draw[0] ? -32 : -26 });
     for (let i = 0; i < 4; i++) ev.push({ type: "squeak", t: T.notes[0] + i * 2 / SM_FPS, d: .16 });
+    if (!isM) for (let j = 0; j < 4; j++) ev.push({ type: "squeak", t: T.notes[0] + (j * 2 + 1) / SM_FPS, d: .12 });
     ev.push({ type: "zip", t: T.slice[0] });
     [0, 1, 2].forEach(i => ev.push({ type: "whoosh", t: T.brush[0] + i / SM_FPS - .03, d: .32, pan: [i % 2 ? .6 : -.6, i % 2 ? -.4 : .4], level: -12, fc: [180, 1400] }));
     ev.push({ type: "impact", t: T.back[0], style: isM ? "paper" : "digital" });
