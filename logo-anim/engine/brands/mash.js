@@ -64,18 +64,18 @@
         hand(g, [[c + ext * .48, b - ext * .6], [c + ext * .55, b - ext * .5], [c + ext * .75, b - ext * .95]], { ...pen, seed: seed + 7 });
       }
     } else {
-      const { c1, c2, R } = LOGO, [l, cy] = S(c1[0] - R, c1[1]), [r] = S(c2[0] + R, 0), [, top] = S(0, c1[1] - R), [, bot] = S(0, c1[1] + R);
+      const { c1, c2, R } = LOGO, [l, cy] = S(c1[0] - LOGO.RX, c1[1]), [r] = S(c2[0] + LOGO.RX, 0), [, top] = S(0, c1[1] - R), [, bot] = S(0, c1[1] + R);
       dimLine(g, l - ext, cy, r + ext, cy, { ...pen, p: p1, head: 8 * sc, seed: seed + 1 });
       for (const y of [top, bot]) dimLine(g, l - ext, y, r + ext, y, { ...pen, p: p1, head: 8 * sc, seed: seed + y | 0 });
       for (const c of [c1, c2]) {
         const [x, y] = S(c[0], c[1]);
         hand(g, [[x - 12 * sc, y], [x + 12 * sc, y]], { ...pen, p: p2 }); hand(g, [[x, y - 12 * sc], [x, y + 12 * sc]], { ...pen, p: p2, seed: seed + 3 });
-        handEllipse(g, x, y, R * P.L, R * P.L, { ...pen, p: p2, a0: c === c1 ? Math.PI : 0, over: .04, seed: seed + c[0] | 0, amp: 1.2 });
+        handEllipse(g, x, y, LOGO.RX * P.L, R * P.L, { ...pen, p: p2, a0: c === c1 ? Math.PI : 0, over: .04, seed: seed + c[0] | 0, amp: 1.2 });
       }
       if (lab) {
         const [x, y] = S(c1[0], c1[1]);
-        dimLine(g, x, y, x - R * P.L, y, { ...pen, color: C.pen, head: 8 * sc, seed: seed + 9 });
-        handText(g, "r", x - R * P.L / 2, y - 16 * sc, { font: `700 ${24 * sc}px Caveat`, color: C.pen, seed });
+        dimLine(g, x, y, x - LOGO.RX * P.L, y, { ...pen, color: C.pen, head: 8 * sc, seed: seed + 9 });
+        handText(g, "r", x - LOGO.RX * P.L / 2, y - 16 * sc, { font: `700 ${24 * sc}px Caveat`, color: C.pen, seed });
         handText(g, "aim mark", l - ext * .4, bot + ext * .7, { font: `500 ${28 * sc}px Caveat`, color: C.pencil, seed: seed + 4 });
         handEllipse(g, r + ext * .55, top - ext * .5, 13 * sc, 13 * sc, { ...pen, seed: seed + 6 });
         hand(g, [[r + ext * .48, top - ext * .5], [r + ext * .55, top - ext * .4], [r + ext * .75, top - ext * .85]], { ...pen, seed: seed + 7 });

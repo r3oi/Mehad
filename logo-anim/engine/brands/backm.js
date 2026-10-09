@@ -21,7 +21,7 @@
   function outlines(k, fx, fy, alpha) {
     const { c1, c2, R } = LOGO;
     cam(ctx, k, fx, fy); ctx.lineWidth = 1.7 / (P.L * k); ctx.strokeStyle = `rgba(235,245,244,${alpha})`;
-    for (const c of [c1, c2]) { ctx.beginPath(); ctx.arc(c[0], c[1], R, 0, 7); ctx.stroke(); }
+    for (const c of [c1, c2]) { ctx.beginPath(); LOGO.ell(ctx, c[0], c[1]); ctx.stroke(); }
     for (const poly of OUT) { ctx.beginPath(); poly.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.stroke(); }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
@@ -66,12 +66,12 @@
       outlines(lerp(8, 6.5, p), lerp((lb[0][0] + lb[0][2]) / 2, (lb[2][0] + lb[2][2]) / 2, p), CY + Math.sin(p * Math.PI) * 60, 1);
       return;
     }
-    // giant solid slices: white letters through vertical bands that jump each quarter second
+    // giant solid slices of the mark through vertical bands that jump each quarter second
     const cut = Math.floor((t - T.slices[0]) / .23), fx = [(lb[1][0] + lb[1][2]) / 2, (lb[2][0] + lb[2][2]) / 2, lb[2][0] + 60][Math.min(cut, 2)];
     cam(ctx, 5, fx, CY);
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.beginPath();
     for (let i = 0; i < 4; i++) { const x0 = W * rnd(cut * 17 + i * 3), w = W * lerp(.08, .3, rnd(cut * 17 + i * 3 + 1)); ctx.rect(x0, 0, w, H); }
-    ctx.clip(); cam(ctx, 5, fx, CY); ctx.drawImage(LOGO.I("letters"), 0, 0, LOGO.src.w, LOGO.src.h); ctx.restore();
+    ctx.clip(); cam(ctx, 5, fx, CY); LOGO.drawFinal(ctx); ctx.restore();
     outlines(5, fx, CY, .5);
   }
 

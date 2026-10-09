@@ -90,7 +90,7 @@
       const lens = seg(tt, .9, 1.1);                              // the overlap deepens once both have landed
       if (lens > 0) {
         ctx.save(); P.tr(ctx); ctx.globalAlpha = lens;
-        ctx.beginPath(); ctx.arc(c1[0], c1[1], R, 0, 7); ctx.clip(); ctx.beginPath(); ctx.arc(c2[0], c2[1], R, 0, 7); ctx.clip();
+        ctx.beginPath(); LOGO.ell(ctx, c1[0], c1[1]); ctx.clip(); ctx.beginPath(); LOGO.ell(ctx, c2[0], c2[1]); ctx.clip();
         LOGO.circles(ctx, c1[0], c2[0]); ctx.restore();
       }
     }

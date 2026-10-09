@@ -49,28 +49,27 @@ const LOGOS = {
       this.G = await (await fetch(this.dir + "geometry.json")).json();
       await Promise.all(this.files.map(f => loadImg("aim_" + f.split(".")[0], this.dir + f)));
       this.I = k => IMG["aim_" + k];
-      this.c1 = this.G.c1; this.c2 = this.G.c2; this.R = this.G.c1[2];
+      this.c1 = this.G.c1; this.c2 = this.G.c2; this.R = this.G.c1[2];          // R: vertical radius
+      this.SX = this.G.sx ?? 1; this.RX = this.R * this.SX;                        // the "circles" are ellipses, SX wide
       this.CX = (this.c1[0] + this.c2[0]) / 2; this.CY = this.c1[1];
       this.slots = this.G.letters.map((b, i) => ({ id: "AIM"[i], group: "letters", img: "letters", box: b }));
     },
     layer(name) { return this.I(name); },
+    ell(g, x, y, r = this.R) { g.ellipse(x, y, r * this.SX, r, 0, 0, 7); },       // one of the mark's two shapes, as a path
     // circles at any centres (the gradient is vertical, so it is exact anywhere)
     circles(g, x1, x2, y = this.CY, opts = {}) {
       const R = opts.r ?? this.R, wide = this.src.w * 3;
       const grad = col => g.drawImage(this.I(col), 0, 0, 1, this.src.h, -wide, y - this.CY, this.src.w + 2 * wide, this.src.h);
-      for (const x of [x1, x2]) { if (x == null) continue; g.save(); g.beginPath(); g.arc(x, y, R, 0, 7); g.clip(); grad("mint_col"); g.restore(); }
-      if (x1 != null && x2 != null) { g.save(); g.beginPath(); g.arc(x1, y, R, 0, 7); g.clip(); g.beginPath(); g.arc(x2, y, R, 0, 7); g.clip(); grad("deep_col"); g.restore(); }
+      for (const x of [x1, x2]) { if (x == null) continue; g.save(); g.beginPath(); this.ell(g, x, y, R); g.clip(); grad("mint_col"); g.restore(); }
+      if (x1 != null && x2 != null) { g.save(); g.beginPath(); this.ell(g, x1, y, R); g.clip(); g.beginPath(); this.ell(g, x2, y, R); g.clip(); grad("deep_col"); g.restore(); }
     },
-    drawFinal(g, dark) {
-      if (dark) g.drawImage(this.I("letters"), 0, 0, this.src.w, this.src.h);
-      g.drawImage(this.I("logo_source"), 0, 0, this.src.w, this.src.h);
-    },
+    drawFinal(g) { g.drawImage(this.I("logo_source"), 0, 0, this.src.w, this.src.h); },   // black letters read on any ground
     drawRough(g, k) { g.drawImage(this.I("rough_" + (k % 3)), 0, 0, this.src.w, this.src.h); },
-    /* the mark in any state, drawn through a layer so the knock-outs stay true holes.
+    /* the mark in any state, drawn through a layer so a fade affects it as one piece.
        g must carry the source→screen transform. letters: per-letter visibility 0..1,
-       dx: per-letter x offset (source px), wipe: letters cut only left of this x,
-       dark: white letter plate under the holes, mono: white translucent version
-       (overlap reads brighter), lens: overlap strength, r: circle radius */
+       dx: per-letter x offset (source px), wipe: letters shown only left of this x,
+       mono: white translucent version (overlap reads brighter), lens: overlap strength,
+       r: vertical radius (the shapes keep the file's width ratio) */
     drawMark(g, o = {}) {
       const x1 = "x1" in o ? o.x1 : this.c1[0], x2 = "x2" in o ? o.x2 : this.c2[0], y = o.y ?? this.CY, r = o.r ?? this.R;
       const letters = o.letters ?? [1, 1, 1], dx = o.dx ?? [0, 0, 0], wipe = o.wipe ?? Infinity, lens = o.lens ?? 1;
@@ -80,25 +79,22 @@ const LOGOS = {
       lg.imageSmoothingQuality = "high";
       if (o.mono) {
         lg.fillStyle = "#FFFFFF"; lg.globalAlpha = .74;
-        for (const x of [x1, x2]) if (x != null) { lg.beginPath(); lg.arc(x, y, r, 0, 7); lg.fill(); }
+        for (const x of [x1, x2]) if (x != null) { lg.beginPath(); this.ell(lg, x, y, r); lg.fill(); }
         lg.globalAlpha = 1;
       } else {
         this.circles(lg, x1, null, y, { r }); this.circles(lg, null, x2, y, { r });
         if (x1 != null && x2 != null && lens > 0) {
-          lg.save(); lg.globalAlpha = lens; lg.beginPath(); lg.arc(x1, y, r, 0, 7); lg.clip(); lg.beginPath(); lg.arc(x2, y, r, 0, 7); lg.clip();
+          lg.save(); lg.globalAlpha = lens; lg.beginPath(); this.ell(lg, x1, y, r); lg.clip(); lg.beginPath(); this.ell(lg, x2, y, r); lg.clip();
           lg.drawImage(this.I("deep_col"), 0, 0, 1, this.src.h, -this.src.w * 3, y - this.CY, this.src.w * 7, this.src.h); lg.restore();
         }
       }
-      const cut = (cg, i, op) => {
-        const a = letters[i]; if (a <= 0) return;
+      for (let i = 0; i < 3; i++) {                                 // the black letters on top
+        const a = letters[i]; if (a <= 0) continue;
         const [b0, b1, b2, b3] = this.G.letters[i];
-        cg.save(); cg.beginPath(); cg.rect(-1e5, -1e5, Math.min(wipe, 1e5) + 1e5, 2e5); cg.clip();
-        cg.translate(dx[i], 0); cg.beginPath(); cg.rect(b0 - 3, b1 - 3, b2 - b0 + 6, b3 - b1 + 6); cg.clip();
-        cg.globalAlpha = a * (op ? 1 : (o.alpha ?? 1)); if (op) cg.globalCompositeOperation = op;
-        cg.drawImage(this.I("letters"), 0, 0, this.src.w, this.src.h); cg.restore();
-      };
-      for (let i = 0; i < 3; i++) cut(lg, i, "destination-out");
-      if (o.dark) for (let i = 0; i < 3; i++) cut(g, i);
+        lg.save(); lg.beginPath(); lg.rect(-1e5, -1e5, Math.min(wipe, 1e5) + 1e5, 2e5); lg.clip();
+        lg.translate(dx[i], 0); lg.beginPath(); lg.rect(b0 - 3, b1 - 3, b2 - b0 + 6, b3 - b1 + 6); lg.clip();
+        lg.globalAlpha = a; lg.drawImage(this.I("letters"), 0, 0, this.src.w, this.src.h); lg.restore();
+      }
       g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha *= o.alpha ?? 1; g.drawImage(lay, 0, 0); g.restore();
     },
   },

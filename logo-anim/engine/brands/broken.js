@@ -137,11 +137,12 @@
       c.t = T.build[0] + (T.build[1] - T.build[0]) * (x * .72 + rnd(c.i * 131 + c.j * 7) * .28);
     }
   }
-  function classifyAIM(L0) {                                     // the circles in grey, the lens teal, the letters cut out
+  function classifyAIM(L0) {                                     // the shapes in grey, the lens teal, the letters black
     const { c1, c2, R } = LOGO, w = LOGO.src.w, h = LOGO.src.h;
     for (const c of L0.cells) {
-      const x = (c.i + .5) / L0.N * w, y = (c.j + .5) / L0.M * h, in1 = Math.hypot(x - c1[0], y - c1[1]) < R, in2 = Math.hypot(x - c2[0], y - c2[1]) < R;
-      c.body = (in1 || in2) && c.a >= .5; c.col = !c.body ? null : in1 && in2 ? C.lens : C.grey;
+      const x = (c.i + .5) / L0.N * w, y = (c.j + .5) / L0.M * h, in1 = Math.hypot((x - c1[0]) / LOGO.SX, y - c1[1]) < R, in2 = Math.hypot((x - c2[0]) / LOGO.SX, y - c2[1]) < R;
+      const letter = (c.r + c.g + c.b) / 3 < 95;                 // the black letters
+      c.body = (in1 || in2) && c.a >= .5; c.col = !c.body ? null : letter ? C.dark : in1 && in2 ? C.lens : C.grey;
     }
   }
   const THREAD = .42;

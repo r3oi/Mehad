@@ -119,7 +119,7 @@
           ctx.globalAlpha = 1; LOGO.circles(ctx, xL, null);
           ctx.globalAlpha = Math.min(1, (t - T.fan[0]) * 6); LOGO.circles(ctx, null, xMax); ctx.globalAlpha = 1;
           const lens = seg(t, T.fan[1] - .3, T.fan[1]);
-          if (lens > 0) { ctx.save(); ctx.beginPath(); ctx.arc(xL, LOGO.CY, LOGO.R, 0, 7); ctx.clip(); ctx.globalAlpha = lens; LOGO.circles(ctx, xL, xMax); ctx.restore(); }
+          if (lens > 0) { ctx.save(); ctx.beginPath(); LOGO.ell(ctx, xL, LOGO.CY); ctx.clip(); ctx.globalAlpha = lens; LOGO.circles(ctx, xL, xMax); ctx.restore(); }
         }
       }
       return;

@@ -37,7 +37,7 @@
 
   // source px → screen, around the mark centre with the pulse scale
   function setTr(g, k) { g.setTransform(L * k, 0, 0, L * k, W / 2 - CX * L * k, H / 2 - CY * L * k); }
-  const circle = (g, x) => { g.beginPath(); g.arc(x, CY, R, 0, Math.PI * 2); };
+  const circle = (g, x) => { g.beginPath(); LOGO.ell(g, x, CY, R); };
   const gradFill = (g, col) => g.drawImage(IMG[col], 0, 0, 1, SRC.h, -enterDx * 2, 0, SRC.w + enterDx * 4, SRC.h);
 
   function draw(t, frame) {
