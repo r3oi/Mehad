@@ -46,4 +46,4 @@ P = 1080
 r = np.random.default_rng(11)
 pap = ndi.gaussian_filter(r.standard_normal((P, 1920)), 1.0) * .5 + ndi.gaussian_filter(r.standard_normal((P, 1920)), 12) * 1.4
 pap = (pap - pap.min()) / (pap.max() - pap.min())
-Image.fromarray((235 + 20 * pap).astype(np.uint8)).save("assets/paper.png")
+Image.fromarray((235 + 20 * pap).astype(np.uint8)).save("assets/shared/paper.png")
