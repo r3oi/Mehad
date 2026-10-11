@@ -6,7 +6,7 @@
      02 reveal    — brand colour arrives with one gesture, then the wordmark writes itself on
      03 lockup    — motion settles, then a long still hold (≈2s) and a clean end on the logo */
 "use strict";
-const FPS = 25;
+const FPS = +new URLSearchParams(location.search).get("fps") || 25;   // 25 for the stings; masters can ask for 50/60
 const TIMING = {
   dur: 6.4,
   clean: [1.80, 2.20],   // build-up resolves to the clean mark and holds
@@ -53,7 +53,9 @@ function strokeUpTo(ctx, P, s) {
 /* ---------- canvas, assets ---------- */
 const QS = new URLSearchParams(location.search);
 const FORMAT = QS.get("format") || "16x9";
-const W = FORMAT === "1x1" ? 1080 : 1920, H = 1080;
+const SCALE = +QS.get("scale") || 1;                   // 2 → 3840×2160 / 2160×2160 masters
+const ALPHA = QS.has("alpha");                         // transparent ground: brands skip their background
+const W = (FORMAT === "1x1" ? 1080 : 1920) * SCALE, H = 1080 * SCALE;
 const cv = document.getElementById("cv"); cv.width = W; cv.height = H;
 const ctx = cv.getContext("2d", { willReadFrequently: true });
 const scratch = Object.assign(document.createElement("canvas"), { width: W, height: H });
@@ -94,17 +96,18 @@ let ACC = null;
 function renderFrame(n) {
   const t = n / FPS;
   const N = (BRAND.blur || [TIMING.blur]).some(([a, b]) => t >= a && t <= b) ? 16 : 1;
-  if (N === 1) { BRAND.draw(t, n); return; }
+  if (N === 1) { if (ALPHA) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); } BRAND.draw(t, n); return; }
   if (!ACC) ACC = new Float32Array(W * H * 4);
   ACC.fill(0);
-  for (let k = 0; k < N; k++) {
+  for (let k = 0; k < N; k++) {                        // averaged premultiplied, so blurred edges on a transparent ground stay clean
     const tk = t + ((k + .5) / N - .5) * (.5 / FPS);
+    if (ALPHA) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); }
     BRAND.draw(tk, n);
     const d = ctx.getImageData(0, 0, W, H).data;
-    for (let i = 0; i < d.length; i++) ACC[i] += d[i];
+    for (let i = 0; i < d.length; i += 4) { const a = d[i + 3]; ACC[i] += d[i] * a; ACC[i + 1] += d[i + 1] * a; ACC[i + 2] += d[i + 2] * a; ACC[i + 3] += a; }
   }
-  const out = ctx.createImageData(W, H);
-  for (let i = 0; i < out.data.length; i++) out.data[i] = Math.round(ACC[i] / N);
+  const out = ctx.createImageData(W, H), o = out.data;
+  for (let i = 0; i < o.length; i += 4) { const a = ACC[i + 3]; if (a > 0) { o[i] = ACC[i] / a; o[i + 1] = ACC[i + 1] / a; o[i + 2] = ACC[i + 2] / a; } o[i + 3] = Math.round(a / N); }
   ctx.putImageData(out, 0, 0);
 }
 window.renderFrame = renderFrame;

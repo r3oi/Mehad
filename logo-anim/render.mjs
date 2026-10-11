@@ -18,11 +18,13 @@ await new Promise(r => server.once("listening", r));
 const port = server.address().port;
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
-const [w, h] = format === "1x1" ? [1080, 1080] : [1920, 1080];
+// masters: SCALE=2 (4K), FPS=60, ALPHA=1 (transparent); out ending in "/" writes a PNG sequence there
+const SCALE = +process.env.SCALE || 1, FPS = +process.env.FPS || 25, ALPHA = !!process.env.ALPHA;
+const [w, h] = (format === "1x1" ? [1080, 1080] : [1920, 1080]).map(v => v * SCALE);
 const page = await browser.newPage({ viewport: { width: w, height: h } });
 page.on("pageerror", e => console.error("PAGEERR:", e.message));
 const [idea, logo, variant] = brand.split("-");   // idea stings: mash-mehad, risk-aim, … (+ a variant: mash-aim-real)
-await page.goto(`http://127.0.0.1:${port}/engine/index.html?render&brand=${idea}&format=${format}${logo ? "&logo=" + logo : ""}${variant ? "&v=" + variant : ""}`);
+await page.goto(`http://127.0.0.1:${port}/engine/index.html?render&brand=${idea}&format=${format}${logo ? "&logo=" + logo : ""}${variant ? "&v=" + variant : ""}&scale=${SCALE}&fps=${FPS}${ALPHA ? "&alpha" : ""}`);
 await page.waitForFunction(() => window.READY || window.BOOT_ERROR, null, { timeout: 60000 });
 const err = await page.evaluate(() => window.BOOT_ERROR); if (err) { console.error(err); process.exit(1); }
 const total = await page.evaluate(() => FRAMES());
@@ -35,17 +37,25 @@ if (out === "cues") {
 } else if (out === "stills") {
   const dir = path.join(ROOT, "out/stills"); fs.mkdirSync(dir, { recursive: true });
   for (const n of list.split(",").map(Number)) fs.writeFileSync(`${dir}/${brand}_${format}_f${String(n).padStart(3, "0")}.png`, Buffer.from(await grab(n), "base64"));
+} else if (out.endsWith("/")) {
+  fs.mkdirSync(out, { recursive: true });
+  const t0 = Date.now();
+  for (let n = 0; n < total; n++) {
+    fs.writeFileSync(`${out}f${String(n).padStart(4, "0")}.png`, Buffer.from(await grab(n), "base64"));
+    if (n % 30 === 0) console.log(`${brand} ${format}: ${n}/${total} ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+  }
+  console.log("wrote", total, "frames to", out);
 } else {
   fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
   // PNG frames, encoded with BT.709 so the brand teal/navy survive the RGB→YUV conversion
-  const ff = spawn("ffmpeg", ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", "25", "-c:v", "png", "-i", "-",
+  const ff = spawn("ffmpeg", ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(FPS), "-c:v", "png", "-i", "-",
     "-vf", "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p", "-c:v", "libx264", "-preset", "slow", "-crf", "12", "-tune", "animation",
     "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv", "-movflags", "+faststart", out], { stdio: ["pipe", "inherit", "inherit"] });
   const t0 = Date.now();
   for (let n = 0; n < total; n++) {
     const b = Buffer.from(await grab(n), "base64");
     if (!ff.stdin.write(b)) await new Promise(r => ff.stdin.once("drain", r));
-    if (n % 25 === 0) console.log(`${brand} ${format}: ${n}/${total} ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+    if (n % FPS === 0) console.log(`${brand} ${format}: ${n}/${total} ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   }
   ff.stdin.end(); await new Promise(r => ff.on("close", r));
   console.log("wrote", out);
