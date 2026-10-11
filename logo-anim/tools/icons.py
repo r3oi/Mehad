@@ -58,7 +58,7 @@ def real_icon(c, name, size):
         a = a * ndi.binary_dilation(keep, iterations=4)
     y0, y1, x0, x1 = bbox(a > .05, 12)
     rgba = np.dstack([c[..., :3], a[..., None] * 255])[y0:y1, x0:x1].astype(np.uint8)
-    k = size * SS / max(rgba.shape[:2])
+    k = min(1, size * SS * 2 / max(rgba.shape[:2]))              # photos kept at 8× (the 4K Collide burst uses them large)
     im = Image.fromarray(rgba, "RGBA").resize((round(rgba.shape[1] * k), round(rgba.shape[0] * k)), Image.LANCZOS)
     im.save(os.path.join(OUT, f"real_{name}.png"))
     print(f"real_{name}: {im.size[0]}x{im.size[1]}")

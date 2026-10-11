@@ -105,11 +105,11 @@ def glitch(e):
     if e.get("rev"): out = out[::-1]
     place(norm(out), e["t"], e.get("level", -27), pan=e.get("pan", 0))
 def riser(e):
-    t = tt(e["d"]); u = t / t[-1]
+    t = tt(e["d"]); u = t / t[-1]                  # falls by default; rev: rises
     s = shaped(len(t), lambda fr: 400 + 5000 * np.interp(fr, t, u ** 2), .45) * u ** 2.2
     s += .4 * np.sin(2 * np.pi * np.cumsum(330 * 2 ** (2 * u)) / SR) * u ** 2
     if not e.get("rev"): s = s[::-1]
-    place(norm(s), e["t"], -22)
+    place(norm(s), e["t"], e.get("level", -22))
 def spin(e):
     t = tt(e["d"] + .2); u = np.clip(t / e["d"], 0, 1)
     rate = 7 * (1 - u) ** 1.5 + .3
@@ -131,8 +131,23 @@ def type_(e):
     s = .7 * bp(rng.standard_normal(len(t)), 1500, 7000) * np.exp(-t / .005) + np.sin(2 * np.pi * np.cumsum(180 + 120 * np.exp(-t / .01)) / SR) * np.exp(-t / .035)
     place(norm(s), e["t"], e.get("level", -20), pan=e.get("pan", 0))
 
+def boom(e):                                    # a big hit: sub drop, a crack on top, a short noise blast
+    t = tt(1.4)
+    sub = np.sin(2 * np.pi * np.cumsum(34 + 70 * np.exp(-t / .07)) / SR) * np.exp(-t / .45) * np.minimum(1, t / .003)
+    crack = hp(rng.standard_normal(len(t)), 1800) * np.exp(-t / .012)
+    blast = lp(rng.standard_normal(len(t)), 900) * np.exp(-t / .18)
+    place(norm(norm(sub) + .5 * norm(crack) + .45 * norm(blast)), e["t"], e.get("level", -6))
+def sparkle(e):                                 # a shower of small bright pings (things flying out), or gathering in (rev)
+    d = e["d"]; out = np.zeros((int((d + .4) * SR), 2)); n = e.get("n", 26)
+    for k in range(n):
+        u = (k + rng.random()) / n; t0 = d * (u ** 1.7 if not e.get("rev") else 1 - (1 - u) ** 1.7)
+        f = rng.uniform(1800, 6200); tk = tt(rng.uniform(.06, .16))
+        ping = (np.sin(2 * np.pi * f * tk) + .35 * np.sin(2 * np.pi * f * 2.01 * tk)) * np.exp(-tk / (tk[-1] / 3.5)) * (1 - .6 * u if not e.get("rev") else .4 + .6 * u)
+        a = (np.clip(rng.uniform(-.9, .9), -1, 1) + 1) * np.pi / 4; i = int(t0 * SR)
+        out[i:i + len(tk)] += np.stack([ping * np.cos(a), ping * np.sin(a)], 1)[:len(out) - i]
+    place(out / (np.abs(out).max() + 1e-9), e["t"], e.get("level", -21))
 FX = {"scratch": scratch, "squeak": squeak, "zip": zip_, "whoosh": whoosh, "impact": impact, "pop": pop, "clicks": clicks,
-      "thud": thud, "glitch": glitch, "riser": riser, "spin": spin, "flutter": flutter, "swell": swell, "type": type_}
+      "thud": thud, "glitch": glitch, "riser": riser, "spin": spin, "flutter": flutter, "swell": swell, "type": type_, "boom": boom, "sparkle": sparkle}
 for e in sorted(cues["events"], key=lambda e: e["t"]): FX[e["type"]](e)
 
 mix = mix[:N]
