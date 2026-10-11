@@ -3,8 +3,9 @@
    In:  the balls pop in apart and hold so both names read → they pull back, trembling with
         charge → rush together, overshoot, squash and wobble on a spring onto the official
         mark. The hit flashes, rings twice, shakes the frame and bursts out what AIM is about:
-        makeup and clothes (the Higgsfield product cut-outs), with sparks.
-   Out: the products are pulled back into the lens as the mark breathes in, then the balls
+        four products (Higgsfield cut-outs: handbag, heel, lipstick, watch) that land above,
+        right, below and left of the mark and float there, with sparks.
+   Out: the four products are pulled back into the lens as the mark breathes in, then the balls
         burst apart through a liquid neck that snaps, «AI» and «IM» drift, and both shrink
         away to an empty frame.
    Made for a transparent master (?alpha, 4K, 60 fps): no background is painted then. */
@@ -19,8 +20,8 @@
   const BG = "#F4F7F7", RING = "#23B2A8", SPARK = ["#FFFFFF", "#9BEDE3", "#E6C47A", "#5FD8CA"];
   const SEP = { "16x9": 440, "1x1": 330 }[FORMAT];             // how far each ball sits from its place (source px)
   const PULL = 60, OVER_OUT = 35, DRIFT = 50, GMAX = 230;
-  const PRODUCTS = ["lipstick", "heel", "handbag", "watch", "dress", "brush", "bowtie", "polish", "hanger", "compact", "necktie", "oxford"];
-  let P, oc, tI, vI, snapT, BURST = [], SPARKS = [], ABSORB = [], HW, HH;
+  const PRODUCTS = ["handbag", "heel", "lipstick", "watch"];
+  let P, oc, tI, vI, snapT, BURST = [], SPARKS = [], HW, HH;
   const SP = { w: 2 * Math.PI * 1.7, z: .4 };                  // the collision spring
 
   const backOut = u => { const c = 1.70158; return 1 + (c + 1) * (u - 1) ** 3 + c * (u - 1) ** 2; };
@@ -31,8 +32,8 @@
     return Math.exp(-a * tau) * (x0 * Math.cos(wd * tau) + (v0 + a * x0) / wd * Math.sin(wd * tau));
   }
   const edge = ang => Math.min(HW / Math.max(1e-3, Math.abs(Math.cos(ang))), HH / Math.max(1e-3, Math.abs(Math.sin(ang))));   // centre → frame edge (source px)
-  const logoEdge = ang => 1 / Math.hypot(Math.cos(ang) / 1080, Math.sin(ang) / 740);                                          // centre → just outside the mark
-  const landAt = (ang, size, f) => { const a = logoEdge(ang) + size * .55, b = edge(ang) - size * .5; return b > a ? lerp(a, b, f) : a; };   // between mark and frame
+  const logoEdge = ang => 1 / Math.hypot(Math.cos(ang) / 1080, Math.sin(ang) / 700);                                          // centre → just outside the mark
+  const landAt = (ang, size, f) => { const a = logoEdge(ang) + size * .5, b = edge(ang) - size * .5; return b > a ? lerp(a, b, f) : a; };   // between mark and frame
 
   async function load() {
     await LOGO.load();
@@ -42,19 +43,12 @@
     oc = (LOGO.c2[0] - LOGO.c1[0] - 2 * LOGO.RX) / 2;           // offset at which the two shapes just touch
     const d = oc - (-SEP - PULL); tI = T.go[1]; vI = 3 * d / (T.go[1] - T.go[0]);   // cubic ease-in → arrival speed
     for (let t = T.burst[0]; t < T.burst[1]; t += .001) if (gapAt(t) > GMAX) { snapT = t; break; }
-    const N = 14;                                                // the burst: products fly out of the hit
-    for (let i = 0; i < N; i++) {
-      const ang = (i + .5) / N * Math.PI * 2 + hash(i * 7 + 1) * .3, z = .5 + .5 * rnd(i * 7 + 2);
-      BURST.push({ img: "p_" + PRODUCTS[(i * 5) % PRODUCTS.length], ang, z, reach: lerp(.15, .85, rnd(i * 7 + 3)),
-                   size: lerp(310, 540, z), spin: hash(i * 7 + 4) * 2.6, rot0: hash(i * 7 + 5) * .5, delay: rnd(i * 7 + 6) * .05, life: lerp(1.3, 1.7, rnd(i * 7 + 7)) });
-    }
+    // the burst: four products fly out of the hit to the four sides, rest there, and are pulled back in at the end
+    BURST = [["handbag", -Math.PI / 2, 360, .12, -.06, 0], ["heel", 0, 380, .2, .05, .03], ["lipstick", Math.PI / 2, 370, .12, .04, .015], ["watch", Math.PI, 390, .2, -.05, .045]]
+      .map(([n, ang, size, reach, tilt, delay], i) => ({ img: "p_" + n, ang, size, reach, tilt, delay, spin: (i % 2 ? -1 : 1) * 2.4, ph: i * 1.7,
+                                                         back: T.absorb[0] + [0, .06, .03, .09][i], dur: .38 }));
     for (let i = 0; i < 34; i++) SPARKS.push({ ang: rnd(i * 13 + 1) * Math.PI * 2, reach: lerp(.22, .62, rnd(i * 13 + 2)), r: lerp(5, 13, rnd(i * 13 + 3)),
                                                col: SPARK[i % SPARK.length], life: lerp(.4, .75, rnd(i * 13 + 4)), delay: rnd(i * 13 + 5) * .04 });
-    for (let i = 0; i < 10; i++) {                               // the outro: products gather back into the lens
-      const ang = (i + .5) / 10 * Math.PI * 2 + .3 + hash(i * 11 + 1) * .25, z = .5 + .5 * rnd(i * 11 + 2);
-      ABSORB.push({ img: "p_" + PRODUCTS[(i * 7 + 3) % PRODUCTS.length], ang, z, reach: lerp(.35, .95, rnd(i * 11 + 3)), size: lerp(290, 470, z),
-                    spin: hash(i * 11 + 4) * 2.2, t0: T.absorb[0] + rnd(i * 11 + 5) * .12, dur: lerp(.34, .42, rnd(i * 11 + 6)) });
-    }
   }
 
   /* offset of each ball from its place, towards the other (+ = deeper than the mark) */
@@ -179,16 +173,14 @@
   }
   function products(g, t) {
     const hit = t - tI;
-    if (hit >= 0 && hit < 2) for (const p of BURST) {            // out of the hit: fast, then floating out and away
-      const u = hit - p.delay; if (u <= 0 || u >= p.life) continue;
-      const f = E.outQuart(Math.min(1, u / .85)) + .05 * u, rr = landAt(p.ang, p.size, p.reach) * f;
-      const k = backOut(Math.min(1, u / .22)) * (1 - smooth(p.life - .4, p.life, u));
-      product(g, p.img, LOGO.CX + Math.cos(p.ang) * rr, LOGO.CY + Math.sin(p.ang) * rr, p.size, p.rot0 + p.spin * (1 - Math.exp(-3 * u)), k, 1, true);
-    }
-    for (const p of ABSORB) {                                    // the outro: pulled back into the lens, accelerating
-      const u = (t - p.t0) / p.dur; if (u <= 0 || u >= 1) continue;
-      const f = 1 - u ** 2.4, rr = landAt(p.ang, p.size, p.reach) * f;
-      product(g, p.img, LOGO.CX + Math.cos(p.ang) * rr, LOGO.CY + Math.sin(p.ang) * rr, p.size, p.spin * u * 1.5, lerp(1, .15, u ** 1.5), Math.min(1, u * 6), true);
+    for (const p of BURST) {
+      const u = hit - p.delay; if (u <= 0 || t >= p.back + p.dur) continue;
+      const rest = landAt(p.ang, p.size, p.reach), bob = u > .6 ? Math.sin(2 * Math.PI * .45 * u + p.ph) * 10 * smooth(.6, 1.2, u) : 0;
+      let rr = rest * E.outQuart(Math.min(1, u / .7)), k = backOut(Math.min(1, u / .25)), rot = p.tilt + p.spin * Math.exp(-4 * u) + bob * .003;
+      if (t >= p.back) {                                         // pulled back into the lens, accelerating and shrinking
+        const v = (t - p.back) / p.dur; rr *= 1 - v ** 2.4; k *= lerp(1, .12, v ** 1.5); rot += p.spin * .6 * v ** 2;
+      }
+      product(g, p.img, LOGO.CX + Math.cos(p.ang) * rr, LOGO.CY + Math.sin(p.ang) * rr + bob, p.size, rot, k, 1, true);
     }
   }
 
@@ -223,9 +215,9 @@
       { type: "whoosh", t: T.go[0] - .05, d: tI - T.go[0] + .09, pan: [.9, 0], level: -15, fc: [350, 3600] },
       { type: "boom", t: tI - .004, level: -5 }, { type: "impact", t: tI, style: "digital", tail: T.absorb[0] - tI },
       { type: "whoosh", t: tI + .01, d: .8, pan: [0, 0], level: -19, fc: [2600, 500] },                // the burst flying out
-      { type: "sparkle", t: tI + .02, d: 1.0, n: 30, level: -20 },
+      { type: "sparkle", t: tI + .02, d: .8, n: 18, level: -20 },
       { type: "riser", t: T.absorb[0] - .02, d: T.absorb[1] - T.absorb[0] + .04, rev: true, level: -21 },   // pulled back in
-      { type: "sparkle", t: T.absorb[0] + .05, d: .45, n: 14, rev: true, level: -23 },
+      { type: "sparkle", t: T.absorb[0] + .05, d: .42, n: 8, rev: true, level: -23 },
       { type: "thud", t: T.breathe[1] - .02 },
       { type: "whoosh", t: T.burst[0] - .02, d: .55, pan: [0, -.85], level: -17, fc: [400, 2400] },
       { type: "whoosh", t: T.burst[0], d: .5, pan: [0, .85], level: -17, fc: [450, 2800] },
