@@ -101,4 +101,4 @@ python3 tools/rough.py mehad && python3 tools/rough.py aim     # رسم الفح
 - `engine/brands/collide.js`، ونابض التصادم وقيم الضغط في أعلى الملف.
 - المحرك يقبل `?scale=2` (للـ 4K) و`?fps=60` و`?alpha` (بدون خلفية). الضبابية الحركية تُحسب بألوان مضروبة في الشفافية حتى لا تظهر حواف داكنة.
 - `./render_collide.sh` يرسم مرة واحدة إطارات PNG شفافة بدقة 3840×2160 و2160×2160، ثم يخرج منها:
-  `out/collide-aim_{16x9,1x1}_alpha.mov` (PNG داخل MOV، بدون فقد مع قناة شفافية)، و`_light.mp4` و`_dark.mp4`.
+  `out/collide-aim_{16x9,1x1}_alpha.mov` (PNG داخل MOV، بدون فقد مع قناة شفافية)، و`_alpha.webm` (نسخة شفافة صغيرة VP9)، و`_light.mp4` و`_dark.mp4`.
