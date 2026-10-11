@@ -16,7 +16,7 @@ ev = [dict(e, t=round(e["t"] - t0, 4)) for e in c["events"] if (e["t"] < 4.4) ==
 json.dump({"dur": d, "events": ev}, open(f"out/collide-aim-{n}_cues.json", "w"), indent=1)
 PY
   python3 tools/sound2.py out/${B}-${N}_cues.json out/${B}-${N}.wav
-  FADE=$([ $N = intro ] && echo "afade=t=out:st=$(echo "$D - .3" | bc):d=.3" || echo "afade=t=in:d=.03")
+  FADE=$([ $N = intro ] && echo "afade=t=out:st=$(echo "$D - 0.3" | bc):d=0.3" || echo "afade=t=in:d=0.03")
   S0=$(echo "$T0 * 60 / 1" | bc); NF=$(echo "$D * 60 / 1" | bc)
   for F in 16x9 1x1; do
     S=$([ $F = 1x1 ] && echo 2160x2160 || echo 3840x2160)
